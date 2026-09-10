@@ -1,0 +1,5 @@
+# Local-only secrets for `wrangler dev`. Copy to `.dev.vars` (gitignored).
+# Leave HUBSPOT_TOKEN unset or as "mock-token" to keep demo mode on.
+HUBSPOT_TOKEN=mock-token
+HUBSPOT_PORTAL_ID=000000
+HUBSPOT_FORM_GUID=00000000-0000-0000-0000-000000000000

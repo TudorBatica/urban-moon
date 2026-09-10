@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "input-capture",
+  "main": ".svelte-kit/cloudflare/_worker.js",
+  "compatibility_date": "2026-09-10",
+  // nodejs_compat lets the Worker use the Node built-ins SvelteKit's server code touches.
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".svelte-kit/cloudflare",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+
+  // Secrets are NEVER set here. Use `wrangler secret put HUBSPOT_TOKEN`.
+  // Non-secret config can live in `vars`:
+  "vars": {
+    "HUBSPOT_API_BASE": "https://api.hubapi.com",
+    "HUBSPOT_FORMS_BASE": "https://api.hsforms.com",
+    "HUBSPOT_FILES_FOLDER": "/proiecte",
+    "MOCK_ADMIN_BASE": ""
+  }
+}

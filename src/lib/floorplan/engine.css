@@ -1,0 +1,366 @@
+  /* Quiet register (src/draw's palette): paper/ink/graphite/hairline, plus
+     exactly one measurement accent and one warn. Provenance used to be a
+     hue per source (typed/drawn/computed) with tinted backgrounds; it is
+     now ink WEIGHT instead — typed is full ink, drawn/computed are both
+     graphite+italic (see .label, .num-input, .chip input below) — so
+     those hues are gone rather than renamed. Wall/window/door keep their
+     own colours: that is the drawing's own geometry, not chrome. */
+  .fp{
+    /* App tokens with standalone fallbacks. The engine's own role names
+       below are derived from these, never redefined, so a host page that
+       sets --ink/--paper/--brass/... restyles the editor for free. */
+    --fp-paper: var(--paper,#F9F6F1);
+    --fp-ink: var(--ink,#1B1B1B);
+    --fp-brass: var(--brass,#B0A986);
+    --fp-brass-deep: var(--brass-deep,#8A835F);
+    --fp-stone: var(--stone,#C4C0BA);
+    --fp-stone-soft: var(--stone-soft,#E4E0D8);
+    --fp-smoke: var(--smoke,#666664);
+    --fp-ash: var(--ash,#9A958F);
+    --fp-white: var(--white,#fff);
+    --fp-sans: var(--sans, Montserrat, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
+
+    /* Engine roles, all inside the --fp- namespace. They must NOT reuse a
+       host token's own name: `--paper: var(--paper,#F9F6F1)` on the same
+       element is a self-reference, invalid at computed-value time, and
+       every `fill:var(--paper)` downstream then falls back to initial
+       (black). Found by rendering the plan, not by reading the file. */
+    --fp-graphite:var(--fp-smoke); --fp-panel:var(--fp-white);
+    --fp-hairline:var(--fp-stone-soft); --fp-rule:var(--fp-stone);
+    --fp-wall:var(--fp-ink); --fp-open:var(--fp-ash);
+    --fp-window:var(--fp-smoke); --fp-door:var(--fp-brass-deep);
+    --fp-accent:var(--fp-brass-deep); --fp-accent-soft:var(--fp-brass);
+    --fp-warn:#9A3B36;
+
+    /* The root is the editor's own stage: it replaces <html>/<body> from
+       the prototype, so it carries their sizing, ground and font. */
+    position:relative; display:block; width:100%; height:100%; min-height:0;
+    background:var(--fp-paper); color:var(--fp-ink); font-family:var(--fp-sans);
+    overflow:hidden; -webkit-tap-highlight-color:transparent;
+    border-radius:0;
+  }
+  .fp *{box-sizing:border-box;}
+  
+  
+  .fp button, .fp input{font-family:inherit; font-size:inherit;}
+  .fp #app{ display:flex; flex-direction:column; height:100%; }
+
+  /* ---------------- stage ---------------- */
+  .fp #stage{ flex:1 1 auto; min-height:0; position:relative; background:var(--fp-paper); }
+  .fp #roomSvg{ width:100%; height:100%; display:block; touch-action:none; }
+  .fp #ctrlLayer{ position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; overflow:hidden; }
+
+  /* No brand badge: it named the app, not a working control, and the
+     rule is nothing sits on screen unless it's doing work. */
+
+  .fp .empty-hint{
+    position:absolute; left:50%; bottom:calc(16px + env(safe-area-inset-bottom) + 60px);
+    transform:translateX(-50%); pointer-events:none; max-width:min(340px, calc(100% - 24px));
+    text-align:center; font-size:13px; color:var(--fp-graphite); z-index:5;
+  }
+  .fp .empty-hint.hidden{ display:none; }
+
+  .fp .toast{
+    position:absolute; left:10px; right:10px; top:10px; margin:0 auto; max-width:420px;
+    background:var(--fp-paper); border:1px solid var(--fp-hairline); padding:9px 12px;
+    font-size:12.5px; line-height:1.4; display:flex; gap:8px; align-items:flex-start; color:var(--fp-ink);
+    z-index:40; pointer-events:auto;
+  }
+  .fp .toast.hidden{ display:none; }
+  .fp .toast button{
+    flex:0 0 auto; border:1px solid var(--fp-hairline); background:var(--fp-paper); color:var(--fp-ink);
+    padding:4px 9px; font-size:11.5px; cursor:pointer; min-height:44px; min-width:44px;
+  }
+
+  /* ---------------- bottom bar ---------------- */
+  /* Floating plates over the canvas, not a docked panel: the stage is
+     the whole window now (see BOTTOM BAR in the script for what moved
+     here from the old rail/cluster). Paper on paper, told apart only by
+     a hairline — the chrome is on the sheet, not hovering over it. */
+  /* A bare underline read as plain text, not a field — nothing said
+     "you can type here" until it was already focused. A full hairline
+     box (the canvas chip's own affordance) fixes that; sized to its
+     actual content (three digits, "cm" is its own separate span) rather
+     than the old flat 56px, which was wide open air around a number. */
+  .fp .num-input{
+    width:38px; min-height:44px; padding:5px 6px; border:1px solid var(--fp-hairline);
+    background:var(--fp-panel); font-size:14px; text-align:right; color:var(--fp-ink);
+  }
+  .fp .num-input.v-drawn, .fp .num-input.v-computed{ color:var(--fp-graphite); font-style:italic; }
+  .fp .num-input.v-empty{ color:var(--fp-graphite); }
+  .fp .unit{ color:var(--fp-graphite); font-size:.85em; }
+
+  /* Stacked a real 44px (this file's own touch-target unit) above the
+     empty-hint's row rather than sharing its bottom offset — the two
+     are mutually exclusive today (renderMissingLine hides on an empty
+     model, exactly when the hint shows), but they still must never be
+     ABLE to land on the same spot if that ever stops being true. */
+  /* Only the expanded sentences live here now — the count that toggles
+     them is a .txtbtn inside the bar. Deliberately pointer-events:none:
+     it is text to read, never a target, so it can float above the bar
+     without taking a single press away from the canvas underneath. */
+  .fp .missing-line{
+    position:absolute; left:50%; bottom:calc(16px + env(safe-area-inset-bottom) + 54px);
+    transform:translateX(-50%); max-width:min(420px, calc(100% - 24px)); text-align:center; z-index:6;
+    pointer-events:none;
+  }
+  .fp .missing-line.hidden{ display:none; }
+  .fp .missing-items{ margin-top:4px; display:flex; flex-direction:column; gap:2px; }
+  .fp .missing-items div{ font-size:12px; color:var(--fp-graphite); }
+
+  .fp .bar{
+    position:absolute; left:50%; bottom:calc(16px + env(safe-area-inset-bottom));
+    transform:translateX(-50%); display:flex; flex-wrap:wrap; justify-content:center;
+    /* flex-end, not stretch: plate two only grows a second row for an
+       opening's own "Starts at" field, and stretch would blow plate
+       one up to match that height, leaving it mostly empty air above
+       Undo/Redo/Ceiling -- bottom-aligned, the two plates read as one
+       shelf regardless of which one is currently taller. */
+    gap:8px; align-items:flex-end; max-width:calc(100vw - 16px); z-index:10;
+    /* left:50%+translateX(-50%) centers this box at PAINT time, but a
+       plain 'width:auto' box positioned with only 'left' set is sized
+       by shrink-to-fit against an "available width" measured from that
+       left edge to the containing block's own right edge -- HALF the
+       stage at left:50%, well short of max-width, before the transform
+       ever gets a say. That silently forced plate two to wrap below
+       plate one the moment both plates' combined width passed a half-
+       stage threshold that had nothing to do with the room being
+       narrow. max-content sizes the box to its own content instead
+       (still capped by max-width above), sidestepping that algorithm
+       entirely, so wrapping only kicks in when the STAGE is genuinely
+       too narrow for both plates. */
+    width:max-content;
+  }
+  .fp .plate{ background:var(--fp-panel); border:1px solid var(--fp-rule); pointer-events:auto; }
+  .fp .plate.hidden{ display:none; }
+  .fp .plate.group{ display:flex; flex-wrap:wrap; align-items:stretch; padding:0 4px; }
+  .fp .plate .divider{ width:1px; align-self:stretch; margin:8px 5px; background:var(--fp-hairline); }
+  .fp .plate .field{ display:flex; align-items:center; gap:6px; padding:0 10px; font-size:13.5px; color:var(--fp-graphite); }
+
+  /* A tool/kind is a legend, not a filled toggle: inactive is a hairline
+     rule under graphite, active is a heavier rule under ink (optionally
+     tinted by --swatch, so a kind can borrow the drawing's own colour
+     for that kind — see the type switcher). */
+  .fp .legend{
+    display:flex; flex-direction:column; justify-content:center; gap:6px; min-width:52px;
+    min-height:44px; padding:8px 8px; color:var(--fp-graphite); font-size:13.5px; font-weight:inherit;
+    background:none; border:0; cursor:pointer;
+  }
+  .fp .legend::before{ content:''; display:block; width:22px; height:1.5px; background:var(--fp-hairline); }
+  .fp .legend:hover{ color:var(--fp-ink); }
+  .fp .legend[aria-pressed='true']{ color:var(--fp-ink); }
+  .fp .legend[aria-pressed='true']::before{ height:3px; background:var(--swatch, var(--fp-ink)); }
+
+  /* A plain text control: undo, redo, and (icon+label, see
+     .piece-actions below) +door/+window, rotate, delete. */
+  .fp .txtbtn{
+    display:grid; place-items:center; min-width:44px; height:40px; padding:0 10px;
+    font-size:13.5px; color:var(--fp-graphite); background:none; border:0; cursor:pointer;
+  }
+  .fp .txtbtn:hover{ color:var(--fp-ink); }
+  .fp .txtbtn:disabled{ color:var(--fp-ash); cursor:default; }
+  .fp .txtbtn.warn:hover{ color:var(--fp-warn); }
+
+  /* ---------------- SVG geometry + hit layers ---------------- */
+  .fp .wall-line{ stroke:var(--fp-wall); stroke-width:5px; stroke-linecap:square; fill:none; pointer-events:none; }
+  .fp .wall-line.is-open{ stroke:var(--fp-open); stroke-width:3px; stroke-dasharray:2 7; stroke-linecap:round; }
+  .fp .wall-line.selected, .fp .wall-line.is-open.selected{ stroke:var(--fp-accent); }
+  /* A 'wall' segment is a filled poché band (see wallBandPoints/renderSvg),
+     not a stroked line: the polygon carries the hatch fill, these two
+     hairline edges are its two long faces, drawn separately so a corner
+     extension (which only stretches the polygon) doesn't also drag a
+     stroke's linecap along with it. Selection swaps BOTH the fill (to
+     the accent-coloured pattern defined alongside the normal one in
+     WALL_HATCH_DEFS) and the edge colour, same "recolour on select"
+     rule .wall-line already used. */
+  .fp .wall-band{ fill:url(#wallHatch); pointer-events:none; }
+  .fp .wall-band.selected{ fill:url(#wallHatchSelected); }
+  .fp .wall-band-edge{ stroke:var(--fp-wall); stroke-width:1.4px; fill:none; pointer-events:none; }
+  .fp .wall-band-edge.selected{ stroke:var(--fp-accent); }
+  .fp .wall-hatch-line{ stroke:var(--fp-wall); stroke-width:1.3px; }
+  .fp .wall-hatch-line.selected{ stroke:var(--fp-accent); }
+  /* Glazing-in-plan: three lines run the LENGTH of the opening (see
+     windowSvg) instead of one fat stroke across it, so each is thin. */
+  .fp .win-line{ stroke:var(--fp-window); stroke-width:2px; fill:none; pointer-events:none; }
+  .fp .win-line.selected{ stroke:var(--fp-brass-deep); }
+  /* The opening is a hole: paper where the hatch stops, and a jamb line
+     across the wall's thickness at each end. */
+  .fp .door-gap{ fill:var(--fp-paper); stroke:none; pointer-events:none; }
+  .fp .door-jamb{ stroke:var(--fp-door); stroke-width:2px; fill:none; pointer-events:none; }
+  .fp .door-jamb.selected{ stroke:var(--fp-accent); }
+  .fp .door-leaf{ stroke:var(--fp-door); stroke-width:2px; fill:none; pointer-events:none; }
+  .fp .door-arc{ stroke:var(--fp-door); stroke-width:1.5px; stroke-dasharray:3 3; fill:none; opacity:.8; pointer-events:none; }
+  .fp .seg-hit{ fill:transparent; cursor:pointer; pointer-events:all; touch-action:none; }
+  .fp .seg-hit.selected{ fill:var(--fp-accent); fill-opacity:.12; }
+  .fp .vertex-dot{ fill:var(--fp-panel); stroke:var(--fp-wall); stroke-width:2px; pointer-events:none; }
+  /* A free end now doubles as a pull-to-resize handle (see the 'freeEnd'
+     drag kind) as well as the one true place a new stroke can start from
+     -- a hollow ring, distinct from a plain corner's filled dot, says so. */
+  /* No stroke-width here (see .snap-ring/.align-guide, same reasoning):
+     it's set per-element in renderSvg instead, compensated by t.scale
+     so the ring reads as the same thin line at every zoom rather than
+     thickening right along with the room the way a flat CSS px would. */
+  .fp .free-end-ring{ fill:none; stroke:var(--fp-accent); pointer-events:none; }
+  .fp .corner-hit{ fill:transparent; cursor:grab; pointer-events:all; touch-action:none; }
+  .fp .free-end-hit{ fill:transparent; cursor:grab; pointer-events:all; touch-action:none; }
+
+  /* Opening edge handles: a short tick straddling the wall line at each
+     edge of the selected window/door, unmistakably different from the
+     free-end ring (a hollow circle) so the two never get confused. */
+  .fp .opening-edge-mark{ stroke:var(--fp-accent); stroke-width:2px; stroke-linecap:round; pointer-events:none; }
+  .fp .opening-edge-hit{ fill:transparent; cursor:grab; pointer-events:all; touch-action:none; }
+
+  /* A live snap/weld during a drag used to be its own green (--good);
+     it is the same "this is about to be true" signal a selection is,
+     so it now shares the one measurement accent instead of adding a
+     second hue. .welded goes solid (no dash) to keep that moment
+     legible without a colour of its own. */
+  .fp .preview-line{ stroke:var(--fp-accent); stroke-width:2.4; stroke-dasharray:6 5; fill:none; pointer-events:none; }
+  .fp .preview-line.welded{ stroke:var(--fp-accent); stroke-dasharray:none; }
+  .fp .snap-ring{ fill:none; stroke:var(--fp-accent); pointer-events:none; }
+  .fp .snap-dot{ fill:var(--fp-accent); pointer-events:none; }
+  .fp .align-guide{ stroke:var(--fp-accent); stroke-dasharray:3 4; pointer-events:none; opacity:.85; }
+  .fp .draw-start-dot{ fill:var(--fp-accent); pointer-events:none; }
+
+  /* ---------------- SVG overlay: dimension lines ---------------- */
+  /* Extension lines, run and ticks under every chip (src/draw's
+     DimLines.svelte) — geometry only, so pointer-events:none same as
+     every other decorative line in this SVG. Tone (below) says which
+     of the two kinds a given dimension is; hierarchy comes from the
+     ink being quieter, not from a third hue the palette doesn't have. */
+  .fp .dim-ext, .fp .dim-run, .fp .dim-tick, .fp .dim-leader{ fill:none; pointer-events:none; }
+  .fp .dim-ext, .fp .dim-leader{ opacity:.6; }
+  .fp .dim-tick{ stroke-linecap:round; }
+  .fp .dim-ext.primary, .fp .dim-run.primary, .fp .dim-tick.primary, .fp .dim-leader.primary{ stroke:var(--fp-accent); }
+  .fp .dim-ext.side, .fp .dim-run.side, .fp .dim-tick.side, .fp .dim-leader.side{ stroke:var(--fp-graphite); }
+
+  /* ---------------- HTML overlay: labels, chips, selection plate ---------------- */
+  /* Small and quiet — paper ground, hairline border, ~12px text — not
+     the heavy white box this used to be (src/draw's DimChip). Used
+     only for the live in-progress dimension now; every other number is
+     the editable .chip below it. */
+  .fp .label{
+    position:absolute; transform:translate(-50%,-50%); pointer-events:none; white-space:nowrap;
+    font-size:12px; font-weight:500; background:var(--fp-paper); border:1px solid var(--fp-hairline);
+    padding:2px 6px; line-height:16px;
+  }
+  .fp .label.typed{ color:var(--fp-ink); }
+  .fp .label.drawn, .fp .label.computed{ color:var(--fp-graphite); font-style:italic; }
+
+  .fp .chip{
+    /* One step up from the 12px/26px it shipped at (spec: "a bit
+       larger") — every number is on screen at once now, so it has to
+       read at a glance rather than only once you've already zoomed in
+       on the one thing selected. DIM_CHIP_FOOTPRINT_PX/DIM_LANE_STEP_PX
+       in the script are sized to THIS box; change one, check the other. */
+    position:absolute; transform:translate(-50%,-50%); pointer-events:auto;
+    display:flex; align-items:center; gap:2px; background:var(--fp-paper); border:1px solid var(--fp-hairline);
+    padding:4px 7px; font-size:13.5px; white-space:nowrap; z-index:20; height:30px;
+  }
+  /* An invisible halo, so the target is finger-sized without the chip
+     itself being drawn finger-sized — a miss here doesn't do nothing,
+     it lands on the canvas behind and takes the selection with it
+     (src/draw's DimChip, same defect). */
+  .fp .chip::before{ content:''; position:absolute; inset:-7px; }
+  .fp .chip input{
+    border:none; outline:none; width:48px; text-align:right; font-size:13.5px; padding:6px 2px; background:transparent;
+    /* tone (.primary/.side below) sets the colour; provenance below can
+       still override it to graphite italic regardless of tone */
+    color:inherit;
+    /* the chip IS the field, so until it's focused it must read as a
+       number on the drawing, not as a form control waiting for input */
+    cursor:pointer;
+    /* The visible chip stays exactly the size it looks (fixed height
+       above); this pads the INPUT's own hit box out to 44px, invisibly
+       overflowing the chip's small border — lesson 17, without the
+       chip itself growing to hide it. */
+    min-height:44px;
+  }
+  .fp .chip input:focus{ cursor:text; }
+  .fp .chip input.v-drawn, .fp .chip input.v-computed{ color:var(--fp-graphite); font-style:italic; }
+  /* Tone is what says which number is the one you picked (src/draw's
+     DimChip primary/side): the selected piece's own measurement reads
+     in the system's one measurement colour, everything beside it
+     (a neighbouring gap, a wall's own outer total) reads in graphite —
+     provenance (typed/drawn/computed, above) still wins when it
+     disagrees. Border stays the same quiet hairline either way; the
+     number's own colour already carries the distinction. */
+  .fp .chip.primary{ color:var(--fp-accent); }
+  .fp .chip.side{ color:var(--fp-graphite); }
+  /* Nothing marks the chip as a field until it actually is one — the
+     outline only appears once a press has focused the input inside. */
+  .fp .chip:focus-within{ outline:1px solid var(--fp-ink); outline-offset:1px; }
+
+  /* PIECE ACTION BAR — the selected piece's own verbs (add a door/
+     window, rotate, delete), floating right beside it rather than
+     living in the bottom bar (see renderPieceActions). Positioned the
+     same way a chip is — absolute + translate(-50%,-50%) off a
+     placeInStage anchor — because it IS placed by placeInStage, not by
+     any layout rule of its own. Icons are licensed here even though
+     the rest of this file avoids an icon set (see the script comment
+     above renderPieceActions for why); currentColor keeps them one
+     asset for both the quiet and the :hover/.warn states, same as the
+     text beside them. */
+  .fp .piece-actions{ position:absolute; transform:translate(-50%,-50%); z-index:20; }
+  .fp .piece-actions.hidden{ display:none; }
+  /* .txtbtn is normally a single-cell grid (plain text, no icon) — this
+     selector's own extra specificity (a class plus an ancestor class)
+     is what lets icon+label override that display without touching
+     .txtbtn itself, which undo/redo/ceiling's summary button still use
+     unchanged. */
+  .fp .piece-actions .txtbtn{ display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .fp .piece-actions .txtbtn svg{ display:block; flex:0 0 auto; }
+
+  /* The selection plate: text buttons in wrapping rows, no filled
+     backgrounds — the kind switcher's "current kind" state is a rule
+     underneath (.legend), not a filled block, same reasoning as the
+     bar itself (never more than one solid button in a view, and this
+     app has none). */
+  .fp #cluster{ display:flex; flex-direction:column; gap:2px; padding:4px; max-height:60vh; overflow:auto; }
+  /* #cluster's own display:flex above is an ID rule, which outranks the
+     generic two-class ".plate.hidden{display:none}" — without this ID-
+     scoped override the "hidden" plate still laid out as an empty
+     bordered sliver (border+padding, no content) beside plate one. */
+  .fp #cluster.hidden{ display:none; }
+  .fp #cluster .crow{ display:flex; flex-wrap:wrap; gap:2px; }
+  .fp #cluster .sill-row{ display:flex; align-items:center; gap:6px; padding:4px 6px; }
+  .fp #cluster .sill-row label{ font-size:12.5px; color:var(--fp-graphite); flex:0 0 auto; }
+  /* Sized to the three digits it actually holds, not stretched across
+     whatever width the plate happens to be — a rule running the width of
+     the panel reads as a form to fill in, which is the opposite of what
+     the rest of this interface says about a number. Same box the canvas
+     chips use, so the two places you can type a measurement look alike. */
+  .fp #cluster .sill-row input{
+    flex:0 0 auto; width:44px; min-height:44px; border:1px solid var(--fp-hairline);
+    background:var(--fp-paper); padding:4px 6px; text-align:right; color:var(--fp-ink); font-size:13.5px;
+  }
+  .fp #cluster .sill-row .unit{ flex:0 0 auto; }
+  /* Same typed/drawn/computed ink-weight signal every other measurement
+     in this file carries, now off the canvas too. */
+  .fp #cluster .sill-row input.v-drawn, .fp #cluster .sill-row input.v-computed{ color:var(--fp-graphite); font-style:italic; }
+
+  /* ---------------- modal confirm (metres trap / capacity offer) ---------------- */
+  .fp #confirmDialog{
+    /* absolute, not fixed: the dialog belongs to this editor's own root
+       rather than to the page, so an embedded instance cannot cover the
+       host. Identical when the editor fills the viewport. */
+    position:absolute; inset:0; background:rgba(27,27,27,.34); display:flex; align-items:center; justify-content:center; z-index:200;
+  }
+  .fp #confirmDialog.hidden{ display:none; }
+  .fp .confirm-card{ background:var(--fp-panel); border:1px solid var(--fp-rule); padding:16px; max-width:300px; }
+  .fp .confirm-card p{ margin:0 0 12px; font-size:13.5px; line-height:1.4; color:var(--fp-ink); }
+  .fp .confirm-card .row{ display:flex; gap:8px; }
+  .fp .confirm-card button{ flex:1 1 auto; padding:9px; font-size:13px; cursor:pointer; min-height:44px; border:1px solid var(--fp-hairline); background:var(--fp-paper); color:var(--fp-ink); }
+  .fp .confirm-card button.primary{ background:var(--fp-ink); color:var(--fp-paper); border-color:var(--fp-ink); }
+
+  /* ---------------- FIXME-11: only a rendered box may take a pointer ----------------
+     #bar is a transparent flex CONTAINER whose bounding box is the union
+     of its plates plus every gap between and beside them — 374x148 CSS px
+     at 390x844, against ~61px of plate. With the container itself
+     hit-testable, a press on bare canvas inside that union (left of the
+     wrapped selection plate, below plate one) was captured by #bar and
+     silently went nowhere. The plates already declare pointer-events:auto;
+     the container must not. Layout — the gap the room's fit keeps clear
+     (PANEL_GAP_PX) — is untouched. */
+  .fp .bar{ pointer-events:none; }
+  .fp .bar > *{ pointer-events:auto; }
