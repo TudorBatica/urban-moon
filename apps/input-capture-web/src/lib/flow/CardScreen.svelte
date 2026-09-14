@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { CardScreen } from '$lib/questions/screens';
-	import { roomOf } from '$lib/questions/rooms';
+	import type { CardScreen } from '@urban-moon/domain-data';
+	import { roomOf } from '@urban-moon/domain-data';
 	import { answers } from '$lib/state/answers.svelte';
 	import { chapterQuestionCount } from '$lib/flow/engine';
 

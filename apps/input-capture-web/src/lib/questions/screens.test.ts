@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Answers } from '$lib/types';
-import { resolveCards, resolveGroups, resolveOptions, visibleScreens } from './screens';
+import { resolveCards, resolveGroups, resolveOptions, visibleScreens } from '@urban-moon/domain-data';
 import { activeFollowUp, chapterQuestionCount, chromeFor, continueState } from '$lib/flow/engine';
-import { S, screenById } from './screens';
-import { ROOMS } from './rooms';
+import { S, screenById } from '@urban-moon/domain-data';
+import { ROOMS } from '@urban-moon/domain-data';
 
 const ids = (a: Answers): string[] => visibleScreens(a).map((s) => s.id);
 

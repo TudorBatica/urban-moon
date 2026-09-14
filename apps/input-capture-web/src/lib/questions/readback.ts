@@ -2,7 +2,6 @@ import type { Answers, PhotoMeta, PlansState } from '$lib/types';
 import { activeFollowUp, cardOn, fieldVisible } from '$lib/flow/engine';
 import {
 	CHAPTER_LABEL,
-	PLAN_MEASURED_KEY,
 	furnitureItems,
 	resolveCards,
 	resolveFieldOptions,
@@ -13,10 +12,9 @@ import {
 	type FollowUp,
 	type Option,
 	type Screen
-} from './screens';
+} from '@urban-moon/domain-data';
 
-/* "Ce am înțeles": every visible question with its answer, grouped by chapter. The same list,
-   as plain text, goes to HubSpot in `um_readback`. */
+/* "Ce am înțeles": every visible question with its answer, grouped by chapter. */
 
 export interface AnswerRow {
 	question: string;
@@ -145,15 +143,10 @@ export function answerLines(s: Screen, a: Answers, up: Uploads = {}): string[] {
 	}
 }
 
-/** The plans step: the measuring, the plan itself and the photos of the space. */
-function plansRows(a: Answers, up: Uploads): AnswerRow[] {
-	const rows: AnswerRow[] = [
-		{
-			question: 'Ai măsurat spațiul?',
-			answer: a[PLAN_MEASURED_KEY] === true ? ['Da, am măsurat spațiul'] : [],
-			href: '/planuri'
-		}
-	];
+/** The plans step: the plan itself and the photos of the space. The "Am măsurat spațiul" tick is a
+ *  gate to continue, not an answer, so it is not listed. */
+function plansRows(up: Uploads): AnswerRow[] {
+	const rows: AnswerRow[] = [];
 	if (up.plans) {
 		const plan = up.plans.files.map((f) => f.name);
 		if (up.plans.drawing) plan.push('Plan desenat');
@@ -182,7 +175,7 @@ export function answerSections(a: Answers, up: Uploads = {}): AnswerSection[] {
 	};
 	for (const s of visibleScreens(a)) {
 		if (s.kind === 'card') continue;
-		if (s.kind === 'route') section(s.chapter).rows.push(...plansRows(a, up));
+		if (s.kind === 'route') section(s.chapter).rows.push(...plansRows(up));
 		else
 			section(s.chapter).rows.push({
 				question: questionOf(s),
@@ -191,18 +184,4 @@ export function answerSections(a: Answers, up: Uploads = {}): AnswerSection[] {
 			});
 	}
 	return sections;
-}
-
-/** The whole list as plain text, for the HubSpot `um_readback` field. */
-export function readbackText(a: Answers, up: Uploads = {}): string {
-	const out: string[] = [];
-	for (const sec of answerSections(a, up)) {
-		out.push(sec.label.toUpperCase());
-		for (const r of sec.rows) {
-			out.push(r.question);
-			out.push(...(r.answer.length ? r.answer.map((x) => `- ${x}`) : ['- fără răspuns']));
-		}
-		out.push('');
-	}
-	return out.join('\n').trim();
 }

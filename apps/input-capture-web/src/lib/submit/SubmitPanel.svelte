@@ -7,8 +7,6 @@
 	import { getPhotoBlob, photos } from '$lib/state/photos.svelte';
 	import { planSteps, runSubmission, type StepProgress, type StepState } from './submit';
 
-	let { readback }: { readback: string } = $props();
-
 	const CONSENT_TEXT =
 		'Sunt de acord ca Urban Moon să prelucreze răspunsurile și planurile trimise pentru pregătirea proiectului meu.';
 
@@ -17,17 +15,11 @@
 	let error = $state('');
 	let steps = $state<StepProgress[]>([]);
 
-	function stateLabel(s: StepState): string {
-		if (s === 'done') return 'trimis';
-		if (s === 'uploading') return 'se trimite';
-		if (s === 'failed') return 'a eșuat';
+	function stateLabel(s: StepProgress): string {
+		if (s.state === 'done') return 'trimis';
+		if (s.state === 'uploading') return s.percent > 0 && s.percent < 100 ? `${s.percent}%` : 'se trimite';
+		if (s.state === 'failed') return 'a eșuat';
 		return 'în așteptare';
-	}
-
-	/** Dev hook for the e2e tests: ?scenario=fail makes the mock return 500. */
-	function scenarioFromUrl(): string | undefined {
-		if (typeof location === 'undefined') return undefined;
-		return new URLSearchParams(location.search).get('scenario') === 'fail' ? 'fail' : undefined;
 	}
 
 	async function send(): Promise<void> {
@@ -38,17 +30,16 @@
 			index,
 			total: all.length,
 			label,
-			state: 'pending' as StepState
+			state: 'pending' as StepState,
+			percent: 0
 		}));
 
 		const result = await runSubmission({
 			answers,
 			plans,
-			readback,
 			getBlob: getFileBlob,
 			photos: photos.list,
 			getPhotoBlob,
-			scenario: scenarioFromUrl(),
 			onProgress: (p) => {
 				const next = [...steps];
 				next[p.index] = p;
@@ -92,7 +83,7 @@
 		<ul class="steps" data-testid="submit-progress" aria-label="Ce trimitem">
 			{#each steps as step (step.index)}
 				<li class={step.state} data-state={step.state}>
-					<span>{step.label}</span><small>{stateLabel(step.state)}</small>
+					<span>{step.label}</span><small>{stateLabel(step)}</small>
 				</li>
 			{/each}
 		</ul>
@@ -146,6 +137,7 @@
 	.steps small {
 		color: var(--grey);
 		flex: none;
+		font-variant-numeric: tabular-nums;
 	}
 	.steps .done small {
 		color: var(--ink);

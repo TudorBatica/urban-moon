@@ -1,4 +1,4 @@
-import type { Screen } from '$lib/questions/screens';
+import type { Screen } from '@urban-moon/domain-data';
 
 /* One photograph per screen. The first ten came with the mockups; the rest were chosen to
    match them (natural light, muted palette, uncluttered). Ids are Unsplash photo ids. */

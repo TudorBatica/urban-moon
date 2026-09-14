@@ -11,13 +11,8 @@
   },
   "observability": { "enabled": true },
 
-  // Secrets are NEVER set here. Use `wrangler secret put HUBSPOT_TOKEN`.
-  // Non-secret config can live in `vars`:
+  // Secrets are never set here (`wrangler secret put`). Non-secret config lives in `vars`:
   "vars": {
-    "HUBSPOT_API_BASE": "https://api.hubapi.com",
-    "HUBSPOT_FORMS_BASE": "https://api.hsforms.com",
-    "HUBSPOT_FILES_FOLDER": "/proiecte",
-    "MOCK_ADMIN_BASE": "",
     // The Calendly event link for the booking step; empty skips it.
     "PUBLIC_CALENDLY_URL": ""
   }

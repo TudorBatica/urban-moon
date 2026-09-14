@@ -1,0 +1,42 @@
+# Local dependencies only: the apps run on your machine (`npm run dev`), not in here.
+#
+#   npm run deps:up      start, and create the bucket
+#   npm run deps:down    stop (the bucket's contents stay in the gcs-data volume)
+#   npm run deps:reset   stop and delete everything uploaded
+
+name: urban-moon-deps
+
+services:
+  # Cloud Storage emulator. The app talks to it through STORAGE_EMULATOR_HOST; the browser sends
+  # file bytes straight to it on the session URIs it hands out, just as it would to Google.
+  gcs:
+    image: fsouza/fake-gcs-server:1.52.2
+    command:
+      - -scheme=http
+      - -port=4443
+      - -external-url=http://localhost:4443
+      - -public-host=localhost:4443
+      - -backend=filesystem
+      - -filesystem-root=/storage
+      - -cors-headers=Content-Range,X-Goog-Resumable,Range
+    ports:
+      - "4443:4443"
+    volumes:
+      - gcs-data:/storage
+
+  # Creates the bucket once the emulator answers; exits afterwards. Safe to run again.
+  gcs-init:
+    image: curlimages/curl:8.16.0
+    depends_on: [gcs]
+    restart: "no"
+    entrypoint:
+      - sh
+      - -c
+      - |
+        until curl -sf http://gcs:4443/storage/v1/b >/dev/null; do sleep 0.5; done
+        curl -s -o /dev/null -w "bucket um-submissions: HTTP %{http_code} (200 created, 409 already there)\n" \
+          -X POST -H "Content-Type: application/json" \
+          -d '{"name":"um-submissions"}' http://gcs:4443/storage/v1/b
+
+volumes:
+  gcs-data:

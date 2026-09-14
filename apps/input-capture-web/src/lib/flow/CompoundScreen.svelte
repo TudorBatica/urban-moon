@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { CompoundScreen, Field as FieldT } from '$lib/questions/screens';
+	import type { CompoundScreen, Field as FieldT } from '@urban-moon/domain-data';
 	import { answers, setAnswer } from '$lib/state/answers.svelte';
 	import { fieldDone, fieldVisible, resolveFieldOptions } from '$lib/flow/engine';
 	import CountRow from '$lib/ui/CountRow.svelte';

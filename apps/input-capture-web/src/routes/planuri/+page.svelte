@@ -11,8 +11,8 @@
 		setDrawing,
 		setFileRoom
 	} from '$lib/state/plans.svelte';
-	import { roomOf } from '$lib/questions/rooms';
-	import { PLAN_MEASURED_KEY, PLAN_MODIFY_KEY } from '$lib/questions/screens';
+	import { roomOf } from '@urban-moon/domain-data';
+	import { PLAN_MEASURED_KEY, PLAN_MODIFY_KEY } from '@urban-moon/domain-data';
 	import { IMG } from '$lib/ui/images';
 	import { BASE, SLOW, ease, ms } from '$lib/ui/motion';
 	import Frame from '$lib/ui/Frame.svelte';
@@ -111,7 +111,7 @@
 		<legend class="sr">Planul și pozele spațiului</legend>
 		<Dropzone
 			label={single ? 'Încarcă schița' : 'Încarcă schițele'}
-			hint="PDF, poză, DWG, DXF · 25 MB · {plans.files.length} din {max} fișiere"
+			hint="PDF, JPG, PNG · PDF până la 25 MB, poze până la 10 MB · {plans.files.length} din {max} fișiere"
 			disabled={full || !measured}
 			{onfiles}
 		>

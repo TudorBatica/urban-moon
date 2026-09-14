@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { TextScreen } from '$lib/questions/screens';
+	import type { TextScreen } from '@urban-moon/domain-data';
 	import { answers, setAnswer } from '$lib/state/answers.svelte';
 	import Field from '$lib/ui/Field.svelte';
 	import ScreenTitle from './ScreenTitle.svelte';

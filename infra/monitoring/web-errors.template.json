@@ -1,0 +1,17 @@
+{
+  "displayName": "web: submission errors",
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "commit_failed / upload_start_failed / storage_not_configured",
+      "conditionMatchedLog": {
+        "filter": "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${SERVICE}\" AND jsonPayload.event=(\"commit_failed\" OR \"upload_start_failed\" OR \"storage_not_configured\")"
+      }
+    }
+  ],
+  "alertStrategy": {
+    "notificationRateLimit": { "period": "300s" },
+    "autoClose": "1800s"
+  },
+  "notificationChannels": ["${CHANNEL}"]
+}

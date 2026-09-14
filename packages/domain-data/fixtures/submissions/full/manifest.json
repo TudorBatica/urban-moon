@@ -1,0 +1,548 @@
+{
+	"schemaVersion": 1,
+	"submissionId": "fixture-full-0001",
+	"committedAt": "2026-09-14T10:22:31Z",
+	"appVersion": "fixture",
+	"pageUri": "https://example.invalid/rezumat",
+	"locale": "ro",
+	"client": {
+		"name": "Ana Popescu",
+		"email": "ana@exemplu.ro"
+	},
+	"rooms": [
+		"bucatarie",
+		"living",
+		"dormitor",
+		"birou",
+		"baie",
+		"hol",
+		"alta"
+	],
+	"answers": {
+		"c_identity": {
+			"name": "Ana Popescu",
+			"email": "ana@exemplu.ro"
+		},
+		"c_rooms": [
+			"bucatarie",
+			"living",
+			"dormitor",
+			"birou",
+			"baie",
+			"hol",
+			"alta"
+		],
+		"p_modify": [
+			"pereti",
+			"usa",
+			"instalatii"
+		],
+		"c_stage": "altceva",
+		"c_stage_other": "Mansardă de amenajat",
+		"c_household": {
+			"adults": 2,
+			"children": 1,
+			"childAges": [
+				"3_6"
+			],
+			"elderly": "nu",
+			"pets": [
+				"caine",
+				"altceva"
+			],
+			"petsOther": "Papagal"
+		},
+		"k1": "gatim",
+		"k2": "gatim",
+		"k3": "una",
+		"k4": [
+			"lent",
+			"tigaie",
+			"copt"
+		],
+		"k3b": [
+			"povesti",
+			"prieteni",
+			"copii"
+		],
+		"k5_frig": {
+			"fridge": true,
+			"fridgeType": "combina",
+			"freezer": true,
+			"wine": true
+		},
+		"k5_gatit": {
+			"cook": "aragaz",
+			"aragazPower": "gaz",
+			"gasSource": "retea"
+		},
+		"k5_spalat": {
+			"dish": true,
+			"washer": true
+		},
+		"k6a": [
+			"altii",
+			"micro",
+			"prajitor"
+		],
+		"k6a_other": "Robot de bucătărie, aparat de vidat",
+		"k5_plasare": {
+			"ovenWhere": "oriunde",
+			"microWhere": "oriunde",
+			"wineWhere": "oriunde"
+		},
+		"k7": "espressor",
+		"k7_freq": "zilnic",
+		"k8": [
+			"balcon",
+			"debara",
+			"beci"
+		],
+		"k9": "unul",
+		"k10": "zilnic",
+		"k10_seats": 4,
+		"k11": {
+			"text": "nu am loc pentru anumite electrocasnice"
+		},
+		"k12": {
+			"text": "o masă mare"
+		},
+		"k13": {
+			"items": [
+				{
+					"name": "masa",
+					"length": "140",
+					"width": "80"
+				}
+			]
+		},
+		"l1": [
+			"masa",
+			"tv",
+			"vorba"
+		],
+		"l1_seats": 4,
+		"l2": {
+			"seats": 3
+		},
+		"l3": {
+			"problem": "nu știu unde să pun canapeaua",
+			"must": "un colțar"
+		},
+		"l4": {
+			"items": [
+				{
+					"name": "canapea",
+					"length": "240",
+					"width": "95"
+				}
+			]
+		},
+		"d1": "altcineva",
+		"d1_other": "Bunica, câteva luni pe an",
+		"d2": {
+			"bed": "altceva",
+			"bedOther": "Pat rotund, 200 cm",
+			"wants": [
+				"dulap",
+				"altceva"
+			],
+			"wantsOther": "Cuier de perete"
+		},
+		"d3": {
+			"problem": "nu știu unde să pun patul",
+			"must": "pat mare"
+		},
+		"d4": {
+			"items": [
+				{
+					"name": "pat",
+					"length": "172",
+					"width": "220"
+				}
+			]
+		},
+		"x1_birou": {
+			"text": "un birou"
+		},
+		"x2_birou": {
+			"problem": "nu știu unde să pun biroul",
+			"must": "un birou de 150 cm"
+		},
+		"x3_birou": {
+			"items": [
+				{
+					"name": "birou",
+					"length": "120",
+					"width": "60"
+				}
+			]
+		},
+		"x1_baie": [
+			"altceva",
+			"cada",
+			"dus_cabina"
+		],
+		"x1_baie_other": "Coș de rufe încorporat",
+		"x2_baie": {
+			"problem": "nu încape cada",
+			"must": "bideu"
+		},
+		"x3_baie": {
+			"items": [
+				{
+					"name": "mașina de spălat",
+					"length": "60",
+					"width": "60"
+				}
+			]
+		},
+		"x1_hol": [
+			"altceva",
+			"cuier",
+			"pantofar"
+		],
+		"x1_hol_other": "Loc pentru bicicletă",
+		"x2_hol": {
+			"problem": "nu am loc de geci / genți",
+			"must": "pantofar"
+		},
+		"x3_hol": {
+			"items": [
+				{
+					"name": "pantofar",
+					"length": "80",
+					"width": "30"
+				}
+			]
+		},
+		"x1_alta": {
+			"room": "spălătorie",
+			"text": "depozitare"
+		},
+		"x2_alta": {
+			"problem": "nu știu unde să pun centrala",
+			"must": "canapea"
+		},
+		"x3_alta": {
+			"items": [
+				{
+					"name": "centrală",
+					"length": "35",
+					"width": "50"
+				}
+			]
+		}
+	},
+	"drawing": {
+		"room": {
+			"unit": "cm",
+			"ceilingHeightCm": 260,
+			"closed": true,
+			"outline": [
+				[
+					0,
+					0
+				],
+				[
+					400,
+					0
+				],
+				[
+					400,
+					300
+				],
+				[
+					0,
+					300
+				]
+			],
+			"walls": [
+				{
+					"id": "w0",
+					"index": 0,
+					"from": [
+						0,
+						0
+					],
+					"to": [
+						400,
+						0
+					],
+					"heading": "N",
+					"lengthCm": {
+						"value": 400,
+						"source": "typed"
+					},
+					"segments": [
+						{
+							"id": "w0s0",
+							"kind": "wall",
+							"lengthCm": {
+								"value": 400,
+								"source": "typed"
+							},
+							"offsetFromStartCm": 0,
+							"sillCm": null,
+							"hinge": null,
+							"swing": null
+						}
+					]
+				},
+				{
+					"id": "w1",
+					"index": 1,
+					"from": [
+						400,
+						0
+					],
+					"to": [
+						400,
+						300
+					],
+					"heading": "E",
+					"lengthCm": {
+						"value": 300,
+						"source": "typed"
+					},
+					"segments": [
+						{
+							"id": "w1s0",
+							"kind": "wall",
+							"lengthCm": {
+								"value": 100,
+								"source": "typed"
+							},
+							"offsetFromStartCm": 0,
+							"sillCm": null,
+							"hinge": null,
+							"swing": null
+						},
+						{
+							"id": "w1s1",
+							"kind": "window",
+							"lengthCm": {
+								"value": 100,
+								"source": "typed"
+							},
+							"offsetFromStartCm": 100,
+							"sillCm": 90,
+							"hinge": null,
+							"swing": null
+						},
+						{
+							"id": "w1s2",
+							"kind": "wall",
+							"lengthCm": {
+								"value": 100,
+								"source": "computed"
+							},
+							"offsetFromStartCm": 200,
+							"sillCm": null,
+							"hinge": null,
+							"swing": null
+						}
+					]
+				},
+				{
+					"id": "w2",
+					"index": 2,
+					"from": [
+						400,
+						300
+					],
+					"to": [
+						0,
+						300
+					],
+					"heading": "S",
+					"lengthCm": {
+						"value": 400,
+						"source": "computed"
+					},
+					"segments": [
+						{
+							"id": "w2s0",
+							"kind": "wall",
+							"lengthCm": {
+								"value": 200,
+								"source": "typed"
+							},
+							"offsetFromStartCm": 0,
+							"sillCm": null,
+							"hinge": null,
+							"swing": null
+						},
+						{
+							"id": "w2s1",
+							"kind": "door",
+							"lengthCm": {
+								"value": 80,
+								"source": "typed"
+							},
+							"offsetFromStartCm": 200,
+							"sillCm": null,
+							"hinge": "start",
+							"swing": "in"
+						},
+						{
+							"id": "w2s2",
+							"kind": "wall",
+							"lengthCm": {
+								"value": 120,
+								"source": "computed"
+							},
+							"offsetFromStartCm": 280,
+							"sillCm": null,
+							"hinge": null,
+							"swing": null
+						}
+					]
+				},
+				{
+					"id": "w3",
+					"index": 3,
+					"from": [
+						0,
+						300
+					],
+					"to": [
+						0,
+						0
+					],
+					"heading": "W",
+					"lengthCm": {
+						"value": 300,
+						"source": "computed"
+					},
+					"segments": [
+						{
+							"id": "w3s0",
+							"kind": "wall",
+							"lengthCm": {
+								"value": 300,
+								"source": "computed"
+							},
+							"offsetFromStartCm": 0,
+							"sillCm": null,
+							"hinge": null,
+							"swing": null
+						}
+					]
+				}
+			],
+			"openings": [
+				{
+					"id": "w1s1",
+					"kind": "window",
+					"lengthCm": {
+						"value": 100,
+						"source": "typed"
+					},
+					"offsetFromStartCm": 100,
+					"sillCm": 90,
+					"hinge": null,
+					"swing": null,
+					"wallId": "w1"
+				},
+				{
+					"id": "w2s1",
+					"kind": "door",
+					"lengthCm": {
+						"value": 80,
+						"source": "typed"
+					},
+					"offsetFromStartCm": 200,
+					"sillCm": null,
+					"hinge": "start",
+					"swing": "in",
+					"wallId": "w2"
+				}
+			],
+			"unanswered": [],
+			"finished": true
+		},
+		"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 400 300\"><rect x=\"0\" y=\"0\" width=\"400\" height=\"300\" fill=\"none\" stroke=\"#141414\"/></svg>",
+		"pngObject": "uploads/drawing.png",
+		"updatedAt": 1757845000000
+	},
+	"files": [
+		{
+			"fileId": "plan-bucatarie",
+			"kind": "plan",
+			"group": null,
+			"roomId": "bucatarie",
+			"originalName": "plan-bucătărie.pdf",
+			"contentType": "application/pdf",
+			"size": 1510,
+			"object": "uploads/plan-bucatarie.pdf",
+			"addedAt": 1757844000000
+		},
+		{
+			"fileId": "plan-living",
+			"kind": "plan",
+			"group": null,
+			"roomId": "living",
+			"originalName": "schiță living.jpg",
+			"contentType": "image/jpeg",
+			"size": 164700,
+			"object": "uploads/plan-living.jpg",
+			"addedAt": 1757844001000
+		},
+		{
+			"fileId": "photo-spatiu-1",
+			"kind": "photo",
+			"group": "spatiu",
+			"roomId": null,
+			"originalName": "IMG_2041.jpg",
+			"contentType": "image/jpeg",
+			"size": 92711,
+			"object": "uploads/photo-spatiu-1.jpg",
+			"addedAt": 1757844002000
+		},
+		{
+			"fileId": "photo-spatiu-2",
+			"kind": "photo",
+			"group": "spatiu",
+			"roomId": null,
+			"originalName": "IMG_2042 (rotită).jpg",
+			"contentType": "image/jpeg",
+			"size": 81919,
+			"object": "uploads/photo-spatiu-2.jpg",
+			"addedAt": 1757844003000
+		},
+		{
+			"fileId": "photo-spatiu-3",
+			"kind": "photo",
+			"group": "spatiu",
+			"roomId": null,
+			"originalName": "captură.png",
+			"contentType": "image/png",
+			"size": 35055,
+			"object": "uploads/photo-spatiu-3.png",
+			"addedAt": 1757844004000
+		},
+		{
+			"fileId": "photo-mobilier-bucatarie",
+			"kind": "photo",
+			"group": "mobilier",
+			"roomId": "bucatarie",
+			"originalName": "masa.jpg",
+			"contentType": "image/jpeg",
+			"size": 79384,
+			"object": "uploads/photo-mobilier-bucatarie.jpg",
+			"addedAt": 1757844005000
+		},
+		{
+			"fileId": "photo-mobilier-dormitor",
+			"kind": "photo",
+			"group": "mobilier",
+			"roomId": "dormitor",
+			"originalName": "dulap.jpg",
+			"contentType": "image/jpeg",
+			"size": 100800,
+			"object": "uploads/photo-mobilier-dormitor.jpg",
+			"addedAt": 1757844006000
+		}
+	]
+}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { FollowUp as FollowUpT, SingleScreen } from '$lib/questions/screens';
+	import type { FollowUp as FollowUpT, SingleScreen } from '@urban-moon/domain-data';
 	import { answers, setAnswer } from '$lib/state/answers.svelte';
 	import { activeFollowUp, followUpDone, resolveOptions } from '$lib/flow/engine';
 	import { line, lineKey } from '$lib/ui/lineMap';

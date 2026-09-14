@@ -1,0 +1,27 @@
+{
+	"name": "@urban-moon/domain-data",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"sideEffects": false,
+	"description": "The questionnaire's shared source of truth: the question catalog, answer and manifest schemas, limits and fixtures.",
+	"exports": {
+		".": "./src/index.ts",
+		"./schema": "./src/schema/index.ts",
+		"./fixtures/*": "./fixtures/*"
+	},
+	"scripts": {
+		"check": "tsc --noEmit -p tsconfig.json",
+		"test": "vitest run",
+		"schema": "tsx scripts/export-json-schema.ts"
+	},
+	"devDependencies": {
+		"@types/node": "^24.13.4",
+		"tsx": "^4.23.13",
+		"typescript": "^6.0.3",
+		"vitest": "^5.0.0"
+	},
+	"dependencies": {
+		"zod": "^4.6.5"
+	}
+}

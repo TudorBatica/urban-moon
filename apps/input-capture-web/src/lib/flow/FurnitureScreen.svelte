@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import type { FurnitureItem, FurnitureScreen } from '$lib/questions/screens';
+	import type { FurnitureItem, FurnitureScreen } from '@urban-moon/domain-data';
 	import { answers, setAnswer } from '$lib/state/answers.svelte';
 	import PhotoField from '$lib/plans/PhotoField.svelte';
 	import Field from '$lib/ui/Field.svelte';

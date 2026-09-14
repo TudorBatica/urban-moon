@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { FollowUp } from '$lib/questions/screens';
+	import type { FollowUp } from '@urban-moon/domain-data';
 	import { answers, setAnswer } from '$lib/state/answers.svelte';
 	import CountRow from '$lib/ui/CountRow.svelte';
 	import Field from '$lib/ui/Field.svelte';

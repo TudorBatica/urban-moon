@@ -1,12 +1,13 @@
 node_modules
 
 # Output
+out
 .output
 .vercel
 .netlify
 .wrangler
-/.svelte-kit
-/build
+.svelte-kit
+build
 
 # OS
 .DS_Store
@@ -23,10 +24,10 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 # Playwright
-/test-results
-/playwright-report
-/blob-report
-/playwright/.cache
+test-results
+playwright-report
+blob-report
+playwright/.cache
 
 # Cloudflare
 .dev.vars

@@ -1,0 +1,63 @@
+{
+	"schemaVersion": 1,
+	"submissionId": "fixture-minimal-0001",
+	"committedAt": "2026-09-14T10:22:31Z",
+	"appVersion": "fixture",
+	"pageUri": "https://example.invalid/rezumat",
+	"locale": "ro",
+	"client": {
+		"name": "Ion Ionescu",
+		"email": "ion@exemplu.ro"
+	},
+	"rooms": [
+		"bucatarie"
+	],
+	"answers": {
+		"c_identity": {
+			"name": "Ion Ionescu",
+			"email": "ion@exemplu.ro"
+		},
+		"c_rooms": [
+			"bucatarie"
+		],
+		"p_modify": [
+			"nu"
+		],
+		"c_stage": "renovez",
+		"c_household": {
+			"adults": 2,
+			"children": 0,
+			"elderly": "nu",
+			"pets": [
+				"nu"
+			]
+		},
+		"k1": "gatim",
+		"k2": "comandam"
+	},
+	"drawing": null,
+	"files": [
+		{
+			"fileId": "plan-bucatarie",
+			"kind": "plan",
+			"group": null,
+			"roomId": "bucatarie",
+			"originalName": "plan.pdf",
+			"contentType": "application/pdf",
+			"size": 1510,
+			"object": "uploads/plan-bucatarie.pdf",
+			"addedAt": 1757844000000
+		},
+		{
+			"fileId": "photo-spatiu-1",
+			"kind": "photo",
+			"group": "spatiu",
+			"roomId": null,
+			"originalName": "bucatarie.jpg",
+			"contentType": "image/jpeg",
+			"size": 92711,
+			"object": "uploads/photo-spatiu-1.jpg",
+			"addedAt": 1757844001000
+		}
+	]
+}

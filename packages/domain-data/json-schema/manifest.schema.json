@@ -1,0 +1,1428 @@
+{
+	"$id": "https://urban-moon.invalid/schemas/manifest.schema.json",
+	"title": "manifest.json",
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"type": "object",
+	"properties": {
+		"schemaVersion": {
+			"type": "number",
+			"const": 1
+		},
+		"submissionId": {
+			"type": "string",
+			"pattern": "^[A-Za-z0-9-]{8,80}$"
+		},
+		"committedAt": {
+			"type": "string",
+			"format": "date-time",
+			"pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+		},
+		"appVersion": {
+			"type": "string",
+			"minLength": 1
+		},
+		"pageUri": {
+			"type": "string"
+		},
+		"locale": {
+			"type": "string",
+			"const": "ro"
+		},
+		"client": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 200
+				},
+				"email": {
+					"type": "string",
+					"format": "email",
+					"pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+				}
+			},
+			"required": [
+				"name",
+				"email"
+			],
+			"additionalProperties": false
+		},
+		"rooms": {
+			"minItems": 1,
+			"type": "array",
+			"items": {
+				"type": "string",
+				"enum": [
+					"bucatarie",
+					"living",
+					"dormitor",
+					"birou",
+					"baie",
+					"hol",
+					"alta"
+				]
+			}
+		},
+		"answers": {
+			"type": "object",
+			"properties": {
+				"c_identity": {
+					"type": "object",
+					"properties": {
+						"name": {
+							"type": "string",
+							"maxLength": 5000
+						},
+						"email": {
+							"type": "string",
+							"maxLength": 5000
+						}
+					},
+					"additionalProperties": false,
+					"description": "Numele și emailul"
+				},
+				"c_rooms": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"enum": [
+							"bucatarie",
+							"living",
+							"dormitor",
+							"birou",
+							"baie",
+							"hol",
+							"alta"
+						]
+					},
+					"description": "Ce cameră vrei să optimizezi?"
+				},
+				"p_modify": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"enum": [
+							"pereti",
+							"usa",
+							"instalatii",
+							"nu"
+						]
+					},
+					"description": "Ești dispus să modifici spațiul sau va rămâne exact așa cum este?"
+				},
+				"c_stage": {
+					"type": "string",
+					"enum": [
+						"neconstruita",
+						"renovez",
+						"instalatii",
+						"finisaje",
+						"mobilier",
+						"altceva"
+					],
+					"description": "În ce etapă este locuința ta?"
+				},
+				"c_stage_other": {
+					"type": "string",
+					"maxLength": 5000,
+					"description": "Ce anume?"
+				},
+				"c_household": {
+					"type": "object",
+					"properties": {
+						"adults": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 8
+						},
+						"children": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 6
+						},
+						"childAges": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"enum": [
+									"sub3",
+									"3_6",
+									"7_12",
+									"teen"
+								]
+							}
+						},
+						"elderly": {
+							"type": "string",
+							"enum": [
+								"nu",
+								"da"
+							]
+						},
+						"pets": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"enum": [
+									"caine",
+									"pisica",
+									"altceva",
+									"nu"
+								]
+							}
+						},
+						"petsOther": {
+							"type": "string",
+							"maxLength": 5000
+						}
+					},
+					"additionalProperties": false,
+					"description": "Cine va locui aici?"
+				},
+				"k1": {
+					"type": "string",
+					"enum": [
+						"gatim",
+						"incalzim",
+						"comandam"
+					],
+					"description": "Cum arată o cină obișnuită la tine acasă, într-o zi din săptămână?"
+				},
+				"k2": {
+					"type": "string",
+					"enum": [
+						"gatim",
+						"incalzim",
+						"comandam"
+					],
+					"description": "Dar în weekend?"
+				},
+				"k3": {
+					"type": "string",
+					"enum": [
+						"una",
+						"doi"
+					],
+					"description": "Cine gătește, de obicei?"
+				},
+				"k4": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"enum": [
+							"lent",
+							"tigaie",
+							"copt",
+							"cuptor",
+							"rapide"
+						]
+					},
+					"description": "Ce se gătește, de obicei?"
+				},
+				"k3b": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"enum": [
+							"povesti",
+							"prieteni",
+							"copii",
+							"laptop"
+						]
+					},
+					"description": "Bucătăria e și locul unde…"
+				},
+				"k5_frig": {
+					"type": "object",
+					"properties": {
+						"fridge": {
+							"type": "boolean"
+						},
+						"fridgeType": {
+							"type": "string",
+							"enum": [
+								"combina",
+								"side",
+								"incorporabil"
+							]
+						},
+						"freezer": {
+							"type": "boolean"
+						},
+						"wine": {
+							"type": "boolean"
+						}
+					},
+					"additionalProperties": false,
+					"description": "Refrigerare"
+				},
+				"k5_gatit": {
+					"type": "object",
+					"properties": {
+						"cook": {
+							"type": "string",
+							"enum": [
+								"aragaz",
+								"separate"
+							]
+						},
+						"aragazPower": {
+							"type": "string",
+							"enum": [
+								"gaz",
+								"electric",
+								"mixt"
+							]
+						},
+						"gasSource": {
+							"type": "string",
+							"enum": [
+								"retea",
+								"butelie"
+							]
+						},
+						"hob": {
+							"type": "string",
+							"enum": [
+								"gaz",
+								"vitro",
+								"inductie"
+							]
+						}
+					},
+					"additionalProperties": false,
+					"description": "Gătit"
+				},
+				"k5_spalat": {
+					"type": "object",
+					"properties": {
+						"dish": {
+							"type": "boolean"
+						},
+						"washer": {
+							"type": "boolean"
+						}
+					},
+					"additionalProperties": false,
+					"description": "Spălat"
+				},
+				"k6a": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"enum": [
+							"micro",
+							"prajitor",
+							"fierbator",
+							"multicooker",
+							"blender",
+							"mixer",
+							"airfryer",
+							"sandwich",
+							"storcator",
+							"gratar",
+							"paine",
+							"altii"
+						]
+					},
+					"description": "Ce alte electrocasnice folosești?"
+				},
+				"k6a_other": {
+					"type": "string",
+					"maxLength": 5000,
+					"description": "Ce alți roboți?"
+				},
+				"k5_plasare": {
+					"type": "object",
+					"properties": {
+						"ovenWhere": {
+							"type": "string",
+							"enum": [
+								"oriunde",
+								"podea",
+								"coloana"
+							]
+						},
+						"microWhere": {
+							"type": "string",
+							"enum": [
+								"oriunde",
+								"blat",
+								"coloana"
+							]
+						},
+						"wineWhere": {
+							"type": "string",
+							"enum": [
+								"oriunde",
+								"sub_blat",
+								"coloana"
+							]
+						}
+					},
+					"additionalProperties": false,
+					"description": "Preferințe de amplasare"
+				},
+				"k7": {
+					"type": "string",
+					"enum": [
+						"espressor",
+						"capsule",
+						"ibric",
+						"filtru",
+						"nu"
+					],
+					"description": "Cum preferi cafeaua?"
+				},
+				"k7_freq": {
+					"type": "string",
+					"enum": [
+						"zilnic",
+						"saptamanal",
+						"rar"
+					],
+					"description": "Cât de des folosești aparatul?"
+				},
+				"k8": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"enum": [
+							"balcon",
+							"debara",
+							"beci",
+							"nu"
+						]
+					},
+					"description": "Depozitezi alimente sau obiecte de bucătărie și în altă parte?"
+				},
+				"k9": {
+					"type": "string",
+					"enum": [
+						"unul",
+						"doua_trei"
+					],
+					"description": "De câte coșuri de gunoi ai nevoie în bucătărie?"
+				},
+				"k10": {
+					"type": "string",
+					"enum": [
+						"zilnic",
+						"rapid",
+						"pahar",
+						"nu"
+					],
+					"description": "Vrei să iei masa în bucătărie?"
+				},
+				"k10_seats": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 12,
+					"description": "Câte persoane trebuie să încapă la masă?"
+				},
+				"k11": {
+					"type": "object",
+					"properties": {
+						"text": {
+							"type": "string",
+							"maxLength": 5000
+						}
+					},
+					"additionalProperties": false,
+					"description": "Ce vrei să faci diferit de data asta?"
+				},
+				"k12": {
+					"type": "object",
+					"properties": {
+						"text": {
+							"type": "string",
+							"maxLength": 5000
+						}
+					},
+					"additionalProperties": false,
+					"description": "Care e lucrul pe care noua bucătărie trebuie neapărat să-l aibă?"
+				},
+				"k13": {
+					"type": "object",
+					"properties": {
+						"items": {
+							"maxItems": 50,
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"name": {
+										"type": "string",
+										"maxLength": 200
+									},
+									"length": {
+										"type": "string",
+										"maxLength": 20
+									},
+									"width": {
+										"type": "string",
+										"maxLength": 20
+									}
+								},
+								"required": [
+									"name",
+									"length",
+									"width"
+								],
+								"additionalProperties": false
+							}
+						}
+					},
+					"required": [
+						"items"
+					],
+					"additionalProperties": false,
+					"description": "Ai deja mobilier pe care vrei să-l păstrezi în bucătărie?"
+				},
+				"l1": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"enum": [
+							"tv",
+							"vorba",
+							"lucru",
+							"masa",
+							"copii",
+							"dormit",
+							"citit"
+						]
+					},
+					"description": "Cum îți petreci timpul în living?"
+				},
+				"l1_seats": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 12,
+					"description": "Câte persoane trebuie să încapă?"
+				},
+				"l2": {
+					"type": "object",
+					"properties": {
+						"seats": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 12
+						}
+					},
+					"additionalProperties": false,
+					"description": "Câte persoane trebuie să încapă comod pe canapea și fotolii?"
+				},
+				"l3": {
+					"type": "object",
+					"properties": {
+						"problem": {
+							"type": "string",
+							"maxLength": 5000
+						},
+						"must": {
+							"type": "string",
+							"maxLength": 5000
+						}
+					},
+					"additionalProperties": false,
+					"description": "Care e problema principală pe care vrei să o rezolvi în living? Și ce nu poate lipsi?"
+				},
+				"l4": {
+					"type": "object",
+					"properties": {
+						"items": {
+							"maxItems": 50,
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"name": {
+										"type": "string",
+										"maxLength": 200
+									},
+									"length": {
+										"type": "string",
+										"maxLength": 20
+									},
+									"width": {
+										"type": "string",
+										"maxLength": 20
+									}
+								},
+								"required": [
+									"name",
+									"length",
+									"width"
+								],
+								"additionalProperties": false
+							}
+						}
+					},
+					"required": [
+						"items"
+					],
+					"additionalProperties": false,
+					"description": "Ai deja mobilier pe care vrei să îl păstrezi în living?"
+				},
+				"d1": {
+					"type": "string",
+					"enum": [
+						"cuplu",
+						"adult",
+						"copil",
+						"doi_copii",
+						"oaspeti",
+						"altcineva"
+					],
+					"description": "Cine va dormi aici?"
+				},
+				"d1_other": {
+					"type": "string",
+					"maxLength": 5000,
+					"description": "Cine?"
+				},
+				"d2": {
+					"type": "object",
+					"properties": {
+						"bed": {
+							"type": "string",
+							"enum": [
+								"90",
+								"120",
+								"140",
+								"160",
+								"180",
+								"200",
+								"canapea",
+								"suspendate",
+								"altceva"
+							]
+						},
+						"bedOther": {
+							"type": "string",
+							"maxLength": 5000
+						},
+						"wants": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"enum": [
+									"dulap",
+									"noptiera",
+									"machiaj",
+									"tv",
+									"birou",
+									"fotoliu",
+									"altceva"
+								]
+							}
+						},
+						"wantsOther": {
+							"type": "string",
+							"maxLength": 5000
+						}
+					},
+					"additionalProperties": false,
+					"description": "Ce vrei în dormitor?"
+				},
+				"d3": {
+					"type": "object",
+					"properties": {
+						"problem": {
+							"type": "string",
+							"maxLength": 5000
+						},
+						"must": {
+							"type": "string",
+							"maxLength": 5000
+						}
+					},
+					"additionalProperties": false,
+					"description": "Care e problema principală pe care vrei să o rezolvi în dormitor? Și ce nu poate lipsi?"
+				},
+				"d4": {
+					"type": "object",
+					"properties": {
+						"items": {
+							"maxItems": 50,
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"name": {
+										"type": "string",
+										"maxLength": 200
+									},
+									"length": {
+										"type": "string",
+										"maxLength": 20
+									},
+									"width": {
+										"type": "string",
+										"maxLength": 20
+									}
+								},
+								"required": [
+									"name",
+									"length",
+									"width"
+								],
+								"additionalProperties": false
+							}
+						}
+					},
+					"required": [
+						"items"
+					],
+					"additionalProperties": false,
+					"description": "Ai deja mobilier pe care vrei să îl păstrezi în dormitor?"
+				},
+				"x1_birou": {
+					"type": "object",
+					"properties": {
+						"text": {
+							"type": "string",
+							"maxLength": 5000
+						}
+					},
+					"additionalProperties": false,
+					"description": "Ce ai nevoie în birou?"
+				},
+				"x2_birou": {
+					"type": "object",
+					"properties": {
+						"problem": {
+							"type": "string",
+							"maxLength": 5000
+						},
+						"must": {
+							"type": "string",
+							"maxLength": 5000
+						}
+					},
+					"additionalProperties": false,
+					"description": "Care e problema principală pe care vrei să o rezolvi în birou? Și ce nu poate lipsi?"
+				},
+				"x3_birou": {
+					"type": "object",
+					"properties": {
+						"items": {
+							"maxItems": 50,
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"name": {
+										"type": "string",
+										"maxLength": 200
+									},
+									"length": {
+										"type": "string",
+										"maxLength": 20
+									},
+									"width": {
+										"type": "string",
+										"maxLength": 20
+									}
+								},
+								"required": [
+									"name",
+									"length",
+									"width"
+								],
+								"additionalProperties": false
+							}
+						}
+					},
+					"required": [
+						"items"
+					],
+					"additionalProperties": false,
+					"description": "Ai deja mobilier pe care vrei să îl păstrezi în birou?"
+				},
+				"x1_baie": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"enum": [
+							"cada",
+							"dus_cabina",
+							"dus_rigola",
+							"masina_spalat",
+							"uscator",
+							"dulap",
+							"lavoar",
+							"doua_lavoare",
+							"toaleta",
+							"bideu",
+							"portprosop",
+							"altceva"
+						]
+					},
+					"description": "Ce obiecte sanitare vrei în baie?"
+				},
+				"x1_baie_other": {
+					"type": "string",
+					"maxLength": 5000,
+					"description": "Ce anume?"
+				},
+				"x2_baie": {
+					"type": "object",
+					"properties": {
+						"problem": {
+							"type": "string",
+							"maxLength": 5000
+						},
+						"must": {
+							"type": "string",
+							"maxLength": 5000
+						}
+					},
+					"additionalProperties": false,
+					"description": "Care e problema principală pe care vrei să o rezolvi în baie? Și ce nu poate lipsi?"
+				},
+				"x3_baie": {
+					"type": "object",
+					"properties": {
+						"items": {
+							"maxItems": 50,
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"name": {
+										"type": "string",
+										"maxLength": 200
+									},
+									"length": {
+										"type": "string",
+										"maxLength": 20
+									},
+									"width": {
+										"type": "string",
+										"maxLength": 20
+									}
+								},
+								"required": [
+									"name",
+									"length",
+									"width"
+								],
+								"additionalProperties": false
+							}
+						}
+					},
+					"required": [
+						"items"
+					],
+					"additionalProperties": false,
+					"description": "Ai deja obiecte pe care vrei să le păstrezi în baie?"
+				},
+				"x1_hol": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"enum": [
+							"cuier",
+							"pantofar",
+							"dulap",
+							"oglinda",
+							"banca",
+							"polita",
+							"altceva"
+						]
+					},
+					"description": "Ce obiecte ai nevoie în hol?"
+				},
+				"x1_hol_other": {
+					"type": "string",
+					"maxLength": 5000,
+					"description": "Ce anume?"
+				},
+				"x2_hol": {
+					"type": "object",
+					"properties": {
+						"problem": {
+							"type": "string",
+							"maxLength": 5000
+						},
+						"must": {
+							"type": "string",
+							"maxLength": 5000
+						}
+					},
+					"additionalProperties": false,
+					"description": "Care e problema principală pe care vrei să o rezolvi în hol? Și ce nu poate lipsi?"
+				},
+				"x3_hol": {
+					"type": "object",
+					"properties": {
+						"items": {
+							"maxItems": 50,
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"name": {
+										"type": "string",
+										"maxLength": 200
+									},
+									"length": {
+										"type": "string",
+										"maxLength": 20
+									},
+									"width": {
+										"type": "string",
+										"maxLength": 20
+									}
+								},
+								"required": [
+									"name",
+									"length",
+									"width"
+								],
+								"additionalProperties": false
+							}
+						}
+					},
+					"required": [
+						"items"
+					],
+					"additionalProperties": false,
+					"description": "Ai deja mobilier pe care vrei să îl păstrezi în hol?"
+				},
+				"x1_alta": {
+					"type": "object",
+					"properties": {
+						"room": {
+							"type": "string",
+							"maxLength": 5000
+						},
+						"text": {
+							"type": "string",
+							"maxLength": 5000
+						}
+					},
+					"additionalProperties": false,
+					"description": "Ce cameră este?"
+				},
+				"x2_alta": {
+					"type": "object",
+					"properties": {
+						"problem": {
+							"type": "string",
+							"maxLength": 5000
+						},
+						"must": {
+							"type": "string",
+							"maxLength": 5000
+						}
+					},
+					"additionalProperties": false,
+					"description": "Care e problema principală pe care vrei să o rezolvi în cameră? Și ce nu poate lipsi?"
+				},
+				"x3_alta": {
+					"type": "object",
+					"properties": {
+						"items": {
+							"maxItems": 50,
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"name": {
+										"type": "string",
+										"maxLength": 200
+									},
+									"length": {
+										"type": "string",
+										"maxLength": 20
+									},
+									"width": {
+										"type": "string",
+										"maxLength": 20
+									}
+								},
+								"required": [
+									"name",
+									"length",
+									"width"
+								],
+								"additionalProperties": false
+							}
+						}
+					},
+					"required": [
+						"items"
+					],
+					"additionalProperties": false,
+					"description": "Ai deja mobilier pe care vrei să îl păstrezi în cameră?"
+				}
+			},
+			"additionalProperties": false
+		},
+		"drawing": {
+			"anyOf": [
+				{
+					"type": "object",
+					"properties": {
+						"room": {
+							"type": "object",
+							"properties": {
+								"unit": {
+									"type": "string",
+									"const": "cm"
+								},
+								"ceilingHeightCm": {
+									"type": [
+										"number",
+										"null"
+									]
+								},
+								"closed": {
+									"type": "boolean"
+								},
+								"outline": {
+									"type": "array",
+									"items": {
+										"type": "array",
+										"prefixItems": [
+											{
+												"type": "number"
+											},
+											{
+												"type": "number"
+											}
+										],
+										"items": false,
+										"minItems": 2,
+										"maxItems": 2
+									}
+								},
+								"walls": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"index": {
+												"type": "integer",
+												"minimum": -9007199254740991,
+												"maximum": 9007199254740991
+											},
+											"from": {
+												"type": "array",
+												"prefixItems": [
+													{
+														"type": "number"
+													},
+													{
+														"type": "number"
+													}
+												],
+												"items": false,
+												"minItems": 2,
+												"maxItems": 2
+											},
+											"to": {
+												"type": "array",
+												"prefixItems": [
+													{
+														"type": "number"
+													},
+													{
+														"type": "number"
+													}
+												],
+												"items": false,
+												"minItems": 2,
+												"maxItems": 2
+											},
+											"heading": {
+												"type": "string",
+												"enum": [
+													"N",
+													"E",
+													"S",
+													"W"
+												]
+											},
+											"lengthCm": {
+												"type": "object",
+												"properties": {
+													"value": {
+														"type": "number"
+													},
+													"source": {
+														"type": "string",
+														"enum": [
+															"typed",
+															"drawn",
+															"computed"
+														]
+													}
+												},
+												"required": [
+													"value",
+													"source"
+												],
+												"additionalProperties": false
+											},
+											"segments": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"properties": {
+														"id": {
+															"type": "string"
+														},
+														"kind": {
+															"type": "string",
+															"enum": [
+																"wall",
+																"open",
+																"window",
+																"door"
+															]
+														},
+														"lengthCm": {
+															"type": "object",
+															"properties": {
+																"value": {
+																	"type": "number"
+																},
+																"source": {
+																	"type": "string",
+																	"enum": [
+																		"typed",
+																		"drawn",
+																		"computed"
+																	]
+																}
+															},
+															"required": [
+																"value",
+																"source"
+															],
+															"additionalProperties": false
+														},
+														"offsetFromStartCm": {
+															"type": "number"
+														},
+														"sillCm": {
+															"type": [
+																"number",
+																"null"
+															]
+														},
+														"hinge": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"enum": [
+																		"start",
+																		"end"
+																	]
+																},
+																{
+																	"type": "null"
+																}
+															]
+														},
+														"swing": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"enum": [
+																		"in",
+																		"out"
+																	]
+																},
+																{
+																	"type": "null"
+																}
+															]
+														},
+														"wallId": {
+															"type": "string"
+														}
+													},
+													"required": [
+														"id",
+														"kind",
+														"lengthCm",
+														"offsetFromStartCm",
+														"sillCm",
+														"hinge",
+														"swing"
+													],
+													"additionalProperties": false
+												}
+											}
+										},
+										"required": [
+											"id",
+											"index",
+											"from",
+											"to",
+											"heading",
+											"lengthCm",
+											"segments"
+										],
+										"additionalProperties": false
+									}
+								},
+								"openings": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"kind": {
+												"type": "string",
+												"enum": [
+													"wall",
+													"open",
+													"window",
+													"door"
+												]
+											},
+											"lengthCm": {
+												"type": "object",
+												"properties": {
+													"value": {
+														"type": "number"
+													},
+													"source": {
+														"type": "string",
+														"enum": [
+															"typed",
+															"drawn",
+															"computed"
+														]
+													}
+												},
+												"required": [
+													"value",
+													"source"
+												],
+												"additionalProperties": false
+											},
+											"offsetFromStartCm": {
+												"type": "number"
+											},
+											"sillCm": {
+												"type": [
+													"number",
+													"null"
+												]
+											},
+											"hinge": {
+												"anyOf": [
+													{
+														"type": "string",
+														"enum": [
+															"start",
+															"end"
+														]
+													},
+													{
+														"type": "null"
+													}
+												]
+											},
+											"swing": {
+												"anyOf": [
+													{
+														"type": "string",
+														"enum": [
+															"in",
+															"out"
+														]
+													},
+													{
+														"type": "null"
+													}
+												]
+											},
+											"wallId": {
+												"type": "string"
+											}
+										},
+										"required": [
+											"id",
+											"kind",
+											"lengthCm",
+											"offsetFromStartCm",
+											"sillCm",
+											"hinge",
+											"swing"
+										],
+										"additionalProperties": false
+									}
+								},
+								"unanswered": {
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								},
+								"finished": {
+									"type": "boolean"
+								}
+							},
+							"required": [
+								"unit",
+								"ceilingHeightCm",
+								"closed",
+								"outline",
+								"walls",
+								"openings",
+								"unanswered",
+								"finished"
+							],
+							"additionalProperties": false
+						},
+						"svg": {
+							"type": "string",
+							"maxLength": 2000000
+						},
+						"pngObject": {
+							"type": "string",
+							"const": "uploads/drawing.png"
+						},
+						"updatedAt": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 9007199254740991
+						}
+					},
+					"required": [
+						"room",
+						"svg",
+						"pngObject",
+						"updatedAt"
+					],
+					"additionalProperties": false
+				},
+				{
+					"type": "null"
+				}
+			]
+		},
+		"files": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"fileId": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9-]{1,80}$"
+					},
+					"kind": {
+						"type": "string",
+						"enum": [
+							"plan",
+							"photo"
+						]
+					},
+					"group": {
+						"anyOf": [
+							{
+								"type": "string",
+								"enum": [
+									"spatiu",
+									"mobilier"
+								]
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"roomId": {
+						"anyOf": [
+							{
+								"type": "string",
+								"enum": [
+									"bucatarie",
+									"living",
+									"dormitor",
+									"birou",
+									"baie",
+									"hol",
+									"alta"
+								]
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"originalName": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 200
+					},
+					"contentType": {
+						"type": "string",
+						"enum": [
+							"image/jpeg",
+							"image/png",
+							"application/pdf"
+						]
+					},
+					"size": {
+						"type": "integer",
+						"exclusiveMinimum": 0,
+						"maximum": 9007199254740991
+					},
+					"crc32c": {
+						"type": "string"
+					},
+					"object": {
+						"type": "string",
+						"pattern": "^uploads\\/[A-Za-z0-9-]{1,80}\\.(jpg|png|pdf)$"
+					},
+					"addedAt": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 9007199254740991
+					}
+				},
+				"required": [
+					"fileId",
+					"kind",
+					"group",
+					"roomId",
+					"originalName",
+					"contentType",
+					"size",
+					"object",
+					"addedAt"
+				],
+				"additionalProperties": false
+			}
+		}
+	},
+	"required": [
+		"schemaVersion",
+		"submissionId",
+		"committedAt",
+		"appVersion",
+		"pageUri",
+		"locale",
+		"client",
+		"rooms",
+		"answers",
+		"drawing",
+		"files"
+	],
+	"additionalProperties": false
+}

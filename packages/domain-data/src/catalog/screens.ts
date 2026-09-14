@@ -1,8 +1,6 @@
-import type { Answers, RoomId } from '$lib/types';
+import type { Answers, RoomId } from '../types';
 import { ROOMS, SMALL } from './rooms';
 import { kids, notCooking, peopleCount, picked, yn } from './predicates';
-
-export { picked, kids, toddlers, notCooking, hasMachine, hh, peopleCount, yn } from './predicates';
 
 /** Chapter ids. `comun` is the prototype's single common chapter; the webapp splits it
  *  into `despre_tine` · `planuri` · `locuinta` (see CONTRACTS.md). Room ids are chapters too. */
@@ -1123,6 +1121,27 @@ export function resolveGroups(c: AppCard, draft: Record<string, unknown>): CardG
 export function resolveFieldOptions(f: Field, a: Answers): Option[] {
 	const raw = typeof f.options === 'function' ? f.options(a) : f.options || [];
 	return raw.filter((o) => !o.showIf || o.showIf(a));
+}
+
+/** The follow-up of a `single` screen, if the picked value opens it. */
+export function activeFollowUp(s: Screen, a: Answers): FollowUp | null {
+	if (s.kind !== 'single' || !s.followUp) return null;
+	const v = a[s.id];
+	if (v === undefined) return null;
+	const when = s.followUp.when;
+	return !when || when(v as string) ? s.followUp : null;
+}
+
+/** Is this card ticked? An `always` card is open from the start. */
+export function cardOn(card: AppCard, draft: Record<string, unknown>, pick?: string): boolean {
+	if (card.always) return true;
+	if (pick) return draft[pick] === card.value;
+	return draft[card.value] === true;
+}
+
+/** Does a compound field show, given the screen's draft and the answers? */
+export function fieldVisible(f: Field, draft: Record<string, unknown>, a: Answers): boolean {
+	return !f.showIf || f.showIf(draft, a);
 }
 
 /** The furniture rows of a `furniture` answer, empty rows dropped. */

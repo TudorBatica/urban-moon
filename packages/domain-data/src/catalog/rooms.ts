@@ -1,4 +1,4 @@
-import type { RoomId } from '$lib/types';
+import type { RoomId } from '../types';
 
 export interface Room {
 	id: RoomId;

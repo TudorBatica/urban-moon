@@ -1,0 +1,20 @@
+# Build context is the repo root (the web app needs the workspace). Keep it small and secret-free.
+.git
+**/node_modules
+**/.svelte-kit
+**/build
+**/out
+**/.wrangler
+**/.env
+**/.env.*
+!**/.env.example
+**/.dev.vars
+compose.yaml
+docs
+infra
+scripts
+apps/input-pdf-worker/fonts
+apps/input-pdf-worker/src
+apps/input-capture-web/urban-moon-*.html
+apps/input-capture-web/COPY-*.md
+packages/domain-data/fixtures

@@ -1,3 +1,4 @@
+import { activeFollowUp, cardOn, fieldVisible } from '@urban-moon/domain-data';
 import type { Answers } from '$lib/types';
 import {
 	CHAPTER_LABEL,
@@ -13,11 +14,14 @@ import {
 	type Field,
 	type FollowUp,
 	type Screen
-} from '$lib/questions/screens';
-import { ROOMS } from '$lib/questions/rooms';
-import { picked } from '$lib/questions/predicates';
+} from '@urban-moon/domain-data';
+import { ROOMS } from '@urban-moon/domain-data';
+import { picked } from '@urban-moon/domain-data';
 
 /* The prototype's navigation, chrome and completeness rules, as pure functions. */
+
+/* These three are catalog semantics shared with the PDF worker; they live in domain-data. */
+export { activeFollowUp, cardOn, fieldVisible };
 
 export const indexOfScreen = (id: string): number => S.findIndex((s) => s.id === id);
 
@@ -59,19 +63,6 @@ export function lastVisible(a: Answers): Screen | null {
 export const followUpDone = (fu: FollowUp, a: Answers): boolean =>
 	fu.kind === 'stepper' ? a[fu.key] !== undefined : !!String(a[fu.key] ?? '').trim();
 
-/** The follow-up of a `single` screen, if the picked value opens it. */
-export function activeFollowUp(s: Screen, a: Answers): FollowUp | null {
-	if (s.kind !== 'single' || !s.followUp) return null;
-	const v = a[s.id];
-	if (v === undefined) return null;
-	const when = s.followUp.when;
-	return !when || when(v as string) ? s.followUp : null;
-}
-
-export function fieldVisible(f: Field, draft: Record<string, unknown>, a: Answers): boolean {
-	return !f.showIf || f.showIf(draft, a);
-}
-
 export function fieldDone(f: Field, draft: Record<string, unknown>): boolean {
 	if (f.kind === 'heading') return true;
 	if (f.kind === 'stepper') return true;
@@ -98,17 +89,6 @@ export function compoundComplete(
 }
 
 /* ---------------- cards ---------------- */
-
-/** Is this card ticked? An `always` card is open from the start. */
-export function cardOn(
-	card: AppCard,
-	draft: Record<string, unknown>,
-	pick?: string
-): boolean {
-	if (card.always) return true;
-	if (pick) return draft[pick] === card.value;
-	return draft[card.value] === true;
-}
 
 /** A ticked card is answered once each of its visible groups has a value. */
 export function cardDone(card: AppCard, draft: Record<string, unknown>): boolean {

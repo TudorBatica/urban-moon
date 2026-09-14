@@ -32,7 +32,7 @@
 	<Dropzone
 		slim
 		label="Încarcă pozele"
-		hint="JPG, PNG, WEBP, HEIC · {mine.length} din {MAX_PHOTOS}"
+		hint="JPG, PNG · până la 10 MB · {mine.length} din {MAX_PHOTOS}"
 		accept={PHOTO_ACCEPT}
 		disabled={mine.length >= MAX_PHOTOS}
 		{onfiles}

@@ -4,7 +4,7 @@
 	import { answers } from '$lib/state/answers.svelte';
 	import { plans } from '$lib/state/plans.svelte';
 	import { photos } from '$lib/state/photos.svelte';
-	import { answerSections, readbackText } from '$lib/questions/readback';
+	import { answerSections } from '$lib/questions/readback';
 	import { lastVisible } from '$lib/flow/engine';
 	import Frame from '$lib/ui/Frame.svelte';
 	import GoBar from '$lib/ui/GoBar.svelte';
@@ -41,7 +41,7 @@
 		</section>
 	{/each}
 
-	<SubmitPanel readback={readbackText(answers, up)} />
+	<SubmitPanel />
 
 	{#snippet bottom()}
 		<GoBar nextHidden backHidden={!back} onback={() => back && goto(`/?s=${back.id}`)} />

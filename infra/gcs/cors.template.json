@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["${WEB_ORIGINS}"],
+    "method": ["PUT"],
+    "responseHeader": ["Content-Type", "Content-Range", "Range", "X-Goog-Resumable"],
+    "maxAgeSeconds": 3600
+  }
+]

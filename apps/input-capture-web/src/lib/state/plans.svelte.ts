@@ -1,79 +1,40 @@
 import { browser } from '$app/environment';
 import { del, get, set } from 'idb-keyval';
 import { pickedRooms } from './answers.svelte';
+import {
+	ACCEPTED_CONTENT_TYPES,
+	ACCEPTED_EXTENSIONS,
+	MAX_IMAGE_BYTES,
+	acceptedTypeOf,
+	maxPlanFiles
+} from '@urban-moon/domain-data';
 import type { Drawing, PlanFileMeta, PlansState, RoomId } from '$lib/types';
 
 const KEY = 'um.plans';
 const blobKey = (id: string): string => `plan-file:${id}`;
 
-/** roomCount * 2, never below 2. */
-export function maxFiles(roomCount: number): number {
-	return Math.max(2, roomCount * 2);
-}
+/** Two plan files per picked room, never below two — the rule lives in domain-data. */
+export const maxFiles = maxPlanFiles;
 
+/** For the file picker's accept attribute: the accepted mime types and their extensions. */
 export const ACCEPTED_TYPES: string[] = [
-	'application/pdf',
-	'image/jpeg',
-	'image/png',
-	'image/webp',
-	'image/heic',
-	'image/heif',
-	'application/acad',
-	'image/vnd.dwg',
-	'image/vnd.dxf',
-	'.pdf',
-	'.jpg',
-	'.jpeg',
-	'.png',
-	'.webp',
-	'.heic',
-	'.heif',
-	'.dwg',
-	'.dxf'
+	...ACCEPTED_CONTENT_TYPES,
+	...ACCEPTED_CONTENT_TYPES.flatMap((t) => ACCEPTED_EXTENSIONS[t])
 ];
 
+/** The upload route still passes files through the server (Cloudflare), so plan PDFs stay under
+ *  25 MB until uploads go straight to the bucket; images follow domain-data's 10 MB. */
 export const MAX_FILE_BYTES: number = 25 * 1024 * 1024;
 
-const ACCEPTED_MIME = new Set(
-	ACCEPTED_TYPES.filter((t) => !t.startsWith('.')).map((t) => t.toLowerCase())
-);
-const ACCEPTED_EXT = new Set(
-	ACCEPTED_TYPES.filter((t) => t.startsWith('.')).map((t) => t.toLowerCase())
-);
-
-/** Extra mime spellings browsers and CAD tools use for the same extensions. */
-const ALSO_ACCEPTED_MIME = new Set([
-	'application/x-pdf',
-	'image/jpg',
-	'image/x-heic',
-	'image/x-heif',
-	'application/dwg',
-	'application/x-dwg',
-	'application/x-acad',
-	'application/autocad_dwg',
-	'drawing/dwg',
-	'application/dxf',
-	'application/x-dxf',
-	'application/x-autocad',
-	'image/x-dwg',
-	'image/x-dxf'
-]);
-
-export const REASON_TYPE = 'Tipul de fișier nu e acceptat (PDF, JPG, PNG, WEBP, HEIC, DWG, DXF).';
+export const REASON_TYPE = 'Tipul de fișier nu e acceptat (PDF, JPG, PNG).';
 export const REASON_SIZE = 'Fișierul are peste 25 MB.';
+export const REASON_IMAGE_SIZE = 'Poza are peste 10 MB.';
 export const REASON_DUPLICATE = 'Fișierul e deja adăugat.';
 export const reasonLimit = (max: number): string => `Ai atins limita de ${max} fișiere.`;
 
-function extOf(name: string): string {
-	const i = name.lastIndexOf('.');
-	return i < 0 ? '' : name.slice(i).toLowerCase();
-}
-
-/** Accepted by mime OR by extension, case-insensitive. A missing mime is common for DWG/DXF. */
+/** Accepted by mime OR by extension, case-insensitive. */
 export function isAcceptedFile(name: string, type: string): boolean {
-	const mime = (type || '').split(';')[0].trim().toLowerCase();
-	if (mime && (ACCEPTED_MIME.has(mime) || ALSO_ACCEPTED_MIME.has(mime))) return true;
-	return ACCEPTED_EXT.has(extOf(name));
+	return acceptedTypeOf(name, type) !== null;
 }
 
 function load(): PlansState {
@@ -127,6 +88,10 @@ export async function addFiles(
 		}
 		if (file.size > MAX_FILE_BYTES) {
 			rejected.push({ name: file.name, reason: REASON_SIZE });
+			continue;
+		}
+		if (acceptedTypeOf(file.name, file.type) !== 'application/pdf' && file.size > MAX_IMAGE_BYTES) {
+			rejected.push({ name: file.name, reason: REASON_IMAGE_SIZE });
 			continue;
 		}
 		if (plans.files.length >= max) {

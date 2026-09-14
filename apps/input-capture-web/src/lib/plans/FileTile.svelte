@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getFileBlob } from '$lib/state/plans.svelte';
-	import { roomOf } from '$lib/questions/rooms';
+	import { roomOf } from '@urban-moon/domain-data';
 	import type { PlanFileMeta, RoomId } from '$lib/types';
 
 	interface Props {

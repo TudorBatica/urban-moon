@@ -1,6 +1,8 @@
 # Submission → PDF pipeline — design
 
-Status: proposal, 2026-09-14. Audience: the owner and the developer who implements it.
+Status: proposal, 2026-09-14; revised the same day: the PDF worker is called by Cloud Scheduler
+every minute and finds work through `pending/` markers (§7), instead of a Cloud Tasks queue plus a
+sweep. Audience: the owner and the developer who implements it.
 Everything marked **[unverified]** was not confirmed on an official page; everything else cites a
 source in §18.
 
@@ -14,22 +16,22 @@ source in §18.
 2. When every file is up, the browser calls **`POST /api/submissions/{id}/commit`** with the
    manifest (answers, drawing, list of files). The server verifies every declared object exists
    with the declared size and real magic bytes, writes `manifest.json` as the atomic commit
-   marker (create-only precondition), enqueues a **Cloud Tasks** task named after the submission
-   id, and answers "sent". The user goes straight to Calendly / "Mulțumim"; they never wait for
+   marker (create-only precondition), leaves an empty **`pending/{id}`** object for the worker, and answers "sent". The user goes straight to Calendly / "Mulțumim"; they never wait for
    the PDF.
-3. A separate **Cloud Run service `pdf-worker`** (Node 24 + `qpdf` + `sharp`, concurrency 1,
-   4 GiB) receives the task, claims the submission through a `status.json` generation
-   precondition, builds **one PDF**: cover, contents, all Q&A from `answerSections`, the drawn
+3. A separate **Cloud Run service `pdf-worker`** (Node 24, at most one instance, one request at a
+   time, 4 GiB) is called by **Cloud Scheduler every minute**. Each call lists `pending/` and, for
+   each submission, builds **one PDF**: cover, contents, all Q&A from `answerSections`, the drawn
    plan, the uploaded plans, the photos — with every client-uploaded PDF page stamped
    *"Document încărcat de client"* — and writes it to `submissions/{id}/output/raspunsuri.pdf`.
 4. The worker uploads that PDF to **HubSpot** (Files API, `PRIVATE`), submits the form (the
    existing `um_*` fields plus the PDF's file id) and attaches the PDF to the contact as a Note.
-   Only then is the submission `delivered`.
+   Only then is the submission done: the worker writes `output/done.json` and deletes the marker;
+   on failure it moves the marker to `failed/{id}`.
 5. Every step emits one structured JSON log line; **Cloud Logging log-based alerts** email/Slack
-   the studio on any `pdf_failed`, `hubspot_failed`, or a submission committed but not delivered
-   within 15 minutes. A 15-minute Cloud Scheduler sweep re-enqueues anything stuck.
+   the studio on any `pdf_failed`, `hubspot_failed`, a submission waiting more than 15 minutes, or
+   the worker not having run for 10 minutes. Failed submissions are re-run by hand (`pdf:reprocess`).
 6. Key decisions: GCS over R2; server-initiated resumable uploads; commit = verified manifest,
-   not "json present"; Cloud Tasks + sweep instead of a polling job; `pdf-lib` for authored pages
+   not "json present"; a once-a-minute scheduled call to a single-instance worker instead of a queue; `pdf-lib` for authored pages
    and `qpdf` for merging/stamping large client PDFs; images normalised with `sharp`
    (EXIF orientation fixed, downscaled to 2200 px); HubSpot files private, not public.
 
@@ -66,7 +68,7 @@ source in §18.
 | Per submission total | 400 MB, 100 objects | Bounds worker memory/time and abuse. |
 | Manifest | 8 MB (`BODY_SIZE_LIMIT=8M` on the app server) | Answers + SVG + drawing model are ≪ 1 MB; adapter-node's default is 512 KiB [S-adapter-node]. |
 | Upload session TTL | 24 h (server-side record); GCS sessions live one week [S-gcs-resumable] | A user can pause on the summary page and come back. |
-| Worker per job | 30 min hard (Cloud Tasks dispatch deadline max) [S-tasks-rest]; expected < 60 s | |
+| Worker per run | 30 min (Cloud Run request timeout; Cloud Scheduler's longest attempt deadline) [S-run-timeout]; a run stops taking new submissions after 20 min; expected < 60 s per submission | |
 
 ---
 
@@ -78,12 +80,10 @@ flowchart LR
   A -- "createResumableUpload" --> G[(GCS bucket<br/>um-submissions, europe-west1)]
   B -- "2. PUT chunks to session URI" --> G
   B -- "3. POST /api/submissions/{id}/commit" --> A
-  A -- "verify objects, write manifest.json (gen=0)" --> G
-  A -- "4. create task {id}" --> T[Cloud Tasks queue<br/>pdf-jobs]
-  T -- "5. POST /jobs/build (OIDC)" --> W[pdf-worker<br/>Cloud Run, conc=1, 4 GiB<br/>node24 + qpdf + sharp]
-  W -- "claim status.json, read uploads, write output/raspunsuri.pdf" --> G
-  W -- "6. Files API + Forms API + Notes" --> H[HubSpot]
-  S[Cloud Scheduler<br/>*/15 min] -- "POST /jobs/sweep" --> W
+  A -- "verify objects, write manifest.json (gen=0) + pending/{id}" --> G
+  S[Cloud Scheduler<br/>every minute] -- "4. POST /run (OIDC)" --> W[pdf-worker<br/>Cloud Run, max 1 instance, conc=1, 4 GiB]
+  W -- "list pending/, read uploads, write output/, move the marker" --> G
+  W -- "5. Files API + Forms API + Notes" --> H[HubSpot]
   A & W -- "JSON logs" --> L[Cloud Logging → log-based metrics & alerts<br/>Cloud Monitoring dashboard, Error Reporting]
   B -- "POST /api/log (upload failures)" --> A
 ```
@@ -92,9 +92,8 @@ flowchart LR
 |---|---|---|
 | `app` | Today's SvelteKit app, adapter switched to `adapter-node`, Docker image | Cloud Run service, `europe-west1`, request-based billing, 512 MiB, concurrency 80 |
 | `um-submissions` | Private bucket, uniform bucket-level access, public access prevention, lifecycle 45 days | GCS, `europe-west1` |
-| `pdf-jobs` | Cloud Tasks queue, max concurrent dispatches 2, retries with backoff | Cloud Tasks, `europe-west1` |
-| `pdf-worker` | Node 24 service: `/jobs/build`, `/jobs/sweep`, `/jobs/reprocess` | Cloud Run service, concurrency 1, 2 vCPU / 4 GiB, timeout 1800 s, min 0, max 3 |
-| Scheduler | `*/15 * * * *` → `/jobs/sweep` | Cloud Scheduler |
+| `pdf-worker` | Node 24 service: `POST /run` (work through `pending/`, then answer), `GET /healthz` | Cloud Run service, concurrency 1, 2 vCPU / 4 GiB, timeout 1800 s, min 0, **max 1** |
+| Scheduler `pdf-run` | `* * * * *` → `POST /run`, no retries | Cloud Scheduler |
 | Logging/Monitoring | log-based metrics, alert policies, dashboard, Error Reporting | Cloud Observability |
 
 Region: **`europe-west1` (Belgium)** for everything. Tier 1 pricing for Cloud Run
@@ -121,20 +120,23 @@ Same repo, two Dockerfiles (§14).
 | Data residency | Single region, EU | `jurisdiction: eu` guaranteed at creation [S-r2-location] |
 | Cost at ~5 GB stored | Cents | Cents (10 GB free) |
 
-**Recommendation: GCS.** The worker, queue, logs and bucket live in one project with one IAM
+**Recommendation: GCS.** The worker, scheduler, logs and bucket live in one project with one IAM
 model, and the only thing R2 wins on (egress) is worth $0 at this scale. The bucket is exposed to
 the code only through a `Storage` adapter (§14), so R2 remains a swap, not a rewrite.
 
 ### 4.2 Object layout (one bucket `um-submissions`)
 
 ```
+pending/{submissionId}               # empty; written by the app at commit, deleted by the worker when done
+failed/{submissionId}                # small JSON {stage, code, message, at}; the worker moves the marker here
 submissions/{submissionId}/
   uploads/{fileId}.{jpg|png|pdf}     # client files, object name fixed by the server
   uploads/drawing.png                # the drawn plan raster (from Drawing.pngDataUrl)
   manifest.json                      # the commit marker; written once (ifGenerationMatch=0)
-  status.json                        # state machine, written by app (queued) and worker
   output/raspunsuri.pdf              # the deliverable
   output/build.json                  # page map, sizes, timings, tool versions (debug aid)
+  output/delivery.json               # HubSpot ids, one per step, written as each step succeeds
+  output/done.json                   # written last: the submission is finished
 ```
 
 - `submissionId` is the browser-generated UUID kept in `sessionStorage["um.submissionId"]`
@@ -143,7 +145,8 @@ submissions/{submissionId}/
   another id's prefix.
 - `fileId` is the `PlanFileMeta.id` / `PhotoMeta.id` UUID from the stores; the extension comes
   from the sniffed type, never from the client's name.
-- Everything under `submissions/` is deleted by one lifecycle rule at **45 days** (§12).
+- Everything under `submissions/` and `failed/` is deleted by lifecycle rules at **45 days** (§12).
+  A healthy worker never leaves a `pending/` marker behind; an old one is an alert (§11).
 
 ### 4.3 `manifest.json` (schema v1)
 
@@ -186,22 +189,21 @@ browser state). `answers` is stored verbatim so `answerSections(answers, uploads
 produces exactly the "Ce am înțeles" the user approved. `uploads` for that call is rebuilt from
 `files` (`PlansState.files`, `PhotoMeta[]`) — the same shapes as in the browser.
 
-### 4.4 `status.json`
+### 4.4 Where a submission stands
 
-```jsonc
-{
-  "state": "queued" | "processing" | "generated" | "delivered" | "failed",
-  "attempt": 2,
-  "updatedAt": "…", "claimedAt": "…", "claimedBy": "pdf-worker-rev-00012-abc",
-  "generatedAt": "…", "outputSize": 48211043, "pages": 37,
-  "hubspot": { "fileId": "1836…", "contactId": "…", "noteId": "…", "formSubmittedAt": "…" },
-  "lastError": { "code": "hubspot_5xx", "message": "…", "at": "…" }
-}
-```
+There is no status file; the objects say it:
 
-Written with `ifGenerationMatch` = the generation just read, so two workers cannot both claim
-(§7.4). `schemaVersion` bumps are additive; the worker refuses a manifest with a major it does not
-know and logs `manifest_unsupported`.
+| Objects | Meaning |
+|---|---|
+| `uploads/…` only | uploading, or abandoned (lifecycle removes it) |
+| `manifest.json` + `pending/{id}` | committed, waiting for the worker |
+| `output/done.json` | finished: PDF built and delivered |
+| `failed/{id}` | the worker gave up; the body says at which stage and why; re-run with `pdf:reprocess` (§7.5) |
+
+`output/delivery.json` records each HubSpot step's id as it succeeds (`{fileId, formSubmittedAt,
+noteId}`), so a re-run after a failure half-way through delivery does not upload the file or
+create the note twice. `schemaVersion` bumps are additive; the worker refuses a manifest with a
+major it does not know and logs `manifest_unsupported`.
 
 ---
 
@@ -293,15 +295,12 @@ verification, and is the *only* thing that means "committed".
    the client said and is what goes into the manifest. Anything else → 400 with the file name
    (`Fișierul „x" nu este PDF, JPG sau PNG.`).
 4. Fill in `committedAt`, `appVersion`, `crc32c` per file; write `manifest.json` with
-   `ifGenerationMatch: 0`. **412 ⇒ already committed** → idempotent success (return the same
-   `{ok:true}`; do not enqueue again). Write `status.json` `{state:"queued", attempt:0}` (also
-   gen 0; if it exists, leave it).
-5. Create Cloud Task `projects/…/queues/pdf-jobs/tasks/{submissionId}` → `POST
-   https://pdf-worker…/jobs/build` body `{submissionId}` with an OIDC token. A task name already
-   in the dedup window returns `ALREADY_EXISTS` → treat as success. If task creation fails after
-   the manifest was written, still return `ok:true`: the sweep (§7.5) picks it up within 15 min
-   and the event `task_create_failed` is alerted.
-6. Log `submission_committed` and answer `{ok:true, submissionId}`.
+   `ifGenerationMatch: 0`. **412 ⇒ already committed** → idempotent success.
+5. Write the empty object `pending/{id}` — on a repeat commit too, so a marker lost after the
+   manifest (the write failed, the client retried) is put back. The worker skips a submission that
+   already has `output/done.json`, so a stray marker costs one list entry, not a second PDF.
+6. Log `submission_committed` and answer `{ok:true, submissionId}`. The app depends on nothing
+   but the bucket: no queue, no worker, no HubSpot.
 
 Commit takes a few hundred ms (N metadata reads + N ranged reads in parallel). It runs through
 Cloudflare's proxy comfortably (125 s limit [S-cf-524]).
@@ -321,76 +320,73 @@ Cloudflare's proxy comfortably (125 s limit [S-cf-524]).
 
 ### 7.1 Options
 
-| | (a) Cloud Scheduler → Cloud Run Job polls prefix (owner's idea) | (b1) GCS notification → Pub/Sub push → worker | (b2) Eventarc (GCS finalize) → worker | (b3) **Commit enqueues Cloud Tasks → worker** |
-|---|---|---|---|---|
-| Latency | 1 min at best (cron granularity), typically minutes | seconds | seconds (triggers take up to 2 min to become active [S-eventarc]) | seconds |
-| What triggers | "manifest.json exists and no output" — a bucket list per run | any `OBJECT_FINALIZE` under prefix; filter to `manifest.json` in code [S-gcs-notify] | same event, CloudEvents envelope | exactly one task per commit, named by id |
-| Duplicates | inherent (same submission seen every run until done) | at-least-once, unordered [S-gcs-notify] | at-least-once | dedup by task name (window up to 24 h [S-tasks-quotas]) |
-| Retry/backoff | next cron run | subscription retry policy 10–600 s backoff, ack deadline ≤ 600 s [S-pubsub-props] | Pub/Sub under the hood | queue retry config: max attempts, min/max backoff, max doublings; dispatch deadline up to 30 min [S-tasks-rest] |
-| Dead letter | none (the list *is* the backlog) | dead-letter topic after 5–100 attempts [S-pubsub-dlq] | via the underlying subscription | none built in — after max attempts the task is dropped; the sweep + "committed-not-delivered" alert replace it |
-| Concurrency control | job parallelism | subscription flow control is weak; worker `max-instances` × concurrency | same | queue `max concurrent dispatches` + worker limits |
-| Cost | Scheduler job + job runs even when idle | ~0 | ~0 | ~0 (first 1 M ops/month free [S-tasks-pricing]) |
-| Extra moving parts | job + scheduler | topic, subscription, DLQ, push auth SA | trigger + hidden topic | queue |
+| | (a) **Cloud Scheduler → single-instance Cloud Run service polling `pending/`** | (b) Commit enqueues a Cloud Tasks task → worker, plus a sweep | (c) Eventarc (GCS finalize of `manifest.json`) → worker |
+|---|---|---|---|
+| Latency | ≤ 1 min, plus the build | seconds | seconds (triggers take up to 2 min to become active [S-eventarc]) |
+| The app depends on | the bucket only | the queue, and IAM to mint OIDC tokens | the bucket only |
+| At most one build at a time | `max-instances=1` + `concurrency=1` | queue `max-concurrent-dispatches` | not built in |
+| Retries | a failure moves the marker to `failed/`; re-run by hand | queue backoff; a sweep for what the queue dropped; `status.json` claims | Pub/Sub retry policy, dead-letter topic |
+| Moving parts | one scheduler job | queue, sweep job, claim protocol | trigger, hidden topic, subscription |
+| Cost | ~1,440 list calls and short requests a day: cents (§15) | ~0 | ~0 |
 
-### 7.2 Recommendation: **(b3) Cloud Tasks, plus (a) as a safety net**
+### 7.2 Decision: **(a)**
 
-- The commit endpoint already knows the exact moment a submission is complete; enqueuing there
-  is the most direct signal, named by submission id so a retried commit cannot create a second
-  job. The worker gets a plain authenticated HTTP request with a 30-minute deadline — no
-  CloudEvents parsing, no Pub/Sub envelope, no 600 s ack ceiling.
-- The owner's polling idea survives as the **sweep** (§7.5): a 15-minute Cloud Scheduler call
-  to `/jobs/sweep` that lists `submissions/*/manifest.json` and re-enqueues anything without a
-  `delivered` status. It catches lost tasks, exhausted retries, worker outages and manual
-  reprocessing. That is where "committed but no PDF" is turned into an alert, and it is our
-  dead-letter queue.
-- Pub/Sub/Eventarc would be the pick if the app server were *not* in the loop at commit (e.g.
-  uploads straight from a third party). It is not.
+At one or two submissions a day a minute of latency is invisible (the client is booking a Calendly
+slot meanwhile), and (a) removes the queue, the sweep, the claim protocol and the app's dependency
+on anything but the bucket.
 
-### 7.3 Queue and worker settings
+- **Cloud Scheduler** job `pdf-run`: `* * * * *`, `POST https://pdf-worker…/run` with an OIDC
+  token, **no retries**, attempt deadline 30 min.
+- **`pdf-worker`** Cloud Run service: `--min-instances=0 --max-instances=1 --concurrency=1`,
+  request-based billing. All the work happens inside the `/run` request, so CPU is allocated for it
+  [S-run-cpu]; an idle instance between calls is not billed.
+- **No overlap.** While a run is still building, the next minute's call finds the only instance
+  busy, is held briefly, then refused (429). Scheduler records a failed attempt and calls again a
+  minute later. These attempts are expected and not alerted on.
+- **The rare exception.** Cloud Run can briefly run more instances than `max-instances` (e.g. while
+  a new revision rolls out) **[unverified wording; documented as possible]**. The worst case is one
+  submission built twice at the same moment. The `done.json` check and `delivery.json`'s per-step
+  ids keep this from delivering twice unless both copies are in the same HubSpot step at once;
+  at this volume that is accepted.
+- **Locally** there is no `max-instances`: the worker also refuses a `/run` while one is in
+  progress (an in-process flag), so a dev tick and a manual call cannot overlap either.
+
+### 7.3 `POST /run`
+
+```
+started = now
+list pending/                                  (one call, usually empty)
+for each id, oldest marker first:
+  if now - started > 20 min → stop; the rest waits for the next run
+  if submissions/{id}/output/done.json exists  → delete pending/{id}; log job_skipped_done; next
+  if the marker is older than 15 min           → log submission_waiting (alert)
+  log job_started
+  build the PDF from submissions/{id}/         (§8) → write output/raspunsuri.pdf, output/build.json
+  deliver                                      (§9; a step whose id is in delivery.json is skipped)
+  write output/done.json; delete pending/{id}; log submission_delivered
+  on error — after in-run retries of transient bucket/HubSpot errors (3 tries, backoff):
+     write failed/{id} {stage: build|deliver, code, message, at}; delete pending/{id}
+     log pdf_failed or hubspot_failed (ERROR)
+answer 200 {processed, failed, left}; log run_summary only when pending/ was not empty
+```
+
+Degraded client files (§8.5) are not failures: the PDF is delivered and `pdf_degraded` is logged.
+
+### 7.4 Settings
 
 | Setting | Value |
 |---|---|
-| Queue `pdf-jobs` | `max-concurrent-dispatches=2`, `max-dispatches-per-second=5`, `max-attempts=6`, `min-backoff=30s`, `max-backoff=600s`, `max-doublings=4` (≈ 30 s, 60 s, 120 s, 240 s, 480 s → ~15 min total) |
-| Task | HTTP POST, `dispatchDeadline=1800s`, OIDC token as `pdf-jobs-invoker@…` (has `roles/run.invoker` on `pdf-worker`) |
-| `pdf-worker` | concurrency **1** (a job may use 2–3 GiB), `--cpu=2 --memory=4Gi`, `--timeout=1800`, `--min-instances=0`, `--max-instances=3`, request-based billing (all work happens inside the request, so CPU is allocated [S-run-cpu]), startup CPU boost on |
-| Bursts | 10 people sending at once ⇒ 10 tasks; 2 dispatched concurrently, rest queued; each < 1 min ⇒ all done in ~5 min. Scale `max-concurrent-dispatches` and `max-instances` together. |
+| Scheduler `pdf-run` | `* * * * *`, HTTP POST `/run`, OIDC as `pdf-run-invoker@…` (has `roles/run.invoker` on `pdf-worker`), `--max-retry-attempts=0`, `--attempt-deadline=30m` |
+| `pdf-worker` | `--concurrency=1 --min-instances=0 --max-instances=1`, `--cpu=2 --memory=4Gi`, `--timeout=1800`, request-based billing, startup CPU boost on, `--no-allow-unauthenticated` |
+| Bursts | 10 people sending in the same minute ⇒ one run builds them one after another, < 1 min each ⇒ all done in ~10 min; a run stops taking new ones after 20 min and the next run continues. |
 
-### 7.4 Idempotency and claiming (`/jobs/build`)
+### 7.5 Re-running a submission
 
-```
-read status.json (generation g)
-if state == delivered            → 200 (log job_skipped_delivered)
-if state == processing and claimedAt < 30 min ago → 200 (another worker has it; Cloud Tasks
-                                   would otherwise retry us into a duplicate)  ← still counts as ack
-write status {state:processing, attempt+1, claimedAt, claimedBy} with ifGenerationMatch=g
-   412 → someone else claimed between read and write → 200 (log job_lost_claim)
-build PDF → write output/raspunsuri.pdf (overwrite is fine; generation records the attempt)
-write status generated
-deliver to HubSpot (each sub-step recorded in status.hubspot so a retry skips what succeeded)
-write status delivered → 200
-any failure → write status failed {lastError}; classify:
-   retryable (GCS/HubSpot 5xx/429, timeout, OOM restart) → 500 (Cloud Tasks retries with backoff)
-   permanent (encrypted PDF, unparseable PDF, manifest invalid)  → 200 + log pdf_failed (no point retrying; the sweep will not re-enqueue a `failed` with a permanent code)
-```
-
-The 30-minute "stale processing" rule equals the dispatch deadline: a worker that died mid-job
-holds the claim no longer than its task could have run.
-
-### 7.5 Sweep (`/jobs/sweep`, Cloud Scheduler every 15 min)
-
-Lists `submissions/` with delimiter `/` (one list call, then `status.json` reads only for
-prefixes that have a `manifest.json`). For each: `delivered` → skip; `failed` with a permanent
-code → log `submission_stuck` once per day (alert); otherwise, if `updatedAt` is older than 15
-min → create the task again (same name; if the task still exists, `ALREADY_EXISTS` is fine).
-Also emits the gauge-like log `sweep_summary {queued, processing, failed, delivered_24h}` that the
-dashboard plots. Runtime: a handful of list/read operations — free.
-
-### 7.6 Reprocess on demand
-
-`npm run pdf:reprocess -- <submissionId> [--force]` runs `gcloud tasks create-http-task` with a
-fresh task name (`{id}-r{timestamp}`) and body `{submissionId, force:true}`; `force` makes the
-worker ignore `delivered` and rebuild + re-attach (a second Note; the old file stays). Used after
-a generator bug fix or a corrupted delivery.
+`npm run pdf:reprocess -- <submissionId> [--force]` moves `failed/{id}` back to `pending/{id}`
+(or just writes the marker); the next run picks it up. Without `--force` the run builds the PDF
+again and skips the HubSpot steps already in `delivery.json`; a submission with `done.json` is
+skipped. `--force` deletes `output/` first: a full rebuild and a new delivery (a second file and
+note in HubSpot). Used after fixing the cause: a config, a generator bug, a HubSpot outage.
 
 ---
 
@@ -517,7 +513,7 @@ same numbers go in the `pdf_generated` log event.
 
 1. **Upload** `raspunsuri.pdf` → `POST /files/v3/files`, `access: "PRIVATE"`, folder
    `/proiecte/{email-slug}/`, name `raspunsuri-{yyyy-mm-dd}-{id8}.pdf`. Store the returned `id`
-   in `status.hubspot.fileId` before anything else so a retry never uploads twice. The HubSpot
+   in `output/delivery.json` before anything else so a retry never uploads twice. The HubSpot
    file is private; humans open it inside HubSpot, code uses `GET /files/v3/files/{id}/signed-url`
    [S-hs-files].
    - Size limit: the files tool accepts "up to 2 GB for accounts with paid subscriptions … If a
@@ -540,14 +536,14 @@ same numbers go in the `pdf_generated` log event.
    The note is what makes the PDF visible on the timeline — and what a HubSpot workflow can
    notify the studio on.
 4. **Retries / idempotency** — each of the three steps is skipped if its id/timestamp is already
-   in `status.hubspot`. `429` → honour `Retry-After` if present, else back off; limits are 100–190
+   in `output/delivery.json`. `429` → honour `Retry-After` if present, else back off; limits are 100–190
    requests / 10 s per private app [S-hs-limits] — we make three. `5xx`/network → retryable
-   failure (Cloud Tasks backoff); `4xx` other than 429 → permanent `hubspot_rejected` with the
+   failure (retried within the run, then `failed/`); `4xx` other than 429 → permanent `hubspot_rejected` with the
    body logged (truncated).
-5. **HubSpot down** — the PDF is already in the bucket (`generated`); retries run for ~15 min via
-   the queue, then the sweep re-enqueues every 15 min for 45 days. The alert
-   "committed-not-delivered > 15 min" fires once; the studio can also fetch the PDF from the
-   bucket by hand (`gcloud storage cp`) in the meantime.
+5. **HubSpot down** — the PDF is already in the bucket; the run retries a few times, then moves
+   the marker to `failed/` and `hubspot_failed` alerts. Once HubSpot is back, `pdf:reprocess`
+   delivers it (steps already done are skipped). The studio can fetch the PDF from the bucket by
+   hand (`gcloud storage cp`) in the meantime.
 
 ---
 
@@ -555,21 +551,22 @@ same numbers go in the `pdf_generated` log event.
 
 | Failure | Behaviour | Retry | Alert | Manual path |
 |---|---|---|---|---|
-| Upload abandoned (user leaves) | Objects sit under `submissions/{id}/uploads/`, no manifest | — | none (normal) | Lifecycle deletes at 45 days. Sweep counts them (`abandoned_7d`) for the dashboard. |
+| Upload abandoned (user leaves) | Objects sit under `submissions/{id}/uploads/`, no manifest | — | none (normal) | Lifecycle deletes at 45 days. |
 | Chunk PUT fails / offline | Client queries `bytes */N`, resumes; 5 attempts with backoff, then row "a eșuat" + retry button | client | `upload_failed` from `/api/log` → metric; alert if > 5 in 1 h | — |
 | Commit: object missing / size mismatch | 400 with the file name; client marks the row failed and re-uploads only that file | client | `commit_rejected` counter | — |
 | Commit: manifest write 412 | Already committed → `ok` | — | — | — |
-| Commit: task create fails | Manifest written, `task_create_failed` logged, `ok` returned | sweep re-enqueues ≤ 15 min | yes (ERROR) | — |
-| Worker crash / OOM mid-job | Status stuck `processing`; Cloud Tasks gets no 2xx → retries after backoff; claim is stale after 30 min | queue then sweep | `pdf_failed` if the process logged one; otherwise "committed-not-delivered" | `pdf:reprocess` |
+| Commit: marker write fails after the manifest | 502 to the browser; the client retries; the repeat commit writes the marker | client | `commit_failed` (ERROR) | — |
+| Worker crash / OOM mid-run | The request dies; the marker stays in `pending/`; the next minute's run starts that submission again | next run | memory alert; `submission_waiting` if it keeps crashing | see the poison row |
 | Corrupt client PDF (`qpdf --check` exit 2) | Permanent `pdf_invalid`; **degrade, don't fail**: the separator page says "Fișierul nu a putut fi citit; este atașat ca fișier în PDF" and the original bytes are attached as an embedded file; the job continues and the PDF is delivered | — | `pdf_degraded` (WARNING) — the studio is told which file to ask for again | ask the client for a new file |
 | Encrypted PDF (needs user password) | Same degrade path: `pdf_encrypted` | — | `pdf_degraded` | same |
-| Generator bug (exception) | `pdf_failed` permanent with stack → Error Reporting group | 1 automatic retry (could be transient), then stop | **yes, immediately** (ERROR) | fix, deploy, `pdf:reprocess` |
-| HubSpot 5xx / timeout | Retryable; PDF stays in bucket | queue (6 attempts), then sweep every 15 min | `hubspot_failed` counter; "committed-not-delivered" after 15 min | upload by hand from bucket if urgent |
-| HubSpot 4xx (bad token, form guid, property missing) | Permanent `hubspot_rejected` | none until config fixed | **yes** (ERROR) | fix config, `pdf:reprocess --force` |
-| Poison task (always crashes worker) | Cloud Tasks stops after 6 attempts; sweep re-enqueues but the `failed` status with the same error code ≥ 3 times marks `permanent` | stops | `submission_stuck` daily until resolved | investigate with `build.json` + logs by `submissionId` |
+| Generator bug (exception) | `pdf_failed` with stack → Error Reporting group; marker → `failed/` | none | **yes, immediately** (ERROR) | fix, deploy, `pdf:reprocess` |
+| HubSpot 5xx / timeout | 3 tries within the run, then `failed/` (stage `deliver`); the PDF stays in the bucket | `pdf:reprocess` | `hubspot_failed` (ERROR) | upload by hand from the bucket if urgent |
+| HubSpot 4xx (bad token, form guid, property missing) | `hubspot_rejected`, marker → `failed/` | none until config fixed | **yes** (ERROR) | fix config, `pdf:reprocess` |
+| Poison submission (crashes the process every time) | Its marker never leaves `pending/`; every run crashes on it and the ones behind it wait | — | `submission_waiting` after 15 min; worker 5xx | move the marker to `failed/` by hand (`gcloud storage mv`), investigate with the logs by `submissionId`. A crash counter on the marker would automate this; not needed at this volume. |
 | Bucket/IAM misconfig | Every commit 500s | — | 5xx spike alert | — |
 
-Every failed job leaves `status.json.lastError` and, when the job got that far, `output/build.json`.
+Every failure leaves `failed/{id}` with the stage and the error and, when the build got that far,
+`output/build.json`.
 Everything in the studio's hands is either HubSpot or a `gcloud storage` command.
 
 ---
@@ -612,8 +609,8 @@ where needed, and can be redacted with a Cloud Logging exclusion if the owner wa
 | `upload_failed` | WARNING | app (`/api/log` from the browser) | fileId, httpStatus, attempt, userAgent |
 | `commit_rejected` | WARNING | app | reason, fileId |
 | `submission_committed` | NOTICE | app | files, totalBytes, rooms |
-| `task_create_failed` | ERROR | app | error |
-| `job_started` / `job_skipped_delivered` / `job_lost_claim` | INFO | worker | attempt |
+| `commit_failed` | ERROR | app | error (bucket unreachable, marker write failed) |
+| `job_started` / `job_skipped_done` | INFO | worker | markerAgeSec |
 | `pdf_generated` | NOTICE | worker | durationMs, sizes, phases{download, images, qpdf, body, merge} |
 | `pdf_degraded` | WARNING | worker | fileId, code (pdf_invalid/pdf_encrypted) |
 | `pdf_failed` | ERROR | worker | code, permanent, stack |
@@ -621,8 +618,8 @@ where needed, and can be redacted with a Cloud Logging exclusion if the owner wa
 | `hubspot_failed` | ERROR (5xx) / WARNING (429) | worker | httpStatus, step |
 | `hubspot_rejected` | ERROR | worker | httpStatus, body (≤ 1 KB) |
 | `submission_delivered` | NOTICE | worker | totalMs since committedAt |
-| `submission_stuck` | ERROR | sweep | ageMin, state, lastError.code |
-| `sweep_summary` | INFO | sweep | queued, processing, failed, abandoned7d, delivered24h |
+| `submission_waiting` | ERROR | worker | ageMin (a marker older than 15 min when a run reaches it) |
+| `run_summary` | INFO | worker | processed, failed, left, durationMs — only when `pending/` was not empty |
 
 ### 11.3 Log-based metrics (counters unless noted) [S-log-metrics]
 
@@ -636,20 +633,20 @@ where needed, and can be redacted with a Cloud Logging exclusion if the owner wa
 | `um/upload_failed` | `… jsonPayload.event="upload_failed"` |
 | `um/pdf_duration_ms` (distribution, field `jsonPayload.durationMs`) | `… jsonPayload.event="pdf_generated"` |
 | `um/pdf_output_bytes` (distribution, field `jsonPayload.sizes.outputBytes`) | same |
-| `um/stuck` (label `state`) | `… jsonPayload.event="submission_stuck"` |
+| `um/waiting` | `… jsonPayload.event="submission_waiting"` |
 
 ### 11.4 Alert policies
 
 | Alert | Type | Condition | Channel |
 |---|---|---|---|
 | Any PDF failure | log-based [S-log-alerts] | `resource.type="cloud_run_revision" AND resource.labels.service_name="pdf-worker" AND jsonPayload.event="pdf_failed"` | email + Slack, immediately; min interval 5 min; autoclose 30 min |
-| Any HubSpot rejection / config error | log-based | `jsonPayload.event="hubspot_rejected" OR jsonPayload.event="task_create_failed"` | email + Slack |
-| Committed but not delivered | log-based | `jsonPayload.event="submission_stuck"` (sweep emits it when age > 15 min) | email + Slack |
+| Any HubSpot failure / config error | log-based | `jsonPayload.event="hubspot_rejected" OR jsonPayload.event="hubspot_failed" OR jsonPayload.event="commit_failed"` | email + Slack |
+| Committed but not delivered | log-based | `jsonPayload.event="submission_waiting"` (the worker logs it when it reaches a marker older than 15 min) | email + Slack |
 | Degraded PDF (client file unreadable) | log-based | `jsonPayload.event="pdf_degraded"` | email (the studio must ask the client for the file) |
 | Upload failures | metric threshold | `logging.googleapis.com/user/um/upload_failed` > 5 in 60 min | email |
 | 5xx spike | metric threshold | `run.googleapis.com/request_count` with `response_code_class="5xx"` > 5 in 5 min, either service | email + Slack |
 | Worker memory | metric threshold | `run.googleapis.com/container/memory/utilizations` p99 > 85 % for 5 min on `pdf-worker` | email |
-| Sweep not running | metric absence | `um/sweep_summary`-derived counter absent for 60 min (absence conditions exist [S-mon-conditions]) | email |
+| Worker not running | metric absence | no `run.googleapis.com/request_count` with `response_code_class="2xx"` on `pdf-worker` for 10 min: Scheduler paused, IAM broken, or every run crashing (absence conditions exist [S-mon-conditions]) | email + Slack |
 | Site down | uptime check on `GET /api/health` every 5 min from 3 EU locations | 2 consecutive failures | email + SMS ("SMS isn't a fully reliable notification channel type" [S-notif] — never the only channel) |
 | New error group | Error Reporting auto-notification **[unverified on this fetch]** | any new group in either service | email |
 
@@ -658,11 +655,11 @@ Channels supported: email, SMS, Slack, PagerDuty, Pub/Sub, webhooks, Google Chat
 
 ### 11.5 Dashboard ("Chestionar — pipeline", one page)
 
-Row 1 scorecards: committed today · delivered today · failed (24 h) · stuck now (from the
-last `sweep_summary`) · median PDF time · median PDF size. Row 2: line chart committed vs
+Row 1 scorecards: committed today · delivered today · failed (24 h) · waiting now (from the
+last `run_summary`) · median PDF time · median PDF size. Row 2: line chart committed vs
 delivered per hour; stacked bars `pdf_failed` by `code`; `hubspot_failed` by `step`. Row 3:
 Cloud Run request count/latency/5xx for both services; worker memory and instance count; Cloud
-Tasks queue depth (`cloudtasks.googleapis.com/queue/depth` **[metric name unverified]**). Row 4:
+Scheduler attempts (429s are expected while a long run is busy). Row 4:
 logs panel filtered to `severity>=WARNING`. Defined as JSON, created with `gcloud monitoring
 dashboards create` and kept in `infra/monitoring/dashboard.json`.
 
@@ -680,7 +677,7 @@ jsonPayload.event="pdf_generated" AND jsonPayload.durationMs>30000
 Retention: `_Default` bucket, 30 days [S-log-buckets]; free allotment and the per-GiB price
 beyond it were not extractable from the (client-rendered) pricing page **[unverified: earlier
 scouting says 50 GiB/project/month free]**. At tens of submissions/day we log kilobytes.
-Anything needing a longer trail (delivery audit) is in HubSpot and in `status.json`/`build.json`
+Anything needing a longer trail (delivery audit) is in HubSpot and in `delivery.json`/`build.json`
 for 45 days.
 
 ---
@@ -696,12 +693,11 @@ for 45 days.
   `um_plan_files` URL fields are retired (§9).
 - **Service accounts, least privilege**
   - `app-sa`: `roles/storage.objectUser` on the bucket only (create sessions, read metadata,
-    ranged reads, write manifest/status), `roles/cloudtasks.enqueuer` on the queue,
-    `roles/iam.serviceAccountUser` on `pdf-jobs-invoker` (to mint the OIDC token).
-  - `worker-sa`: `roles/storage.objectUser` on the bucket, `roles/cloudtasks.enqueuer` (sweep
-    re-enqueues), Secret Manager accessor for `HUBSPOT_TOKEN`.
-  - `pdf-jobs-invoker`: `roles/run.invoker` on `pdf-worker` only. `pdf-worker` has
-    `--no-allow-unauthenticated` and ingress internal; nothing on the internet can call it.
+    ranged reads, write the manifest and the `pending/` marker). Nothing else.
+  - `worker-sa`: `roles/storage.objectUser` on the bucket, Secret Manager accessor for
+    `HUBSPOT_TOKEN`.
+  - `pdf-run-invoker`: `roles/run.invoker` on `pdf-worker` only; Cloud Scheduler calls as it.
+    `pdf-worker` has `--no-allow-unauthenticated`, so nothing without that identity can call it.
   - No JSON keys anywhere; Cloud Run attaches identities.
 - **Secrets**: `HUBSPOT_TOKEN`, `SUBMISSION_TOKEN_SECRET` in Secret Manager, mounted as env.
 - **Submission token**: on the first `/api/uploads/start` for an id, the server returns
@@ -712,8 +708,8 @@ for 45 days.
   (§2) enforced at commit; declared size cap per session; content type decided by magic bytes
   on the server, never by the client; file names sanitised (`safeFileName`) and never used as
   object names. Cloud Armor is not needed at this scale (it costs more than the app).
-- **Retention** (data minimisation): bucket lifecycle `Delete` when `age ≥ 45` days on prefix
-  `submissions/` [S-gcs-lifecycle] — covers raw uploads, output and abandoned uploads with one
+- **Retention** (data minimisation): bucket lifecycle `Delete` when `age ≥ 45` days on prefixes
+  `submissions/` and `failed/` [S-gcs-lifecycle] — covers raw uploads, output and abandoned uploads with one
   rule (rules can take up to 24 h to apply). HubSpot keeps the deliverable (the system of record
   and where the studio's retention policy lives). No copy anywhere else. Photo EXIF (GPS) is
   stripped by `sharp` (§8.4).
@@ -742,9 +738,17 @@ for 45 days.
   - `STORAGE=disk|gcs` env picks one. `fake-gcs-server` is an option, but it does no
     signature validation and resumable support is undocumented [S-fake-gcs], so the disk adapter
     is the primary local path.
-- **Queue adapter** (`src/lib/server/queue/`): `enqueue(submissionId)`. `GcsTasksQueue` vs
-  `InProcessQueue` which, in dev, `fetch`es the worker's `/jobs/build` on `localhost:3001`
-  (or runs the generator in-process if `WORKER_INLINE=1`).
+  - **As built (2026-09-14):** `fake-gcs-server` 1.52.2 in `compose.yaml` instead of a disk
+    adapter; the app talks to it through `STORAGE_EMULATOR_HOST` with the same code as for
+    Google. Probed: resumable sessions, chunked PUTs (`308` + `Range`), ranged reads, CORS
+    preflight for `Content-Range` all work. Three differences from Google, all handled in the
+    code: a `bytes */N` status query *finalises* the upload (so the client only queries after an
+    error), `ifGenerationMatch=0` is ignored (the commit checks for `manifest.json` first) and
+    `Range` is not exposed to the browser (the client assumes a 308'd chunk arrived).
+- **The scheduler, locally**: the worker runs as a plain Node server
+  (`npm run dev -w @urban-moon/input-pdf-worker`, `:3001`) against the emulator; `npm run pdf:tick`
+  calls `POST /run` once, and the dev server can call itself every minute (`WORKER_TICK=60`) to
+  behave like Cloud Scheduler.
 - **HubSpot**: WireMock as today (`npm run mock`), with new mappings for `/files/v3/files`
   returning an id, `/crm/v3/objects/contacts/{email}` and `/crm/v3/objects/notes`; a
   `fail` scenario per endpoint (fixes the "one failure scenario" gap in README).
@@ -761,8 +765,8 @@ for 45 days.
   EXIF-rotated fixture comes out with width > height; encrypted/corrupt fixtures produce the
   degraded separator. Snapshot tests on `build.json` page maps.
 - **Integration test** (vitest, `STORAGE=disk`): start the app + worker in-process, run
-  `runSubmission` with the real fetch against them, assert `manifest.json`, `status.json
-  delivered`, WireMock journal shows file + form + note.
+  `runSubmission` with the real fetch against them, assert `manifest.json` and `pending/{id}`, call
+  `POST /run`, assert `output/done.json` and no marker, WireMock journal shows file + form + note.
 - **E2E** (Playwright): the existing `journey` specs, with uploads going through
   `/dev/upload/*`; add a "kill the connection mid-upload and resume" spec using
   `page.route` to abort one chunk.
@@ -772,6 +776,9 @@ for 45 days.
 ---
 
 ## 14. Code layout in this repo
+
+(Written before the monorepo: the app's `src/…` is now `apps/input-capture-web/src/…`, and the
+generator lives in `apps/input-pdf-worker/src/build/`.)
 
 ```
 src/lib/pdf/                      pure generator, no SvelteKit imports, shared by worker + demo
@@ -785,23 +792,23 @@ src/lib/pdf/                      pure generator, no SvelteKit imports, shared b
   *.test.ts, fixtures/
 src/lib/server/
   log.ts                          structured logger
-  storage/ (index.ts, gcs.ts, disk.ts)   queue/ (index.ts, tasks.ts, inprocess.ts)
+  storage/ (index.ts, gcs.ts, disk.ts)
   token.ts                        submission token (HMAC)
   sniff.ts                        magic bytes → content type
-src/lib/hubspot/client.ts         + uploadPdf(stream, size, name) PRIVATE, findContactByEmail, createNote
-src/lib/hubspot/mapping.ts        fields change per §9 (um_pdf_*, file lists without URLs)
-src/routes/api/uploads/start/+server.ts     replaces /api/upload
-src/routes/api/submissions/[id]/commit/+server.ts   replaces /api/submit
+apps/input-pdf-worker/src/hubspot/  uploadPdf(stream, size, name) PRIVATE, findContactByEmail, createNote,
+                                  field mapping per §9 (the web app no longer talks to HubSpot)
+src/routes/api/uploads/start/+server.ts     new (the multipart /api/upload is gone)
+src/routes/api/submissions/[id]/commit/+server.ts   replaces the /api/submit stand-in
 src/routes/api/log/+server.ts     browser → structured log (rate limited)
 src/routes/dev/upload/[session]/+server.ts   disk adapter only (404 in prod like /dev/inbox)
-src/worker/main.ts                Node HTTP server: /jobs/build /jobs/sweep /jobs/reprocess /healthz
-src/worker/build.ts               claim → generatePdf → deliver → status
-src/worker/deliver.ts             HubSpot steps with per-step idempotency
-scripts/pdf-demo.ts  scripts/pdf-reprocess.sh
+apps/input-pdf-worker/src/server.ts   Node HTTP server: POST /run, GET /healthz
+apps/input-pdf-worker/src/run.ts      list pending/ → build → deliver → done.json, or failed/
+apps/input-pdf-worker/src/deliver/    HubSpot steps, each id saved in delivery.json
+scripts/pdf-demo.ts  scripts/pdf-reprocess.ts
 Dockerfile.app  Dockerfile.worker  infra/ (terraform or gcloud scripts, monitoring/*.json)
 ```
 
-- **Worker build**: `esbuild src/worker/main.ts --bundle --platform=node --format=esm
+- **Worker build**: `esbuild apps/input-pdf-worker/src/server.ts --bundle --platform=node --format=esm
   --alias:$lib=./src/lib --external:sharp` (sharp's native binary must stay external).
   `readback.ts` → `screens.ts` → `flow/engine.ts` are pure TS and bundle fine (the Vite
   `ssrLoadModule` trick from the spike stays for `pdf:demo` in dev only). `.svelte.ts` stores are
@@ -816,7 +823,6 @@ Dockerfile.app  Dockerfile.worker  infra/ (terraform or gcloud scripts, monitori
   - `plans.svelte.ts` / `photos.svelte.ts`: `ACCEPTED_TYPES` → pdf/jpeg/png only, `MAX_FILE_BYTES`
     → per-kind (`MAX_IMAGE_BYTES = 10 MB`, `MAX_PDF_BYTES = 100 MB`), messages updated
     (`REASON_TYPE`, `REASON_SIZE`, `PHOTO_ACCEPT`, the hint in `/planuri`).
-  - `hubspot/validation.ts`: same lists; `MAX_FILE_BYTES` split; `sniff.ts` becomes the gate.
   - `submit.ts`: `runSubmission` → sessions + chunked PUT + commit; `planSteps` unchanged in
     spirit; cache key `um.uploads` stores `{object, sessionUri, size}`; `SubmitRequest` in
     `types.ts` becomes the manifest body (files by `fileId`, no URLs; `drawing` inline).
@@ -837,13 +843,12 @@ staging = prod):
 ```
 project um-prod (billing, EU org policy `constraints/gcp.resourceLocations` = in:eu-locations)
 storage bucket um-submissions      location europe-west1, uniform access, PAP enforced, CORS, lifecycle 45d
-cloud tasks queue pdf-jobs         europe-west1, retry + rate config (§7.3)
-service accounts                   app-sa, worker-sa, pdf-jobs-invoker (+ IAM bindings §12)
+service accounts                   app-sa, worker-sa, pdf-run-invoker (+ IAM bindings §12)
 secret manager                     HUBSPOT_TOKEN, SUBMISSION_TOKEN_SECRET (+ existing HUBSPOT_* ids)
 artifact registry                  europe-west1-docker.pkg.dev/um-prod/app
 cloud run service app              image app, 512Mi/1cpu, conc 80, min 0 (or 1, see cost), max 10, timeout 60s, allow-unauthenticated, env from §14
-cloud run service pdf-worker       image worker, 4Gi/2cpu, conc 1, min 0, max 3, timeout 1800s, no-allow-unauthenticated, ingress internal
-cloud scheduler job pdf-sweep      */15 * * * *, POST https://pdf-worker…/jobs/sweep, OIDC as pdf-jobs-invoker
+cloud run service pdf-worker       image worker, 4Gi/2cpu, conc 1, min 0, max 1, timeout 1800s, no-allow-unauthenticated
+cloud scheduler job pdf-run        * * * * *, POST https://pdf-worker…/run, OIDC as pdf-run-invoker, no retries, deadline 30m
 logging metrics + alert policies + notification channels + dashboard + uptime check (§11)
 domain mapping or LB               see below
 ```
@@ -854,14 +859,13 @@ Illustrative commands (the Terraform encodes the same):
 gcloud storage buckets create gs://um-submissions --location=europe-west1 \
   --uniform-bucket-level-access --public-access-prevention
 gcloud storage buckets update gs://um-submissions --cors-file=infra/cors.json --lifecycle-file=infra/lifecycle.json
-gcloud tasks queues create pdf-jobs --location=europe-west1 --max-concurrent-dispatches=2 \
-  --max-dispatches-per-second=5 --max-attempts=6 --min-backoff=30s --max-backoff=600s --max-doublings=4
 gcloud run deploy pdf-worker --image … --region=europe-west1 --cpu=2 --memory=4Gi --concurrency=1 \
-  --timeout=1800 --max-instances=3 --no-allow-unauthenticated --ingress=internal \
+  --min-instances=0 --max-instances=1 --timeout=1800 --no-allow-unauthenticated \
   --service-account=worker-sa@… --set-secrets=HUBSPOT_TOKEN=HUBSPOT_TOKEN:latest
-gcloud run services add-iam-policy-binding pdf-worker --member=serviceAccount:pdf-jobs-invoker@… --role=roles/run.invoker
-gcloud scheduler jobs create http pdf-sweep --location=europe-west1 --schedule="*/15 * * * *" \
-  --uri=https://pdf-worker-….run.app/jobs/sweep --http-method=POST --oidc-service-account-email=pdf-jobs-invoker@…
+gcloud run services add-iam-policy-binding pdf-worker --member=serviceAccount:pdf-run-invoker@… --role=roles/run.invoker
+gcloud scheduler jobs create http pdf-run --location=europe-west1 --schedule="* * * * *" \
+  --uri=https://pdf-worker-….run.app/run --http-method=POST --oidc-service-account-email=pdf-run-invoker@… \
+  --max-retry-attempts=0 --attempt-deadline=30m
 ```
 
 **CI/CD** (GitHub Actions or Cloud Build): on push to `main`: `npm ci`, `npm run check`,
@@ -869,7 +873,7 @@ gcloud scheduler jobs create http pdf-sweep --location=europe-west1 --schedule="
 for `app`, run the smoke test against the tagged revision URL, then `gcloud run services
 update-traffic app --to-latest`. Rollback = `update-traffic` to the previous revision (revisions
 are kept). Worker deploys straight (no user traffic); a bad worker revision fails jobs → alerts →
-roll back the same way; the sweep re-runs the failed jobs.
+roll back the same way, then `pdf:reprocess` whatever is in `failed/`.
 
 **The current Cloudflare deploy**: the Worker is retired at M6. DNS stays on Cloudflare. Two
 options: (1) keep the record **proxied** (orange cloud) pointing at a Cloud Run custom domain or a
@@ -889,9 +893,9 @@ checked in the pricing calculator before the owner signs off):**
 | Item | Estimate |
 |---|---|
 | Cloud Run `app`, request-based, scale to zero | $0–2 (free tier covers it); ~$13 if `min-instances=1` to avoid cold starts |
-| Cloud Run `pdf-worker`, 2 vCPU/4 GiB, ~1 min/day | < $1 |
-| GCS ~5–10 GB, few thousand ops | < $0.30 |
-| Cloud Tasks, Scheduler, Pub/Sub | $0 (free tiers: Tasks 1 M ops [S-tasks-pricing]) |
+| Cloud Run `pdf-worker`, 2 vCPU/4 GiB: 1,440 short `/run` calls a day (≥ 100 ms billed each) plus ~1 min of builds | $0–3, mostly inside the free tier **[unverified]** |
+| GCS ~5–10 GB, ~45,000 list calls/month + a few thousand other ops | < $0.50 |
+| Cloud Scheduler, one job | $0 (a few jobs free per billing account) **[unverified]** |
 | Logging/Monitoring | $0 within free allotments; alerting conditions may be billed per condition **[unverified]** — ~10 conditions |
 | Artifact Registry, Secret Manager | < $1 |
 | **Total** | **≈ $2–5/month**, or ≈ $15–20 with one warm app instance |
@@ -904,7 +908,7 @@ checked in the pricing calculator before the owner signs off):**
 |---|---|---|
 | **M1 — generator on disk** | `src/lib/pdf/*`, fonts, `qpdf.ts`, `images.ts`, three fixtures, `npm run pdf:demo`, unit tests | Open the three PDFs: diacritics, rotated photos upright, client PDF pages stamped, contents page numbers correct, 100 MB fixture builds under 2 GB RSS and < 90 s (measured, recorded in `build.json`) |
 | **M2 — uploads + commit** | Storage adapters, `/api/uploads/start`, chunked resumable client, `/api/submissions/{id}/commit`, sniffing, token, new limits/types in stores, `SubmitPanel` percentages, `/api/log` | Locally with `STORAGE=disk`: send a 100 MB PDF, kill the network mid-way, resume; commit writes `manifest.json`; second commit is a no-op. Then the same against a staging bucket from a phone on 4G. |
-| **M3 — worker + trigger** | `Dockerfile.worker`, `src/worker/*`, queue adapter, Cloud Tasks queue, sweep, staging project via Terraform | Commit on staging → PDF appears in `output/` within seconds; kill the worker mid-job → retried; poison manifest → `failed` + stuck event |
+| **M3 — worker + trigger** | `POST /run` in `apps/input-pdf-worker`, bucket source, `pending/` → `done.json` / `failed/`, `pdf:reprocess`, local tick; then `Dockerfile.worker`, the Scheduler job and a staging project | Locally: commit → marker → `pdf:tick` → PDF in `output/`, marker gone; kill the worker mid-run → the next tick redoes it; broken manifest → `failed/` + `pdf_failed`. On staging: the same with the real scheduler. |
 | **M4 — HubSpot delivery** | `uploadPdf` (PRIVATE), contact lookup, note, mapping changes, WireMock mappings, real-portal test with a 250 MB PDF | A submission on staging lands as a private file + note on a test contact in the real portal; HubSpot `fail` scenario retries and alerts |
 | **M5 — observability** | Log-based metrics, alert policies, channels, dashboard, uptime check, Error Reporting | Force each failure type on staging and watch each alert arrive in Slack/email; dashboard shows the day |
 | **M6 — cut-over** | `Dockerfile.app`, adapter-node, CI/CD, prod project, DNS switch, Cloudflare Worker retired, README/DEPLOY rewritten | Owner sends a real questionnaire from a phone; PDF is on the contact before the Calendly slot is booked |

@@ -5,7 +5,7 @@
 	import { isPlansComplete, plans, resetPlans } from '$lib/state/plans.svelte';
 	import { resetPhotos } from '$lib/state/photos.svelte';
 	import { clearSubmissionState } from '$lib/submit/submit';
-	import { S, isVisible } from '$lib/questions/screens';
+	import { S, isVisible } from '@urban-moon/domain-data';
 	import { chapterQuestionCount, chromeFor, firstVisible, visibleScreens } from '$lib/flow/engine';
 	import { IMG, THUMB, unsplash } from '$lib/ui/images';
 	import Frame from '$lib/ui/Frame.svelte';

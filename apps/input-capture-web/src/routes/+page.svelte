@@ -4,7 +4,7 @@
 	import { browser } from '$app/environment';
 	import { answers, setAnswer } from '$lib/state/answers.svelte';
 	import { loadCursor, saveCursor } from '$lib/state/cursor.svelte';
-	import { CHAPTER_LABEL, S, isVisible, type Screen } from '$lib/questions/screens';
+	import { CHAPTER_LABEL, S, isVisible, type Screen } from '@urban-moon/domain-data';
 	import {
 		continueState,
 		counterFor,

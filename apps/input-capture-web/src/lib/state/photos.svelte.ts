@@ -1,7 +1,8 @@
 import { browser } from '$app/environment';
 import { del, get, set } from 'idb-keyval';
 import type { PhotoMeta, RoomId } from '$lib/types';
-import { MAX_FILE_BYTES, REASON_DUPLICATE, REASON_SIZE, reasonLimit } from './plans.svelte';
+import { MAX_IMAGE_BYTES, MAX_PHOTOS_PER_GROUP, acceptedTypeOf } from '@urban-moon/domain-data';
+import { REASON_DUPLICATE, REASON_IMAGE_SIZE, reasonLimit } from './plans.svelte';
 
 /* Photos of the space (plans step) and of the furniture kept in each room. Metadata lives in
    localStorage "um.photos", the blobs in IndexedDB — the same split as the plans store. */
@@ -10,17 +11,15 @@ const KEY = 'um.photos';
 const blobKey = (id: string): string => `photo-file:${id}`;
 
 /** Per group: the space, or one room's furniture. */
-export const MAX_PHOTOS = 10;
+export const MAX_PHOTOS = MAX_PHOTOS_PER_GROUP;
 
-export const PHOTO_ACCEPT =
-	'image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif';
+export const PHOTO_ACCEPT = 'image/jpeg,image/png,.jpg,.jpeg,.png';
 
-export const REASON_PHOTO_TYPE = 'Poți încărca doar poze (JPG, PNG, WEBP, HEIC).';
+export const REASON_PHOTO_TYPE = 'Poți încărca doar poze JPG sau PNG.';
 
 export function isPhoto(name: string, type: string): boolean {
-	const mime = (type || '').split(';')[0].trim().toLowerCase();
-	if (/^image\/(jpe?g|png|webp|heic|heif|x-heic|x-heif)$/.test(mime)) return true;
-	return /\.(jpe?g|png|webp|heic|heif)$/i.test(name);
+	const t = acceptedTypeOf(name, type);
+	return t === 'image/jpeg' || t === 'image/png';
 }
 
 function load(): PhotoMeta[] {
@@ -59,7 +58,7 @@ export async function addPhotos(
 	for (const file of files) {
 		const mine = photosOf(photos.list, group, roomId);
 		if (!isPhoto(file.name, file.type)) rejected.push({ name: file.name, reason: REASON_PHOTO_TYPE });
-		else if (file.size > MAX_FILE_BYTES) rejected.push({ name: file.name, reason: REASON_SIZE });
+		else if (file.size > MAX_IMAGE_BYTES) rejected.push({ name: file.name, reason: REASON_IMAGE_SIZE });
 		else if (mine.length >= MAX_PHOTOS)
 			rejected.push({ name: file.name, reason: reasonLimit(MAX_PHOTOS) });
 		else if (mine.some((f) => f.name === file.name && f.size === file.size))

@@ -1,5 +1,5 @@
 {
-	"name": "input-capture",
+	"name": "@urban-moon/input-capture-web",
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
@@ -11,12 +11,13 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "vitest run",
-		"deploy": "npm run build && wrangler deploy",
-		"preview:cf": "npm run build && wrangler dev",
-		"sync": "./sync-from-prototype.sh"
+		"start": "node build",
+		"deploy": "ADAPTER=cloudflare npm run build && wrangler deploy",
+		"preview:cf": "ADAPTER=cloudflare npm run build && wrangler dev"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-cloudflare": "^7.2.9",
+		"@sveltejs/adapter-node": "^5.5.7",
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"svelte": "^5.56.1",
@@ -27,6 +28,8 @@
 		"wrangler": "^4.131.0"
 	},
 	"dependencies": {
-		"idb-keyval": "^6.3.0"
+		"@urban-moon/domain-data": "*",
+		"idb-keyval": "^6.3.0",
+		"zod": "^4.6.5"
 	}
 }

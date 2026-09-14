@@ -1,4 +1,4 @@
-import type { Answers, RoomId } from '$lib/types';
+import type { Answers, RoomId } from '../types';
 
 /* Ported verbatim from ../index.html ("predicates" block). */
 

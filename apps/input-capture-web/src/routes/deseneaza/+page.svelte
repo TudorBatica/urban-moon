@@ -5,7 +5,7 @@
 	import { roomToSvg, svgToPngDataUrl } from '$lib/floorplan/export';
 	import { pickedRooms, roomCount } from '$lib/state/answers.svelte';
 	import { plans, setDrawing } from '$lib/state/plans.svelte';
-	import { roomOf } from '$lib/questions/rooms';
+	import { roomOf } from '@urban-moon/domain-data';
 	import type { RoomSnapshot } from '$lib/types';
 
 	let editor = $state<ReturnType<typeof FloorplanEditor> | null>(null);

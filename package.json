@@ -1,0 +1,23 @@
+{
+	"name": "urban-moon",
+	"private": true,
+	"type": "module",
+	"workspaces": ["apps/*", "packages/*"],
+	"engines": {
+		"node": ">=22"
+	},
+	"scripts": {
+		"dev": "npm run dev -w @urban-moon/input-capture-web",
+		"check": "npm run check --workspaces --if-present",
+		"test": "npm run test --workspaces --if-present",
+		"build": "npm run build --workspaces --if-present",
+		"pdf:demo": "npm run pdf:demo -w @urban-moon/input-pdf-worker",
+		"deploy:web": "bash scripts/deploy-web.sh",
+		"deps:up": "docker compose up -d",
+		"deps:down": "docker compose down",
+		"deps:reset": "docker compose down -v",
+		"bucket:ls": "node scripts/bucket.mjs ls",
+		"bucket:files": "node scripts/bucket.mjs files",
+		"bucket:pull": "node scripts/bucket.mjs pull"
+	}
+}

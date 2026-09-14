@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { AppCard, CardsScreen } from '$lib/questions/screens';
+	import type { AppCard, CardsScreen } from '@urban-moon/domain-data';
 	import { answers, setAnswer } from '$lib/state/answers.svelte';
 	import { cardDone, cardOn, resolveCards, resolveGroups } from '$lib/flow/engine';
 	import { line } from '$lib/ui/lineMap';

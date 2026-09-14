@@ -66,7 +66,7 @@ function mk(name: string, type: string, size = 1024): File {
 	return f;
 }
 
-const REASON_TYPE = 'Tipul de fișier nu e acceptat (PDF, JPG, PNG, WEBP, HEIC, DWG, DXF).';
+const REASON_TYPE = 'Tipul de fișier nu e acceptat (PDF, JPG, PNG).';
 const REASON_SIZE = 'Fișierul are peste 25 MB.';
 const REASON_DUP = 'Fișierul e deja adăugat.';
 
@@ -117,9 +117,9 @@ describe('MAX_FILE_BYTES', () => {
 		expect(MAX_FILE_BYTES).toBe(26_214_400);
 	});
 
-	it('lists every accepted extension', () => {
-		for (const ext of ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.dwg', '.dxf'])
-			expect(ACCEPTED_TYPES).toContain(ext);
+	it('lists every accepted extension, and only those', () => {
+		for (const ext of ['.pdf', '.jpg', '.jpeg', '.png']) expect(ACCEPTED_TYPES).toContain(ext);
+		for (const ext of ['.webp', '.heic', '.heif', '.dwg', '.dxf']) expect(ACCEPTED_TYPES).not.toContain(ext);
 	});
 });
 
@@ -131,8 +131,8 @@ describe('addFiles — accepting', () => {
 		expect(plans.files[0].name).toBe('plan.pdf');
 	});
 
-	it('accepts by extension when the browser gives no mime (DWG)', async () => {
-		const res = await addFiles([mk('parter.DWG', '')], 1);
+	it('accepts by extension when the browser gives no mime', async () => {
+		const res = await addFiles([mk('parter.PDF', '')], 1);
 		expect(res.rejected).toEqual([]);
 		expect(plans.files).toHaveLength(1);
 		expect(plans.files[0].type).toBe('');
@@ -159,6 +159,21 @@ describe('addFiles — rejecting', () => {
 		expect(res.added).toEqual([]);
 		expect(res.rejected).toEqual([{ name: 'notes.txt', reason: REASON_TYPE }]);
 		expect(plans.files).toHaveLength(0);
+	});
+
+	it('rejects the formats a PDF cannot hold natively (HEIC, WEBP, DWG)', async () => {
+		const res = await addFiles([mk('a.heic', 'image/heic'), mk('b.webp', 'image/webp'), mk('c.dwg', '')], 3);
+		expect(res.added).toEqual([]);
+		expect(res.rejected.map((r) => r.reason)).toEqual([REASON_TYPE, REASON_TYPE, REASON_TYPE]);
+	});
+
+	it('rejects an image over 10 MB, but not a PDF of the same size', async () => {
+		const res = await addFiles(
+			[mk('mare.jpg', 'image/jpeg', 11 * 1024 * 1024), mk('mare.pdf', 'application/pdf', 11 * 1024 * 1024)],
+			3
+		);
+		expect(res.rejected).toEqual([{ name: 'mare.jpg', reason: 'Poza are peste 10 MB.' }]);
+		expect(res.added.map((f) => f.name)).toEqual(['mare.pdf']);
 	});
 
 	it('rejects a file over 25 MB', async () => {

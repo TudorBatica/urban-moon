@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Option } from '$lib/questions/screens';
+	import type { Option } from '@urban-moon/domain-data';
 
 	interface Props {
 		options: Option[];
