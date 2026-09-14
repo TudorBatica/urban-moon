@@ -2,8 +2,10 @@
 	import { untrack } from 'svelte';
 	import type { MultiScreen } from '$lib/questions/screens';
 	import { answers, setAnswer } from '$lib/state/answers.svelte';
-	import { resolveOptions } from '$lib/flow/engine';
-	import Tile from '$lib/ui/Tile.svelte';
+	import { followUpDone, resolveOptions } from '$lib/flow/engine';
+	import { line, lineKey } from '$lib/ui/lineMap';
+	import Keyed from '$lib/ui/Keyed.svelte';
+	import Reveal from '$lib/ui/Reveal.svelte';
 	import FollowUp from './FollowUp.svelte';
 	import ScreenTitle from './ScreenTitle.svelte';
 
@@ -15,12 +17,14 @@
 
 	const opts = $derived(resolveOptions(screen, answers));
 
-	/* The prototype prunes values that no longer have an option, once, on entry. */
+	/* Objects get drawn tiles when every option has a drawing (the small appliances). */
+	const tiles = $derived(opts.length > 0 && opts.every((o) => lineKey(o.icon, o.value)));
+
+	/* Values that no longer have an option are pruned, once, on entry. */
 	untrack(() => {
 		const cur = (answers[screen.id] as string[]) || [];
 		const live = resolveOptions(screen, answers);
 		const kept = cur.filter((v) => live.some((o) => o.value === v));
-		/* Only a real prune is worth persisting — see CompoundScreen for the empty-seed rule. */
 		if (kept.length !== cur.length) setAnswer(screen.id, kept);
 	});
 
@@ -40,26 +44,56 @@
 	}
 </script>
 
-<ScreenTitle title={screen.title} subtitle={screen.subtitle ?? 'Poți alege mai multe.'} />
+<ScreenTitle title={screen.title} subtitle={screen.subtitle} optional={screen.allowEmpty} />
 
-<div class="tiles">
-	{#each opts as o (o.value)}
-		<Tile
-			label={o.label}
-			hint={o.hint}
-			icon={o.icon}
-			selected={sel.includes(o.value)}
-			dim={!!screen.max && sel.length >= screen.max && !sel.includes(o.value)}
-			quiet={!!screen.exclusive && o.value === screen.exclusive}
-			onclick={() => toggle(o.value)}
-		/>
-	{/each}
-</div>
+{#if screen.id === 'c_rooms'}
+	<div class="gseg" role="group" aria-label={screen.title}>
+		{#each opts as o (o.value)}
+			<button
+				type="button"
+				class:on={sel.includes(o.value)}
+				role="checkbox"
+				aria-checked={sel.includes(o.value)}
+				onclick={() => toggle(o.value)}>{o.label}</button
+			>
+		{/each}
+	</div>
+{:else if tiles}
+	<div class="tiles small" role="group" aria-label={screen.title}>
+		{#each opts as o (o.value)}
+			{@const on = sel.includes(o.value)}
+			<button
+				type="button"
+				class="tile"
+				class:on
+				class:dim={!!screen.max && sel.length >= screen.max && !on}
+				role="checkbox"
+				aria-checked={on}
+				onclick={() => toggle(o.value)}
+			>
+				{@html line(o.icon, o.value)}
+				<span>{o.label}{#if o.hint}<small>{o.hint}</small>{/if}</span>
+			</button>
+		{/each}
+	</div>
+{:else}
+	<Keyed
+		multi
+		variant={opts.length > 7 ? 'grid' : 'list'}
+		options={opts}
+		selected={sel}
+		max={screen.max}
+		hotkeys
+		label={screen.title}
+		onpick={toggle}
+	/>
+{/if}
 
-<div class="followups">
-	{#each opts as o (o.value)}
-		{#if o.followUp && sel.includes(o.value)}
-			<FollowUp fu={o.followUp} hostLabel={o.label} />
-		{/if}
-	{/each}
-</div>
+{#each opts as o (o.value)}
+	{#if o.followUp}
+		{@const on = sel.includes(o.value)}
+		<Reveal open={on} done={on && followUpDone(o.followUp, answers)}>
+			<FollowUp fu={o.followUp} active={on} hostLabel={o.followUp.kind === 'stepper' ? o.label : undefined} />
+		</Reveal>
+	{/if}
+{/each}

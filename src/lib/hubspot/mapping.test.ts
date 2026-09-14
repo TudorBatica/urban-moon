@@ -230,3 +230,23 @@ describe('buildSubmission', () => {
 		expect(names).toContain('um_submission_id');
 	});
 });
+
+describe('um_photo_files', () => {
+	it('lists one photo per line, with its room and group', () => {
+		const f = fieldMap(
+			buildSubmission(
+				base({
+					photos: [
+						{ url: 'http://x/1.jpg', name: '1.jpg', roomId: null, group: 'spatiu' },
+						{ url: 'http://x/2.jpg', name: '2.jpg', roomId: 'living', group: 'mobilier' }
+					]
+				})
+			)
+		);
+		expect(f.um_photo_files).toBe('http://x/1.jpg | 1.jpg | - | spatiu\nhttp://x/2.jpg | 2.jpg | living | mobilier');
+	});
+
+	it('is left out when there are no photos', () => {
+		expect(fieldMap(buildSubmission(base())).um_photo_files).toBeUndefined();
+	});
+});

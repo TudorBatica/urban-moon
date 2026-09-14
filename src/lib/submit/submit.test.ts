@@ -1,4 +1,4 @@
-import type { Answers, Drawing, PlanFileMeta, PlansState, RoomSnapshot } from '$lib/types';
+import type { Answers, Drawing, PhotoMeta, PlanFileMeta, PlansState, RoomSnapshot } from '$lib/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	SUBMISSION_ID_KEY,
@@ -350,5 +350,62 @@ describe('runSubmission — retry', () => {
 		});
 		const init = f.mock.mock.calls[0][1] as RequestInit;
 		expect((init.headers as Record<string, string>)['X-Mock-Scenario']).toBe('fail');
+	});
+});
+
+describe('runSubmission — photos', () => {
+	const photo: PhotoMeta = {
+		id: 'p1',
+		name: 'colt.jpg',
+		type: 'image/jpeg',
+		size: 3,
+		roomId: 'bucatarie',
+		addedAt: 1,
+		group: 'mobilier'
+	};
+
+	it('lists the photos as steps, before the submission', () => {
+		expect(planSteps({ files: [], drawing: null }, [photo])).toEqual(['colt.jpg', 'Trimit răspunsurile']);
+	});
+
+	it('uploads each photo, prefixed with its group, and sends the urls with the answers', async () => {
+		const { impl, calls } = fakeFetch(okHandler);
+		const res = await runSubmission({
+			answers: { c_identity: { name: 'Ana', email: 'ana@exemplu.ro' } },
+			plans: { files: [], drawing: null },
+			readback: '',
+			fetchImpl: impl,
+			getBlob: async () => undefined,
+			photos: [photo],
+			getPhotoBlob: async () => new Blob(['abc'], { type: 'image/jpeg' }),
+			storage: fakeStorage(),
+			pageUri: 'http://localhost/rezumat',
+			newId: () => 'sub-photos'
+		});
+		expect(res.ok).toBe(true);
+		const uploads = calls.filter((c) => c.url === '/api/upload');
+		expect(uploads).toHaveLength(1);
+		const form = uploads[0].body as FormData;
+		expect((form.get('file') as File).name).toBe('mobilier--colt.jpg');
+		expect(form.get('roomId')).toBe('bucatarie');
+		const body = JSON.parse(String(calls.find((c) => c.url === '/api/submit')!.body));
+		expect(body.photos).toEqual([
+			{ url: expect.stringMatching(/^http:\/\/mock\//), name: 'colt.jpg', roomId: 'bucatarie', group: 'mobilier' }
+		]);
+	});
+
+	it('stops with a message when a photo is gone from the browser', async () => {
+		const { impl } = fakeFetch(okHandler);
+		const res = await runSubmission({
+			answers: {},
+			plans: { files: [], drawing: null },
+			readback: '',
+			fetchImpl: impl,
+			getBlob: async () => undefined,
+			photos: [photo],
+			getPhotoBlob: async () => undefined,
+			storage: fakeStorage()
+		});
+		expect(res).toMatchObject({ ok: false, step: 'colt.jpg' });
 	});
 });

@@ -57,11 +57,14 @@ src/lib/types.ts              the shared types in CONTRACTS.md
 src/lib/state/answers.svelte.ts   answers store, persisted to localStorage "um.answers"
 src/lib/state/plans.svelte.ts     plans store: "um.plans" metadata + blobs in IndexedDB
 src/lib/state/cursor.svelte.ts    the resume cursor, "um.cursor"
-src/lib/questions/            rooms.ts · screens.ts (the S array) · icons.ts (generated) · predicates.ts · readback.ts
+src/lib/questions/            rooms.ts · screens.ts (the S array) · predicates.ts · readback.ts · icons.ts (old clay set, no longer rendered)
 src/lib/flow/                 engine.ts (navigation, completeness, chrome) + the screen renderers
-src/lib/ui/                   Tile · Pills · Stepper · ChapterCard · Rail · Meter · NavBar
-src/lib/plans/                Dropzone · FileTile · DrawingCard + their icons (generated)
-tools/icons/                  clay.mjs (the icon source) · build.mjs → the two icons.ts files
+src/lib/ui/                   Frame (photo + side shell) · GoBar · Keyed · Seg · CountRow · Reveal · Field · Roll
+                              motion.ts (durations, curves, page/roll/crossfade transitions)
+                              images.ts (Unsplash ids, artFor(screen), contents thumbnails)
+                              lineIcons.ts (appliance + coffee drawings) · lineMap.ts
+src/lib/plans/                Dropzone · FileTile · DrawingCard · PhotoField · Thumb · Rejections
+tools/icons/                  clay.mjs · build.mjs — the old clay icon set; nothing renders it since the redesign
 src/lib/floorplan/            engine.js (the editor) · engine.css · export.ts (svg/png) · FloorplanEditor.svelte
 src/lib/hubspot/              mapping.ts (pure) · client.ts (server only) · validation.ts
 src/lib/submit/               submit.ts (the orchestration) · SubmitPanel.svelte
@@ -82,14 +85,26 @@ plus a standalone `harness.html` and `verify.mjs` parity suite
 
 Chapters, in order: **Despre tine** (`c_identity`, `c_rooms`) → **Planuri** (a `route` screen that
 hands off to `/planuri`) → **Locuința** (`c_stage`, `c_household`) → one chapter per picked room
-(`bucatarie` k1–k13 · `living` l1–l4 · `dormitor` d1–d4 · every other room three free-text
-screens). Screens, options and prune rules are ported verbatim from `../index.html`.
+(`bucatarie` k1–k13 · `living` l1–l4 · `dormitor` d1–d4 · `birou` · `baie` · `hol` · `alta`
+x1–x3). The copy follows `COPY-chestionar(1).md`. The child room is gone — children now pick a
+`dormitor`.
+
+- "Altceva" options open a text box: a `followUp` of kind `input` on single/multi screens
+  (`c_stage_other`, `d1_other`, `k6a_other`, `x1_baie_other`, `x1_hol_other`), and a field
+  `other` inside compound screens (`petsOther`, `bedOther`, `wantsOther`). Continuing needs the text.
+- The "mobilier păstrat" screens (`k13`, `l4`, `d4`, `x3_*`) are `furniture` screens:
+  `{ items: [{ name, length, width }] }`, plus optional photos of the objects.
 
 - URLs are `/?s=<screenId>`; plain `/` resumes from `localStorage["um.cursor"]`, or starts over.
 - Answers, plans and the cursor all live in the browser. "Începe din nou" clears all of them,
   the IndexedDB blobs and the submission session keys.
-- `/rezumat` shows "Ce am înțeles" — the portrait, the quotes and what each answer means for the
-  plan — then the submit panel. `/multumim` closes the loop.
+- `/rezumat` shows "Ce am înțeles" — every question with its answer, by chapter, each with a
+  "Modifică" link back to its screen (`src/lib/questions/readback.ts`) — then the submit panel.
+- After a successful send, `/programare` embeds Calendly (`PUBLIC_CALENDLY_URL`, name and email
+  prefilled) and moves on to `/multumim` once a slot is booked. With the variable empty the
+  booking step is skipped.
+- Photos (of the space on `/planuri`, of kept furniture per room) live in
+  `src/lib/state/photos.svelte.ts`: `localStorage["um.photos"]` + IndexedDB, up to 10 per group.
 
 ### The plans step (`/planuri`)
 
@@ -100,7 +115,10 @@ screens). Screens, options and prune rules are ported verbatim from `../index.ht
 - Limit: `rooms × 2` files, never fewer than 2. Max 25 MB each. Accepted: PDF, JPG, PNG, WEBP,
   HEIC/HEIF, DWG, DXF (by mime *or* by extension). Rejections — wrong type, too big, over the
   limit, duplicate — are listed in Romanian and never silently drop a file.
-- Continuing needs at least one file or a drawing.
+- It is preceded by its own question screen, "Ești dispus să modifici spațiul…?" (`p_modify`,
+  multi, "Nu" exclusive). The step itself opens with the measuring disclaimer and an "Am măsurat
+  spațiul" checkbox (`p_measured`): until it is ticked, drawing, uploads and photos are disabled.
+- Continuing needs `p_measured` and at least one file or a drawing.
 
 ## HubSpot
 
@@ -134,9 +152,10 @@ Every field is a contact field (`objectTypeId: "0-1"`). Empty values are omitted
 | `um_adults` · `um_children` | the household steppers |
 | `um_child_ages` · `um_pets` | `;`-joined lists |
 | `um_elderly` | `da` / `nu` |
-| `um_readback` | the whole "Ce am înțeles" as plain text |
+| `um_readback` | the whole "Ce am înțeles" list (chapter, question, `- answer`) as plain text |
 | `um_answers_json` | every answer, as JSON |
 | `um_plan_files` | one `url \| name \| room` per line (room is `-` when untagged) |
+| `um_photo_files` | one `url \| name \| room \| spatiu-or-mobilier` per line |
 | `um_plan_drawing_json` | the `RoomSnapshot` of the drawn plan |
 | `um_plan_drawing_png` | the uploaded url of `plan-desenat.png` |
 | `um_submission_id` | a UUID kept for the whole attempt series, so retries dedupe |

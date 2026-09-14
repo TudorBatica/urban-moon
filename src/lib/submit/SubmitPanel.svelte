@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { env } from '$env/dynamic/public';
 	import { answers } from '$lib/state/answers.svelte';
 	import { getFileBlob, plans } from '$lib/state/plans.svelte';
+	import { getPhotoBlob, photos } from '$lib/state/photos.svelte';
 	import { planSteps, runSubmission, type StepProgress, type StepState } from './submit';
 
 	let { readback }: { readback: string } = $props();
@@ -32,7 +34,7 @@
 		if (!consent || sending) return;
 		sending = true;
 		error = '';
-		steps = planSteps(plans).map((label, index, all) => ({
+		steps = planSteps(plans, photos.list).map((label, index, all) => ({
 			index,
 			total: all.length,
 			label,
@@ -44,6 +46,8 @@
 			plans,
 			readback,
 			getBlob: getFileBlob,
+			photos: photos.list,
+			getPhotoBlob,
 			scenario: scenarioFromUrl(),
 			onProgress: (p) => {
 				const next = [...steps];
@@ -56,33 +60,42 @@
 		if (result.ok) {
 			/* Let the last row paint as "trimis" before the page changes under it. */
 			await tick();
-			await goto('/multumim');
+			/* With a Calendly link configured, the meeting is booked before the thanks. */
+			await goto(env.PUBLIC_CALENDLY_URL ? '/programare' : '/multumim');
 			return;
 		}
 		error = result.error ?? 'Nu am putut trimite răspunsurile. Încearcă din nou.';
 	}
 </script>
 
-<div class="done-box" data-testid="submit-panel">
-	<h3>Trimite răspunsurile</h3>
-	<p>Le citim înainte de întâlnire, ca să venim cu propuneri, nu cu întrebări.</p>
+<section class="submit" data-testid="submit-panel">
+	<h2 class="q2">Trimite răspunsurile</h2>
+	<p class="sub">Le citim înainte de întâlnire, ca să venim cu propuneri, nu cu întrebări.</p>
 
-	<label class="consent">
-		<input type="checkbox" bind:checked={consent} disabled={sending} data-testid="submit-consent" />
+	<button
+		type="button"
+		class="check"
+		class:on={consent}
+		role="checkbox"
+		aria-checked={consent}
+		disabled={sending}
+		data-testid="submit-consent"
+		onclick={() => (consent = !consent)}
+	>
+		<span class="k" aria-hidden="true"
+			><svg viewBox="0 0 24 24"><path pathLength="1" d="M7 12.5l3.5 3.5L17 9" /></svg></span
+		>
 		<span>{CONSENT_TEXT}</span>
-	</label>
+	</button>
 
 	{#if steps.length > 0}
-		<div class="means" data-testid="submit-progress">
-			<h4>Ce trimitem</h4>
-			<ul>
-				{#each steps as step (step.index)}
-					<li class="step {step.state}" data-state={step.state}>
-						{step.label} <small>— {stateLabel(step.state)}</small>
-					</li>
-				{/each}
-			</ul>
-		</div>
+		<ul class="steps" data-testid="submit-progress" aria-label="Ce trimitem">
+			{#each steps as step (step.index)}
+				<li class={step.state} data-state={step.state}>
+					<span>{step.label}</span><small>{stateLabel(step.state)}</small>
+				</li>
+			{/each}
+		</ul>
 	{/if}
 
 	{#if error}
@@ -91,61 +104,64 @@
 
 	<div class="actions">
 		<button
-			class="btn"
+			class="go"
 			type="button"
 			onclick={send}
 			disabled={!consent || sending}
+			aria-label={sending ? 'Se trimite…' : error ? 'Încearcă din nou' : 'Trimite răspunsurile'}
+			title={sending ? 'Se trimite…' : error ? 'Încearcă din nou' : 'Trimite răspunsurile'}
 			data-testid="submit-button"
 		>
-			{#if sending}
-				Se trimite…
-			{:else if error}
-				Încearcă din nou
-			{:else}
-				Trimite răspunsurile
-			{/if}
+			<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
 		</button>
 	</div>
-</div>
+</section>
 
 <style>
-	.consent {
+	.submit {
+		margin-top: 44px;
+		padding-top: 6px;
+		border-top: 1px solid var(--ink);
+	}
+	.steps {
+		list-style: none;
+		margin: 20px 0 0;
+		padding: 0;
+		font-size: 13.5px;
+		border-top: 1px solid var(--hair);
+	}
+	.steps li {
 		display: flex;
-		align-items: flex-start;
-		gap: 10px;
-		margin-top: 20px;
-		font-size: 0.92rem;
-		line-height: 1.45;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 7px 0;
+		border-bottom: 1px solid var(--hair);
+		color: var(--soft);
+	}
+	.steps span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.steps small {
+		color: var(--grey);
+		flex: none;
+	}
+	.steps .done small {
 		color: var(--ink);
-		cursor: pointer;
-		max-width: 56ch;
 	}
-	.consent input {
-		margin-top: 3px;
-		width: 18px;
-		height: 18px;
-		flex: 0 0 auto;
-		accent-color: var(--ink);
-	}
-	.step small {
-		color: var(--ash);
-	}
-	.step.done small {
-		color: var(--brass-deep);
-	}
-	.step.failed small {
+	.steps .failed small {
 		color: var(--ink);
 		font-weight: 600;
 	}
 	.err {
-		margin-top: 16px;
-		font-size: 0.92rem;
-		font-weight: 600;
+		margin: 16px 0 0;
+		font-size: 14px;
 		color: var(--ink);
-		border-left: 2px solid var(--brass);
+		border-left: 1px solid var(--ink);
 		padding-left: 12px;
 	}
 	.actions {
-		margin-top: 22px;
+		margin-top: 24px;
 	}
 </style>

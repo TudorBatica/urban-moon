@@ -1,4 +1,11 @@
-import type { Answers, Drawing, PlanFileMeta, PlansState, SubmitRequest } from '$lib/types';
+import type {
+	Answers,
+	Drawing,
+	PhotoMeta,
+	PlanFileMeta,
+	PlansState,
+	SubmitRequest
+} from '$lib/types';
 
 /**
  * Client-side submit orchestration. Pure and injectable: every side effect (fetch, blob
@@ -35,6 +42,9 @@ export interface RunSubmissionOptions {
 	readback: string;
 	fetchImpl?: typeof fetch;
 	getBlob: (id: string) => Promise<Blob | undefined>;
+	/** photos of the space and of the kept furniture */
+	photos?: PhotoMeta[];
+	getPhotoBlob?: (id: string) => Promise<Blob | undefined>;
 	onProgress?: (p: StepProgress) => void;
 	scenario?: string;
 	/** Defaults to `sessionStorage` in the browser; injectable for tests. */
@@ -142,9 +152,10 @@ export function dataUrlToBlob(dataUrl: string): Blob {
 }
 
 /** The steps a run will report, in order. Used by the panel to render the list up front. */
-export function planSteps(plans: PlansState): string[] {
+export function planSteps(plans: PlansState, photos: PhotoMeta[] = []): string[] {
 	const labels = plans.files.map((f) => f.name);
 	if (plans.drawing) labels.push('Planul desenat (imagine)', 'Planul desenat (date)');
+	for (const p of photos) labels.push(p.name);
 	labels.push('Trimit răspunsurile');
 	return labels;
 }
@@ -164,6 +175,8 @@ export async function runSubmission(opts: RunSubmissionOptions): Promise<SubmitR
 		plans,
 		readback,
 		getBlob,
+		photos = [],
+		getPhotoBlob = async () => undefined,
 		onProgress,
 		scenario,
 		fetchImpl = typeof fetch !== 'undefined' ? fetch : undefined,
@@ -176,7 +189,7 @@ export async function runSubmission(opts: RunSubmissionOptions): Promise<SubmitR
 	const pageUri =
 		opts.pageUri ?? (typeof location !== 'undefined' ? location.href : 'http://localhost/');
 	const email = emailOf(answers);
-	const labels = planSteps(plans);
+	const labels = planSteps(plans, photos);
 	const total = labels.length;
 	const headers: Record<string, string> = scenario ? { 'X-Mock-Scenario': scenario } : {};
 
@@ -300,7 +313,36 @@ export async function runSubmission(opts: RunSubmissionOptions): Promise<SubmitR
 		drawing = { pngUrl: png.url, jsonUrl: jsonUp.url, room: d.room };
 	}
 
-	// 3) the submission itself
+	// 3) the photos: of the space, and of the furniture kept in each room
+	const uploadedPhotos: NonNullable<SubmitRequest['photos']> = [];
+	for (const meta of photos) {
+		const cacheKey = `photo:${meta.id}`;
+		let entry: Uploaded | null = cache[cacheKey]?.url ? cache[cacheKey] : null;
+		if (entry) report(index, 'done');
+		else {
+			const blob = await getPhotoBlob(meta.id);
+			if (!blob) {
+				report(index, 'failed');
+				return {
+					ok: false,
+					error: `Nu am găsit poza „${meta.name}". Adaug-o din nou.`,
+					step: meta.name
+				};
+			}
+			entry = await upload(index, blob, `${meta.group}--${meta.name}`, meta.roomId, cacheKey);
+		}
+		if (!entry) {
+			return {
+				ok: false,
+				error: `Nu am putut încărca poza „${meta.name}". Încearcă din nou.`,
+				step: meta.name
+			};
+		}
+		uploadedPhotos.push({ url: entry.url, name: meta.name, roomId: meta.roomId, group: meta.group });
+		index++;
+	}
+
+	// 4) the submission itself
 	report(index, 'uploading');
 	const request: SubmitRequest = {
 		submissionId: id,
@@ -308,6 +350,7 @@ export async function runSubmission(opts: RunSubmissionOptions): Promise<SubmitR
 		readback,
 		files,
 		drawing,
+		photos: uploadedPhotos,
 		pageUri
 	};
 

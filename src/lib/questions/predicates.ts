@@ -30,7 +30,7 @@ export const peopleCount = (a: Answers): number => {
 };
 
 export const hasMachine = (a: Answers): boolean =>
-	['espressor', 'capsule', 'filtru', 'manual'].includes(a.k7 as string);
+	['espressor', 'capsule', 'filtru'].includes(a.k7 as string);
 
 export const yn = [
 	{ value: 'nu', label: 'Nu' },

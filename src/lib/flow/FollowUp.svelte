@@ -1,44 +1,62 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import type { FollowUp } from '$lib/questions/screens';
 	import { answers, setAnswer } from '$lib/state/answers.svelte';
-	import Pills from '$lib/ui/Pills.svelte';
-	import Stepper from '$lib/ui/Stepper.svelte';
+	import CountRow from '$lib/ui/CountRow.svelte';
+	import Field from '$lib/ui/Field.svelte';
+	import Keyed from '$lib/ui/Keyed.svelte';
+	import Seg from '$lib/ui/Seg.svelte';
 
 	interface Props {
 		fu: FollowUp;
-		/** the parent option's label, shown as small text under a stepper's name */
+		/** the follow-up is showing: only then does a stepper write its starting value */
+		active?: boolean;
+		/** the parent option's label, under a stepper's name */
 		hostLabel?: string;
 	}
 
-	let { fu, hostLabel }: Props = $props();
+	let { fu, active = true, hostLabel }: Props = $props();
 
 	const seed = (): number => fu.defaultOf?.(answers) ?? fu.default ?? fu.min ?? 0;
 
-	untrack(() => {
-		if (fu.kind === 'stepper' && answers[fu.key] === undefined) setAnswer(fu.key, seed());
+	$effect(() => {
+		if (active && fu.kind === 'stepper' && answers[fu.key] === undefined) setAnswer(fu.key, seed());
 	});
 
 	const value = $derived(answers[fu.key]);
 </script>
 
-<div class="followup">
-	{#if fu.kind === 'stepper'}
-		<Stepper
+{#if fu.kind === 'stepper'}
+	<CountRow
+		label={fu.label}
+		sub={hostLabel}
+		value={(value as number) ?? seed()}
+		min={fu.min ?? 0}
+		max={fu.max ?? 12}
+		onchange={(v) => setAnswer(fu.key, v)}
+	/>
+{:else if fu.kind === 'input' || fu.kind === 'text'}
+	<Field
+		label={fu.label}
+		placeholder={fu.placeholder}
+		value={(value as string) ?? ''}
+		oninput={(v) => setAnswer(fu.key, v)}
+	/>
+{:else}
+	<p class="fl">{fu.label}</p>
+	{#if (fu.options?.length ?? 0) <= 4}
+		<Seg
+			options={fu.options ?? []}
+			selected={value === undefined ? [] : [String(value)]}
 			label={fu.label}
-			sub={hostLabel}
-			icon={fu.icon}
-			value={(value as number) ?? seed()}
-			min={fu.min ?? 0}
-			max={fu.max ?? 12}
-			onchange={(v) => setAnswer(fu.key, v)}
+			onpick={(v) => setAnswer(fu.key, v)}
 		/>
 	{:else}
-		<div class="field-label">{fu.label}</div>
-		<Pills
+		<Keyed
+			variant="row"
 			options={fu.options ?? []}
-			value={(value as string) ?? null}
-			onselect={(v) => setAnswer(fu.key, v)}
+			selected={value === undefined ? [] : [String(value)]}
+			label={fu.label}
+			onpick={(v) => setAnswer(fu.key, v)}
 		/>
 	{/if}
-</div>
+{/if}

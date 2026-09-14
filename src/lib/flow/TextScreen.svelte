@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { TextScreen } from '$lib/questions/screens';
 	import { answers, setAnswer } from '$lib/state/answers.svelte';
+	import Field from '$lib/ui/Field.svelte';
 	import ScreenTitle from './ScreenTitle.svelte';
 
 	interface Props {
@@ -24,27 +25,40 @@
 
 <ScreenTitle title={screen.title} subtitle={screen.subtitle} />
 
-<div>
-	{#each screen.fields as f (f.key)}
-		<div class="field">
-			{#if f.label}<div class="field-label">{f.label}</div>{/if}
+{#each screen.fields as f (f.key)}
+	{@const key = f.key as string}
+	{#if !f.chips?.length}
+		<!-- a short answer: a line, not a box -->
+		<Field label={f.label} placeholder={f.placeholder} value={draft[key] ?? ''} oninput={(v) => set(key, v)} />
+	{:else}
+		<div class="tfield">
+			{#if f.label}<p class="fl">{f.label}</p>{/if}
 			<textarea
-				class="input"
-				bind:this={boxes[f.key as string]}
+				class="ta"
+				class:short={screen.fields.length > 1}
+				bind:this={boxes[key]}
+				aria-label={f.label ?? screen.title}
 				placeholder={f.placeholder ?? ''}
-				value={draft[f.key as string] ?? ''}
-				oninput={(e) => set(f.key as string, e.currentTarget.value)}
+				value={draft[key] ?? ''}
+				oninput={(e) => set(key, e.currentTarget.value)}
 			></textarea>
-			{#if f.chips?.length}
-				<div class="chips">
-					{#each f.chips as c (c)}
-						<button type="button" class="chipbtn" onclick={() => addChip(f.key as string, c)}>
-							{c}
-						</button>
-					{/each}
-				</div>
-			{/if}
+			<div class="tags">
+				{#each f.chips as c (c)}
+					<button type="button" onclick={() => addChip(key, c)}>{c}</button>
+				{/each}
+			</div>
 		</div>
-	{/each}
-	<p class="q-note">Opțional. Poți sări peste.</p>
-</div>
+	{/if}
+{/each}
+
+<style>
+	.tfield + .tfield {
+		margin-top: 8px;
+	}
+	.tfield :global(.fl) {
+		margin-top: 18px;
+	}
+	.short {
+		min-height: 88px;
+	}
+</style>

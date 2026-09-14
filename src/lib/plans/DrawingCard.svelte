@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { Drawing } from '$lib/types';
-	import { pico } from './icons';
 
 	interface Props {
 		drawing: Drawing;
@@ -11,80 +10,38 @@
 	let { drawing, onedit, ondelete }: Props = $props();
 </script>
 
-<div class="tile dcard" data-testid="drawing-card">
-	<div class="thumb">
-		{#if drawing.pngDataUrl}
-			<img src={drawing.pngDataUrl} alt="Planul desenat de tine" />
-		{:else}
-			<span class="ico">{@html pico('pencil')}</span>
-		{/if}
-	</div>
-	<div class="meta">
-		<span class="lbl">Planul desenat de tine</span>
-		<span class="hint2">
-			{drawing.room?.closed ? 'Camera e închisă.' : 'Camera nu e închisă încă.'}
-		</span>
-	</div>
-	<div class="acts">
-		<button type="button" class="chipbtn" data-testid="drawing-edit" onclick={onedit}>
-			Modifică
-		</button>
-		<button type="button" class="chipbtn" data-testid="drawing-delete" onclick={ondelete}>
-			Șterge
-		</button>
-	</div>
+<div class="drop dcard" data-testid="drawing-card">
+	{#if drawing.pngDataUrl}
+		<img src={drawing.pngDataUrl} alt="Planul desenat de tine" />
+	{/if}
+	<span class="big">Planul desenat de tine</span>
+	<span class="sm">{drawing.room?.closed ? 'Camera e închisă.' : 'Camera nu e închisă încă.'}</span>
+	<span class="acts2">
+		<button type="button" class="lnk" data-testid="drawing-edit" onclick={onedit}>Modifică</button>
+		<button type="button" class="lnk" data-testid="drawing-delete" onclick={ondelete}>Șterge</button>
+	</span>
 </div>
 
 <style>
 	.dcard {
-		gap: 10px;
-		min-height: 148px;
-	}
-	.thumb {
-		height: 84px;
-		border-radius: 12px;
-		background: var(--brass-tint);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		overflow: hidden;
-		color: var(--brass-deep);
-	}
-	.thumb img {
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
-		display: block;
-	}
-	.thumb .ico {
-		width: 48px;
-		height: 48px;
-	}
-	.thumb .ico :global(svg) {
-		width: 100%;
-		height: 100%;
-		display: block;
-	}
-	.meta {
-		display: flex;
-		flex-direction: column;
+		cursor: default;
+		border-color: var(--ink);
 		gap: 2px;
 	}
-	.lbl {
-		font-size: 0.95rem;
-		font-weight: 600;
-		color: var(--ink);
+	.dcard img {
+		width: 100%;
+		max-height: 110px;
+		object-fit: contain;
+		margin-bottom: 8px;
 	}
-	.hint2 {
-		font-size: 0.84rem;
-		color: var(--smoke);
-	}
-	.acts {
+	.acts2 {
 		display: flex;
-		gap: 8px;
-		margin-top: auto;
+		gap: 18px;
+		margin-top: 6px;
 	}
-	.acts .chipbtn {
-		min-height: 40px;
+	.acts2 .lnk {
+		color: var(--ink);
+		text-decoration: underline;
+		text-underline-offset: 4px;
 	}
 </style>

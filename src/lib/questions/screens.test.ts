@@ -2,50 +2,51 @@ import { describe, expect, it } from 'vitest';
 import type { Answers } from '$lib/types';
 import { resolveCards, resolveGroups, resolveOptions, visibleScreens } from './screens';
 import { activeFollowUp, chapterQuestionCount, chromeFor, continueState } from '$lib/flow/engine';
-import { S } from './screens';
+import { S, screenById } from './screens';
+import { ROOMS } from './rooms';
 
 const ids = (a: Answers): string[] => visibleScreens(a).map((s) => s.id);
 
 const common = {
 	c_identity: { name: 'Ana Popescu', email: 'ana@exemplu.ro' },
-	c_stage: 'noua',
+	c_stage: 'renovez',
 	c_household: { adults: 2, children: 1, childAges: ['sub3'], elderly: 'nu', pets: ['nu'] }
 };
 
 /** 1 — three rooms, keen cook. */
 export const threeRooms: Answers = {
 	...common,
-	c_rooms: ['bucatarie', 'living', 'copil'],
+	c_rooms: ['bucatarie', 'living', 'baie'],
+	p_modify: ['pereti', 'instalatii'],
 	k1: 'gatim',
 	k2: 'gatim',
 	k3: 'doi',
-	k4: ['lent', 'copt', 'taiat'],
+	k4: ['lent', 'copt', 'rapide'],
 	k3b: ['povesti', 'prieteni'],
 	k5_frig: { fridge: true, fridgeType: 'combina', freezer: true },
 	k5_gatit: { cook: 'aragaz', aragazPower: 'gaz', gasSource: 'retea' },
 	k5_spalat: { dish: true },
-	k6a: ['robot', 'blender', 'mixer', 'fierbator'],
+	k6a: ['blender', 'mixer', 'fierbator'],
 	k7: 'espressor',
 	k7_freq: 'zilnic',
 	k8: ['debara'],
-	k8_debara: 'plin',
 	k9: 'doua_trei',
 	k10: 'zilnic',
 	k10_seats: 4,
 	k11: { text: 'prea puțin blat' },
 	k12: { text: 'o masă mare' },
-	k13: { text: 'masa și scaunele' },
+	k13: { items: [{ name: 'masa', length: '140', width: '80' }] },
 	l1: ['tv', 'masa', 'copii'],
 	l1_seats: 6,
 	l2: { seats: 4 },
-	l3: { problem: 'masa nu încape', must: 'o canapea mare' },
-	l4: { text: 'nimic' },
-	x1_copil: { text: 'pat suprapus, doi copii' },
-	x2_copil: { problem: 'nu încape tot', must: 'depozitare' },
-	x3_copil: { text: 'nimic' }
+	l3: { problem: 'masa nu încape', must: 'un colțar' },
+	l4: { items: [] },
+	x1_baie: ['cada', 'altceva'],
+	x1_baie_other: 'uscător mic',
+	x2_baie: { problem: 'nu încape cada', must: 'bideu' }
 };
 
-/** 2 — kitchen only, never cooks: k3 and k4 prune away, and so does k6b. */
+/** 2 — kitchen only, never cooks: k3, k4 and k3b prune away. */
 export const neverCooks: Answers = {
 	...common,
 	c_household: { adults: 1, children: 0, elderly: 'nu', pets: ['nu'] },
@@ -62,33 +63,32 @@ export const neverCooks: Answers = {
 	k9: 'unul',
 	k10: 'nu',
 	k11: {},
-	k12: {},
-	k13: {}
+	k12: {}
 };
 
 /** 3 — kitchen only, middle case: ibric (no k7 follow-up) and no baking. */
 export const middleCase: Answers = {
 	...common,
-	c_household: { adults: 2, children: 0, elderly: 'da', pets: ['pisica'] },
+	c_household: { adults: 2, children: 0, elderly: 'da', pets: ['pisica', 'altceva'], petsOther: 'papagal' },
 	c_rooms: ['bucatarie'],
 	k1: 'incalzim',
 	k2: 'gatim',
 	k3: 'una',
-	k4: ['tigaie', 'taiat'],
+	k4: ['tigaie', 'rapide'],
 	k3b: [],
 	k5_frig: { fridge: true, fridgeType: 'side' },
 	k5_gatit: { cook: 'separate', hob: 'inductie' },
 	k5_spalat: { dish: true },
 	k5_plasare: { ovenWhere: 'oriunde' },
-	k6a: ['robot', 'blender', 'mixer', 'fierbator'],
+	k6a: ['blender', 'mixer', 'fierbator', 'altii'],
+	k6a_other: 'Thermomix',
 	k7: 'ibric',
 	k8: ['nu'],
 	k9: 'unul',
 	k10: 'rapid',
 	k10_seats: 2,
 	k11: { text: 'ne încurcăm unul pe altul' },
-	k12: { text: 'un blat lung, liber' },
-	k13: { text: 'nimic' }
+	k12: { text: 'un blat liber' }
 };
 
 const KITCHEN_FULL = [
@@ -110,10 +110,10 @@ const KITCHEN_FULL = [
 	'k12',
 	'k13'
 ];
-const HEAD = ['c_identity', 'c_rooms', 'planuri', 'c_stage', 'c_household'];
+const HEAD = ['c_identity', 'c_rooms', 'p_modify', 'planuri', 'c_stage', 'c_household'];
 
 describe('screen visibility', () => {
-	it('three rooms, keen cook — kitchen, living and the child room, in ROOMS order', () => {
+	it('three rooms, keen cook — kitchen, living and the bathroom, in ROOMS order', () => {
 		expect(ids(threeRooms)).toEqual([
 			...HEAD,
 			...KITCHEN_FULL,
@@ -122,10 +122,10 @@ describe('screen visibility', () => {
 			'l2',
 			'l3',
 			'l4',
-			'x_card_copil',
-			'x1_copil',
-			'x2_copil',
-			'x3_copil'
+			'x_card_baie',
+			'x1_baie',
+			'x2_baie',
+			'x3_baie'
 		]);
 	});
 
@@ -228,6 +228,45 @@ describe('screen visibility', () => {
 	});
 });
 
+describe('the revamped questions', () => {
+	const at = (id: string) => screenById(id)!;
+
+	it('the child room is gone: children now sleep in a bedroom', () => {
+		expect(ROOMS.map((r) => r.id)).not.toContain('copil');
+		expect(resolveOptions(at('d1'), threeRooms).map((o) => o.value)).toContain('copil');
+	});
+
+	it('"Altceva" on a single choice asks for the text before continuing', () => {
+		expect(continueState(at('c_stage'), { c_stage: 'altceva' }).enabled).toBe(false);
+		expect(continueState(at('c_stage'), { c_stage: 'altceva', c_stage_other: '  ' }).enabled).toBe(false);
+		expect(continueState(at('c_stage'), { c_stage: 'altceva', c_stage_other: 'mansardă' }).enabled).toBe(true);
+		expect(continueState(at('c_stage'), { c_stage: 'mobilier' }).enabled).toBe(true);
+	});
+
+	it('"Altceva" on a multi choice and inside a compound screen asks for the text too', () => {
+		expect(continueState(at('x1_baie'), { x1_baie: ['altceva'] }).enabled).toBe(false);
+		expect(continueState(at('x1_baie'), threeRooms).enabled).toBe(true);
+		const d2 = at('d2');
+		expect(continueState(d2, { d2: { bed: 'altceva', wants: ['dulap'] } }).enabled).toBe(false);
+		expect(
+			continueState(d2, { d2: { bed: 'altceva', bedOther: 'pat rotund', wants: ['dulap'] } }).enabled
+		).toBe(true);
+	});
+
+	it('a furniture screen can be skipped, and says so until an object is written', () => {
+		expect(continueState(at('k13'), { ...threeRooms, k13: undefined }).label).toBe('Sar peste');
+		expect(continueState(at('k13'), { ...threeRooms, k13: { items: [{ name: '', length: '', width: '' }] } }).label).toBe('Sar peste');
+		expect(continueState(at('k13'), threeRooms).label).toBe('Continuă');
+		expect(continueState(at('x3_baie'), threeRooms).label).toBe('Sar peste, vezi ce am înțeles');
+	});
+
+	it('only an appliance opens the coffee frequency — ibric, moka and french press do not', () => {
+		const k7 = at('k7');
+		expect(activeFollowUp(k7, { k7: 'ibric' })).toBeNull();
+		expect(activeFollowUp(k7, { k7: 'filtru' })?.key).toBe('k7_freq');
+	});
+});
+
 describe('chrome', () => {
 	it('the meter label counts the visible, non-card screens of the chapter', () => {
 		const at = (id: string) =>
@@ -245,7 +284,7 @@ describe('chrome', () => {
 			'locuinta',
 			'bucatarie',
 			'living',
-			'copil'
+			'baie'
 		]);
 		expect(c.chapters.find((x) => x.id === 'bucatarie')?.state).toBe('now');
 		expect(c.chapters.find((x) => x.id === 'locuinta')?.state).toBe('done');

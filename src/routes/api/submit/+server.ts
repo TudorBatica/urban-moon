@@ -30,6 +30,17 @@ function validate(body: unknown): string | null {
 		}
 	}
 
+	if (body.photos !== undefined) {
+		if (!Array.isArray(body.photos)) return 'photos este invalid.';
+		for (const f of body.photos) {
+			if (!isRecord(f) || typeof f.url !== 'string' || typeof f.name !== 'string') {
+				return 'photos conține o intrare invalidă.';
+			}
+			if (f.roomId !== null && typeof f.roomId !== 'string') return 'photos conține o intrare invalidă.';
+			if (f.group !== 'spatiu' && f.group !== 'mobilier') return 'photos conține o intrare invalidă.';
+		}
+	}
+
 	const d = body.drawing;
 	if (d !== null && d !== undefined) {
 		if (!isRecord(d)) return 'drawing este invalid.';

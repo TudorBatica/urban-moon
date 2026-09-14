@@ -2,6 +2,7 @@ import type { Answers } from '$lib/types';
 import {
 	CHAPTER_LABEL,
 	S,
+	furnitureItems,
 	isVisible,
 	resolveCards,
 	resolveFieldOptions,
@@ -56,7 +57,7 @@ export function lastVisible(a: Answers): Screen | null {
 /* ---------------- completeness ---------------- */
 
 export const followUpDone = (fu: FollowUp, a: Answers): boolean =>
-	fu.kind === 'stepper' ? a[fu.key] !== undefined : !!a[fu.key];
+	fu.kind === 'stepper' ? a[fu.key] !== undefined : !!String(a[fu.key] ?? '').trim();
 
 /** The follow-up of a `single` screen, if the picked value opens it. */
 export function activeFollowUp(s: Screen, a: Answers): FollowUp | null {
@@ -75,6 +76,11 @@ export function fieldDone(f: Field, draft: Record<string, unknown>): boolean {
 	if (f.kind === 'heading') return true;
 	if (f.kind === 'stepper') return true;
 	const v = f.key ? draft[f.key] : undefined;
+	/* Picking "Altceva" asks for the text too. */
+	if (f.other) {
+		const on = Array.isArray(v) ? v.includes(f.other.value) : v === f.other.value;
+		if (on && !String(draft[f.other.key] ?? '').trim()) return false;
+	}
 	if (f.kind === 'pills') return v !== undefined;
 	if (f.kind === 'pillsMulti') return !!f.allowEmpty || (Array.isArray(v) && v.length > 0);
 	if (f.kind === 'input') return !!String(v ?? '').trim();
@@ -126,6 +132,7 @@ export interface ContinueState {
 export function continueState(s: Screen, a: Answers): ContinueState {
 	const last = isLast(s, a);
 	const label = last ? 'Vezi ce am înțeles' : 'Continuă';
+	const skip = last ? 'Sar peste, vezi ce am înțeles' : 'Sar peste';
 	if (s.kind === 'single') {
 		const v = a[s.id];
 		const fu = activeFollowUp(s, a);
@@ -137,7 +144,10 @@ export function continueState(s: Screen, a: Answers): ContinueState {
 		const pending = opts.filter(
 			(o) => o.followUp && sel.includes(o.value) && !followUpDone(o.followUp, a)
 		);
-		return { enabled: (sel.length > 0 || !!s.allowEmpty) && pending.length === 0, label };
+		return {
+			enabled: (sel.length > 0 || !!s.allowEmpty) && pending.length === 0,
+			label: sel.length === 0 && s.allowEmpty ? skip : label
+		};
 	}
 	if (s.kind === 'compound') {
 		const draft = (a[s.id] as Record<string, unknown>) || {};
@@ -145,14 +155,22 @@ export function continueState(s: Screen, a: Answers): ContinueState {
 	}
 	if (s.kind === 'cards') {
 		const draft = (a[s.id] as Record<string, unknown>) || {};
-		return { enabled: cardsComplete(s, draft, a), label };
+		const none = !!s.allowEmpty && resolveCards(s, a).every((c) => !cardOn(c, draft, s.pick));
+		return { enabled: cardsComplete(s, draft, a), label: none ? skip : label };
 	}
 	if (s.kind === 'text') {
 		const d = (a[s.id] as Record<string, string>) || {};
 		const empty = s.fields.every((f) => !String(d[f.key ?? ''] ?? '').trim());
 		return {
 			enabled: true,
-			label: empty ? (last ? 'Sar peste, vezi ce am înțeles' : 'Sar peste') : label
+			label: empty ? skip : label
+		};
+	}
+	if (s.kind === 'furniture') {
+		const empty = furnitureItems(a[s.id]).length === 0;
+		return {
+			enabled: true,
+			label: empty ? skip : label
 		};
 	}
 	if (s.kind === 'card') return { enabled: true, label: 'Începem' };
@@ -241,6 +259,14 @@ export function chromeFor(
 	const label = CHAPTER_LABEL[current.chapter] || '';
 	if (current.kind === 'card') return { chapters: rail, label: `${label} · ${n} întrebări`, progress: 0 };
 	return { chapters: rail, label: `${label} · ${i} din ${n}`, progress: n ? i / n : 0 };
+}
+
+/** The question counter in the top bar: position among the chapter's questions. */
+export function counterFor(s: Screen | null, a: Answers): { i: number; n: number } | null {
+	if (!s || !counted(s) || s.kind === 'route') return null;
+	const inChapter = visibleScreens(a).filter((x) => x.chapter === s.chapter && counted(x));
+	const i = inChapter.indexOf(s);
+	return i < 0 ? null : { i: i + 1, n: inChapter.length };
 }
 
 export { resolveOptions, resolveFieldOptions, resolveCards, resolveGroups, visibleScreens, isVisible };

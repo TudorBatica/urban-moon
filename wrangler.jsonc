@@ -17,6 +17,8 @@
     "HUBSPOT_API_BASE": "https://api.hubapi.com",
     "HUBSPOT_FORMS_BASE": "https://api.hsforms.com",
     "HUBSPOT_FILES_FOLDER": "/proiecte",
-    "MOCK_ADMIN_BASE": ""
+    "MOCK_ADMIN_BASE": "",
+    // The Calendly event link for the booking step; empty skips it.
+    "PUBLIC_CALENDLY_URL": ""
   }
 }

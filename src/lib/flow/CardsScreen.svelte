@@ -3,7 +3,8 @@
 	import type { AppCard, CardsScreen } from '$lib/questions/screens';
 	import { answers, setAnswer } from '$lib/state/answers.svelte';
 	import { cardDone, cardOn, resolveCards, resolveGroups } from '$lib/flow/engine';
-	import { ico, TICK } from '$lib/questions/icons';
+	import { line } from '$lib/ui/lineMap';
+	import Seg from '$lib/ui/Seg.svelte';
 	import ScreenTitle from './ScreenTitle.svelte';
 
 	interface Props {
@@ -15,7 +16,7 @@
 	const cards = $derived(resolveCards(screen, answers));
 	const draft = $derived((answers[screen.id] as Record<string, unknown>) || {});
 
-	/* An `always` card is open from the start, so its default lands before the first touch. */
+	/* An `always` card is answered from the start, so its default lands before the first touch. */
 	untrack(() => {
 		const seed: Record<string, unknown> = { ...((answers[screen.id] as object) || {}) };
 		let changed = false;
@@ -31,8 +32,7 @@
 	});
 
 	const on = (c: AppCard) => cardOn(c, draft, screen.pick);
-	const done = (c: AppCard) => on(c) && cardDone(c, draft);
-	/** the card is pushed aside because another one won the exclusive pick */
+	/** another card won the one-at-a-time pick */
 	const away = (c: AppCard) =>
 		!!screen.pick && draft[screen.pick] !== undefined && draft[screen.pick] !== c.value;
 
@@ -67,86 +67,90 @@
 		for (const g of c.groups ?? []) if (!live.includes(g) && g.key !== key) delete next[g.key];
 		setAnswer(screen.id, next);
 	}
+
+	const placement = $derived(cards.length > 0 && cards.every((c) => c.always));
 </script>
 
-{#snippet options(c: AppCard)}
-	<div class="groups">
-		{#each resolveGroups(c, draft) as g (g.key)}
-			<div class="gp">
-				{#if g.label}<div class="gp-label">{g.label}</div>{/if}
-				{#each g.options as o (o.value)}
-					<button
-						type="button"
-						class="opt"
-						class:on={draft[g.key] === o.value}
-						aria-pressed={draft[g.key] === o.value}
-						onclick={() => choose(c, g.key, o.value)}
-					>
-						{#if o.icon}<span class="ico">{@html ico(o.icon)}</span>{/if}
-						<span class="opt-txt">
-							<span>{o.label}</span>
-							{#if o.hint}<small>{o.hint}</small>{/if}
-						</span>
-					</button>
-				{/each}
+{#if screen.eyebrow}
+	<h1 class="q sm">{screen.eyebrow}</h1>
+	<p class="sub"><b>{screen.title}.</b> {screen.subtitle ?? ''}</p>
+{:else}
+	<ScreenTitle title={screen.title} subtitle={screen.subtitle} small />
+{/if}
+
+{#if placement}
+	<!-- placement: one block per appliance, a segmented choice each -->
+	<div>
+		{#each cards as c (c.value)}
+			{#each resolveGroups(c, draft) as g (g.key)}
+				<div class="blk">
+					<h2>{c.label}</h2>
+					<Seg
+						options={g.options}
+						selected={draft[g.key] === undefined ? [] : [String(draft[g.key])]}
+						label={c.label}
+						onpick={(v) => choose(c, g.key, v)}
+					/>
+				</div>
+			{/each}
+		{/each}
+	</div>
+{:else}
+	<div class="flipset" role="group" aria-label={screen.eyebrow ?? screen.title}>
+		{#each cards as c (c.value)}
+			{@const isOn = on(c)}
+			{@const flips = !!c.groups?.length}
+			{@const groups = resolveGroups(c, draft)}
+			<div
+				class="acard"
+				class:on={isOn}
+				class:flips
+				class:turned={isOn && flips}
+				class:await={isOn && flips && !cardDone(c, draft)}
+				class:dim={away(c)}
+			>
+				<button
+					type="button"
+					class="face"
+					aria-pressed={isOn}
+					tabindex={isOn && flips ? -1 : 0}
+					onclick={() => toggle(c)}
+				>
+					{@html line(c.icon, c.value)}
+					<span>{c.label}{#if c.hint}<small>{c.hint}</small>{/if}</span>
+				</button>
+				{#if flips}
+					<div class="back" inert={!isOn}>
+						<div class="back-h">
+							<span>{groups[0]?.label ?? c.label}</span>
+							<button type="button" class="x" aria-label="Renunț la {c.label}" onclick={() => toggle(c)}
+								>×</button
+							>
+						</div>
+						{#each groups as g, gi (g.key)}
+							{#if gi > 0 && g.label}<p class="fl">{g.label}</p>{/if}
+							<div class="subopts" role="radiogroup" aria-label={g.label ?? c.label}>
+								{#each g.options as o, oi (o.value)}
+									<button
+										type="button"
+										class:on={draft[g.key] === o.value}
+										role="radio"
+										aria-checked={draft[g.key] === o.value}
+										style:--i={oi}
+										onclick={() => choose(c, g.key, o.value)}
+									>
+										{@html line(o.icon, o.value)}
+										<span>{o.label}</span>
+									</button>
+								{/each}
+							</div>
+						{/each}
+						<svg class="edge" preserveAspectRatio="none" aria-hidden="true">
+							<rect class="draw" x=".5" y=".5" width="99.6%" height="99%" pathLength="1" />
+						</svg>
+					</div>
+				{/if}
 			</div>
 		{/each}
 	</div>
-{/snippet}
-
-{#if screen.eyebrow}<p class="deck-eyebrow">{screen.eyebrow}</p>{/if}
-<ScreenTitle title={screen.title} subtitle={screen.subtitle} />
-
-<div class="deck" class:pick={!!screen.pick}>
-	{#each cards as c (c.value)}
-		{@const open = on(c) && !!c.groups?.length}
-		<section class="acard" class:on={on(c)} class:open class:always={c.always} class:away={away(c)}>
-			{#if c.always}
-				<!-- placement cards are answered from the start: there is no face to turn -->
-				<div class="face back">
-					<span class="tick" class:show={done(c)}>{@html TICK}</span>
-					<div class="acard-head">
-						<span class="ico">{@html ico(c.icon)}</span>
-						<span class="txt"><span class="lbl">{c.label}</span></span>
-					</div>
-					{@render options(c)}
-				</div>
-			{:else}
-				<div class="flip">
-					<!-- front: the card as it sits, closed -->
-					<button
-						type="button"
-						class="face front"
-						aria-pressed={on(c)}
-						tabindex={open ? -1 : 0}
-						onclick={() => toggle(c)}
-					>
-						<span class="tick" class:show={on(c) && !c.groups?.length}>{@html TICK}</span>
-						<span class="acard-head">
-							<span class="ico">{@html ico(c.icon)}</span>
-							<span class="txt">
-								<span class="lbl">{c.label}</span>
-								{#if c.hint}<span class="hint">{c.hint}</span>{/if}
-							</span>
-						</span>
-					</button>
-
-					<!-- back: the same card, turned over onto its options -->
-					<div class="face back">
-						<span class="tick" class:show={done(c)}>{@html TICK}</span>
-						<button
-							type="button"
-							class="acard-head"
-							tabindex={open ? 0 : -1}
-							onclick={() => toggle(c)}
-						>
-							<span class="ico">{@html ico(c.icon)}</span>
-							<span class="txt"><span class="lbl">{c.label}</span></span>
-						</button>
-						{@render options(c)}
-					</div>
-				</div>
-			{/if}
-		</section>
-	{/each}
-</div>
+{/if}

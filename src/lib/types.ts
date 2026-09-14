@@ -2,7 +2,6 @@ export type RoomId =
 	| 'bucatarie'
 	| 'living'
 	| 'dormitor'
-	| 'copil'
 	| 'birou'
 	| 'baie'
 	| 'hol'
@@ -22,6 +21,11 @@ export interface PlanFileMeta {
 	size: number; // bytes
 	roomId: RoomId | null; // tag
 	addedAt: number;
+}
+
+/** A photo: of the space (`spatiu`) or of the furniture kept in a room (`mobilier`). */
+export interface PhotoMeta extends PlanFileMeta {
+	group: 'spatiu' | 'mobilier';
 }
 
 /** window.__room() shape from ../SPEC-shared-contract.md — unchanged */
@@ -78,5 +82,7 @@ export interface SubmitRequest {
 	readback: string; // full "Ce am înțeles" as plain text
 	files: { url: string; name: string; roomId: RoomId | null }[]; // HubSpot file URLs after upload
 	drawing: { jsonUrl: string; pngUrl: string; room: RoomSnapshot } | null;
+	/** photos of the space and of the kept furniture, after upload */
+	photos?: { url: string; name: string; roomId: RoomId | null; group: PhotoMeta['group'] }[];
 	pageUri: string;
 }

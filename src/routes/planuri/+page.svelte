@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { fade, slide } from 'svelte/transition';
 	import { goto } from '$app/navigation';
-	import { pickedRooms } from '$lib/state/answers.svelte';
+	import { answers, pickedRooms, setAnswer } from '$lib/state/answers.svelte';
 	import {
 		addFiles,
 		isPlansComplete,
@@ -11,11 +12,16 @@
 		setFileRoom
 	} from '$lib/state/plans.svelte';
 	import { roomOf } from '$lib/questions/rooms';
-	import NavBar from '$lib/ui/NavBar.svelte';
+	import { PLAN_MEASURED_KEY, PLAN_MODIFY_KEY } from '$lib/questions/screens';
+	import { IMG } from '$lib/ui/images';
+	import { BASE, SLOW, ease, ms } from '$lib/ui/motion';
+	import Frame from '$lib/ui/Frame.svelte';
+	import GoBar from '$lib/ui/GoBar.svelte';
 	import Dropzone from '$lib/plans/Dropzone.svelte';
 	import FileTile from '$lib/plans/FileTile.svelte';
 	import DrawingCard from '$lib/plans/DrawingCard.svelte';
-	import { pico } from '$lib/plans/icons';
+	import PhotoField from '$lib/plans/PhotoField.svelte';
+	import Rejections from '$lib/plans/Rejections.svelte';
 	import type { RoomId } from '$lib/types';
 
 	const rooms = $derived(pickedRooms());
@@ -33,14 +39,21 @@
 		single ? `Planul pentru ${(roomOf(rooms[0])?.label ?? 'cameră').toLowerCase()}` : 'Planurile camerelor'
 	);
 
-	const sub = $derived(
-		`Un PDF de la dezvoltator, o poză a planului tipărit, un DWG — orice ai. Poți încărca până la ${max} fișiere` +
-			(single ? ' sau desenezi tu planul, direct aici.' : ', câte două pentru fiecare cameră.')
-	);
+	/* Nothing can be drawn or uploaded before the space is measured. The tick draws first;
+	   a moment later the disclaimer folds away and the actions wake up. */
+	const measured = $derived(answers[PLAN_MEASURED_KEY] === true);
+	let ticking = $state(false);
+
+	function tick(): void {
+		if (measured || ticking) return;
+		ticking = true;
+		setTimeout(() => setAnswer(PLAN_MEASURED_KEY, true), ms(BASE + 120));
+	}
 
 	let rejected = $state<{ name: string; reason: string }[]>([]);
 
 	async function onfiles(files: File[]): Promise<void> {
+		if (!measured) return;
 		const res = await addFiles(files, count);
 		rejected = res.rejected;
 	}
@@ -59,109 +72,118 @@
 	}
 </script>
 
-<h1 class="q-title">{title}</h1>
-<p class="q-sub">{sub}</p>
+<svelte:head><title>{title} · Urban Moon</title></svelte:head>
 
-<Dropzone
-	label={single ? 'Încarcă planul' : 'Încarcă planurile'}
-	hint="PDF, poză, DWG sau DXF. Până la 25 MB fișierul."
-	disabled={full}
-	{onfiles}
->
-	{#if single}
-		{#if plans.drawing}
-			<DrawingCard
-				drawing={plans.drawing}
-				onedit={() => goto('/deseneaza')}
-				ondelete={deleteDrawing}
-			/>
-		{:else}
+<Frame img={IMG.kitchenBW} mode="dense" counter="Planuri">
+	<h1 class="q">{title}</h1>
+
+	{#if !measured}
+		<div class="gate" out:slide={{ duration: ms(SLOW), easing: ease }}>
+			<div class="note">
+				<p><strong>Înainte de plan, măsoară spațiul.</strong></p>
+				<p>
+					Dacă dimensiunile nu sunt cele reale, planul nu poate fi executat. Nu lucrăm pe cadastru:
+					de multe ori nu are toate cotele.
+				</p>
+			</div>
 			<button
 				type="button"
-				class="tile draw-tile"
-				data-testid="tile-draw"
-				onclick={() => goto('/deseneaza')}
+				class="opt measure"
+				class:on={ticking}
+				role="checkbox"
+				aria-checked={ticking}
+				data-testid="measured"
+				onclick={tick}
 			>
-				<span class="ico">{@html pico('pencil')}</span>
-				<span class="lbl">Desenează planul</span>
-				<span class="hint">Nu ai niciun plan? Îl desenezi tu, în câteva minute.</span>
+				<span class="k" aria-hidden="true"
+					><svg viewBox="0 0 24 24"><path pathLength="1" d="M7 12.5l3.5 3.5L17 9" /></svg></span
+				>
+				<span class="t">Am măsurat spațiul<small>Lungimi, înălțime, uși și ferestre, cu ruleta.</small></span>
 			</button>
-		{/if}
+		</div>
+	{:else}
+		<p class="sub done" in:fade={{ duration: ms(BASE), delay: ms(SLOW), easing: ease }}>
+			Măsurat de tine. Mergem mai departe.
+		</p>
 	{/if}
-</Dropzone>
 
-<p class="q-note" data-testid="counter">{plans.files.length} din {max} fișiere</p>
-
-{#if rejected.length > 0}
-	<div class="rejects" data-testid="rejections">
-		<ul>
-			{#each rejected as r, i (`${r.name}-${i}`)}
-				<li data-testid="rejection"><strong>{r.name}</strong> — {r.reason}</li>
-			{/each}
-		</ul>
-		<button
-			type="button"
-			class="chipbtn"
-			data-testid="rejections-dismiss"
-			onclick={() => (rejected = [])}
+	<fieldset class="work" class:locked={!measured} disabled={!measured} inert={!measured}>
+		<legend class="sr">Planul și pozele spațiului</legend>
+		<Dropzone
+			label={single ? 'Încarcă schița' : 'Încarcă schițele'}
+			hint="PDF, poză, DWG, DXF · 25 MB · {plans.files.length} din {max} fișiere"
+			disabled={full || !measured}
+			{onfiles}
 		>
-			Am înțeles
-		</button>
-	</div>
-{/if}
+			{#if single}
+				{#if plans.drawing}
+					<DrawingCard
+						drawing={plans.drawing}
+						onedit={() => goto('/deseneaza')}
+						ondelete={deleteDrawing}
+					/>
+				{:else}
+					<button
+						type="button"
+						class="drop"
+						data-testid="tile-draw"
+						disabled={!measured}
+						onclick={() => goto('/deseneaza')}
+					>
+						<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16l-1 4zM14 7l3 3" /></svg>
+						<span class="big"><u>Desenează planul</u><br />după dimensiunile reale</span>
+						<span class="sm">Câteva minute, direct aici</span>
+					</button>
+				{/if}
+			{/if}
+		</Dropzone>
 
-{#if plans.files.length > 0}
-	<div class="field">
-		<div class="field-label">
-			Fișierele tale
-			{#if !single}<small>Poți spune ce cameră arată fiecare.</small>{/if}
-		</div>
-		<div class="tiles wide">
-			{#each plans.files as file (file.id)}
-				<FileTile {file} {rooms} showTags={!single} {onremove} {ontag} />
-			{/each}
-		</div>
-	</div>
-{/if}
+		<Rejections list={rejected} ondismiss={() => (rejected = [])} />
 
-<NavBar
-	backLabel="Înapoi"
-	nextLabel="Continuă"
-	nextDisabled={!isPlansComplete(plans)}
-	onback={() => goto('/?s=c_rooms')}
-	onnext={() => goto('/?s=c_stage')}
-/>
+		{#if plans.files.length > 0}
+			<div class="files" data-testid="counter">
+				{#each plans.files as file (file.id)}
+					<FileTile {file} {rooms} showTags={!single} {onremove} {ontag} />
+				{/each}
+			</div>
+		{/if}
+
+		<h2 class="q2">Ai imagini cu spațiul tău?</h2>
+		<PhotoField group="spatiu" roomId={null} />
+	</fieldset>
+
+	{#snippet bottom()}
+		<GoBar
+			onback={() => goto(`/?s=${PLAN_MODIFY_KEY}`)}
+			disabled={!measured || !isPlansComplete(plans)}
+			onnext={() => goto('/?s=c_stage')}
+		/>
+	{/snippet}
+</Frame>
 
 <style>
-	.draw-tile {
-		min-height: 148px;
+	.gate .note {
+		margin-top: 0;
 	}
-	.draw-tile .ico {
-		width: 56px;
-		height: 56px;
-	}
-	.draw-tile .ico :global(svg) {
-		width: 100%;
-		height: 100%;
-		display: block;
-	}
-	.rejects {
-		margin-top: 14px;
+	.measure {
+		margin-bottom: 18px;
 		padding: 16px 18px;
-		background: var(--brass-tint);
-		border-radius: var(--r-card);
+		border-color: var(--line-strong);
 	}
-	.rejects ul {
-		margin: 0 0 10px;
-		padding-left: 18px;
-		font-size: 0.88rem;
-		color: var(--smoke);
+	.measure .t {
+		font-size: 16.5px;
 	}
-	.rejects li {
-		margin: 3px 0;
+	.done {
+		margin: -6px 0 22px;
 	}
-	.rejects strong {
-		color: var(--ink);
-		font-weight: 600;
+	.work {
+		border: 0;
+		margin: 0;
+		padding: 0;
+		min-width: 0;
+		transition: opacity var(--slow) var(--ease);
+	}
+	.work.locked {
+		opacity: 0.4;
 	}
 </style>

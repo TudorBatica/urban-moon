@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Urban Moon · web + mobil</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400&family=Figtree:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F5F4F0;--ink:#141414;--grey:#8C8C88;--hair:#E0DFD9;--wash:#ECEBE6;--s:"Newsreader",Georgia,serif;--f:"Figtree","Helvetica Neue",Arial,sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1a1a1a;color:#b5b3ad;font-family:var(--f);padding:28px 18px 80px}
+.lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#77756f;margin:44px 0 12px}
+.lbl:first-of-type{margin-top:0}
+.pair{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+img{display:block;width:100%;height:100%;object-fit:cover}
+ul{list-style:none}
+li{cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
+
+/* frames */
+.dk{width:100%;max-width:960px;min-height:640px;background:var(--paper);color:var(--ink);display:flex;box-shadow:0 30px 60px rgba(0,0,0,.5)}
+.dk .art{width:42%;flex:none;background:#ccc;overflow:hidden}
+.dk.dense .art{width:34%}
+.dk .side{flex:1;padding:26px 44px 24px;display:flex;flex-direction:column;min-width:0}
+.dk .mid{margin:auto 0;padding:28px 0}
+.dk.noart .art{display:none}
+.dk.noart .side{max-width:620px;margin:0 auto;width:100%}
+.mb.noart .art{display:none}
+.mb{width:360px;min-height:760px;background:var(--paper);color:var(--ink);display:flex;flex-direction:column;box-shadow:0 30px 60px rgba(0,0,0,.5);padding:22px 22px 20px}
+.mb .art{height:190px;margin-top:18px;background:#ccc;overflow:hidden;flex:none}
+.mb.dense .art{display:none}
+.mb .side{display:flex;flex-direction:column;flex:1;min-width:0}
+.mb .mid{padding:22px 0 20px}
+.top{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+.top .wm{font:600 14px/1 "Playfair Display",Georgia,serif;letter-spacing:.14em}
+.top .ct{color:var(--grey);letter-spacing:.06em;text-transform:none;font-size:11.5px;font-variant-numeric:tabular-nums}
+.bot{display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:14px}
+.lnk{font-size:14px;color:var(--grey)}
+.go{width:54px;height:54px;border-radius:50%;background:var(--ink);display:flex;align-items:center;justify-content:center;flex:none}
+.go.off{background:#C9C8C2}
+.go svg{width:20px;height:20px;stroke:var(--paper);stroke-width:1.5;fill:none}
+.go span{color:var(--paper);font-size:13px;font-weight:500;margin-right:8px}
+.go.w{width:auto;padding:0 20px 0 22px;border-radius:27px}
+
+/* type */
+.q{font:300 34px/1.12 var(--s);font-variation-settings:"opsz" 72;letter-spacing:-.012em;margin-bottom:22px;max-width:16ch}
+.mb .q{font-size:27px;max-width:none}
+.q.sm{font-size:26px;margin-bottom:16px}
+.mb .q.sm{font-size:24px}
+.sub{font:300 17px/1.4 var(--s);font-variation-settings:"opsz" 24;color:#5A5955;margin:-10px 0 20px;max-width:40ch}
+.mb .sub{font-size:16px}
+.fl{font-size:13px;color:var(--grey);margin:18px 0 8px}
+.tag{display:inline-block;font-size:11.5px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);border:1px solid var(--ink);border-radius:3px;padding:5px 9px;margin-bottom:22px}
+
+/* keyed cells */
+.opts li,.grid li,.row li{display:flex;align-items:center;gap:14px;border:1px solid var(--hair);background:#fff;border-radius:4px;padding:12px 14px;font-size:15.5px;color:#33322F;transition:all .18s;position:relative}
+.opts li{margin-bottom:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.k{width:24px;height:24px;border:1px solid #CFCEC8;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--grey);flex:none;transition:all .18s}
+li .t{display:block}
+li .t small{display:block;font-size:12.5px;color:var(--grey);margin-top:2px;font-weight:400}
+li.on{border-color:var(--ink);color:var(--ink);font-weight:500;box-shadow:0 4px 10px -6px rgba(0,0,0,.25);transform:translateY(-1px)}
+li.on .k{background:var(--ink);border-color:var(--ink);color:#fff;font-size:0}
+li.on .k:after{content:"";width:5px;height:9px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg);margin-top:-2px}
+li.dim{opacity:.45}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.row li{padding:9px 14px 9px 10px;font-size:14px;gap:10px;margin:0}
+.row li .k{width:20px;height:20px;font-size:10px}
+.row li.on .k{font-size:0}
+.row li.on .k:after{width:4px;height:7px}
+
+/* word list (rooms) */
+.words{display:grid;grid-template-columns:1fr 1fr;column-gap:24px;border-top:1px solid var(--hair)}
+.words li{font:300 22px/1.2 var(--s);font-variation-settings:"opsz" 30;color:#9A9994;padding:13px 0;border-bottom:1px solid var(--hair);display:flex;justify-content:space-between;align-items:center;transition:color .15s}
+.words li:after{content:"";width:14px;height:14px;border:1px solid #CFCEC8;border-radius:2px;flex:none;transition:all .15s}
+.words li.on{color:var(--ink);font-weight:400;box-shadow:none;transform:none;border-color:var(--hair)}
+.words li.on:after{border-color:var(--ink);background:var(--ink) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'><path d='M3.5 7.5l2.5 2.5 4.5-5' fill='none' stroke='white' stroke-width='1.5'/></svg>") center/contain no-repeat}
+.mb .words li{font-size:20px;padding:12px 0}
+
+/* joined grid (rooms) */
+.gseg{display:grid;grid-template-columns:1fr 1fr;border:1px solid #CFCEC8;border-radius:4px;overflow:hidden;background:#fff}
+.gseg li{padding:18px 14px;font-size:15.5px;color:#33322F;text-align:center;border-right:1px solid #E6E5E0;border-bottom:1px solid #E6E5E0;transition:all .15s}
+.gseg li:nth-child(2n){border-right:0}
+.gseg li:nth-last-child(-n+2){border-bottom:0}
+.gseg li.on{background:var(--ink);color:#fff;font-weight:500}
+.mb .gseg li{padding:16px 10px;font-size:15px}
+/* segmented */
+.seg{display:flex;border:1px solid #CFCEC8;border-radius:4px;overflow:hidden;background:#fff}
+.seg li{flex:1;text-align:center;padding:10px 6px;font-size:14px;color:#33322F;border-right:1px solid #E6E5E0;transition:all .15s}
+.seg li:last-child{border-right:0}
+.seg li.on{background:var(--ink);color:#fff;font-weight:500}
+.seg.mini{width:auto}
+.seg.mini li{padding:8px 16px;font-size:13.5px}
+
+/* counters */
+.cnt{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--hair);font-size:16px}
+.cnt .st{display:flex;align-items:center}
+.cnt .st b{width:36px;height:36px;border:1px solid #CFCEC8;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:400;font-size:18px;color:#5A5955;cursor:pointer;background:#fff}
+.cnt .st i{font:400 22px var(--s);font-style:normal;width:44px;text-align:center;font-variant-numeric:tabular-nums}
+
+/* icon tiles */
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tiles.c2{grid-template-columns:1fr 1fr}
+.tiles.c2>li>svg,.tiles.c2>li .face>svg{width:88px;height:88px}
+.mb .flipset{grid-template-columns:1fr}
+.mb .flipset>li{aspect-ratio:auto;min-height:110px;flex-direction:row;justify-content:flex-start;gap:16px;padding:12px 16px}
+.mb .flipset>li>svg,.mb .flipset>li .face>svg{width:64px;height:64px}
+.mb .flipset>li>span,.mb .flipset>li .face>span{text-align:left;padding:0;font-size:15px}
+.mb .flipset>li .face{flex-direction:row;justify-content:flex-start;gap:16px;padding:12px 16px}
+.mb .flipset>li.on:after{top:12px;right:12px}
+.mb .flipset>li.flip.on{min-height:150px}
+.mb .flipset .back{padding:14px 14px 14px}
+.mb .flipset .sub{flex-direction:row;gap:8px;margin-top:12px}
+.mb .flipset .sub li{flex:1;flex-direction:column;gap:6px;padding:10px 4px;font-size:12px;text-align:center}
+.mb .flipset .sub li svg{width:26px;height:26px}
+.tiles.c2>li>span,.tiles.c2>li .face>span{font-size:14px}
+.tiles>li{min-width:0;background:#fff;border:1px solid var(--hair);border-radius:4px;aspect-ratio:1/1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;position:relative;transition:all .18s}
+.tiles>li>svg,.tiles>li .face>svg{width:60px;height:60px}
+.tiles.lg>li>svg,.tiles.lg>li .face>svg{width:76px;height:76px}
+.tiles>li>span,.tiles>li .face>span{font-size:12.5px;line-height:1.2;text-align:center;padding:0 8px;color:#33322F}
+.tiles>li span small{display:block;font-size:11px;color:var(--grey);margin-top:2px}
+.tiles>li.on{border-color:var(--ink);box-shadow:none;transform:none}
+.tiles>li.on>span,.tiles>li.on .face>span{color:var(--ink);font-weight:500}
+.tiles>li.on:after{content:"";position:absolute;top:8px;right:8px;width:16px;height:16px;border-radius:3px;background:var(--ink) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M4.5 8.5l2.5 2.5 4.5-5' fill='none' stroke='white' stroke-width='1.6'/></svg>") center/contain no-repeat}
+.tiles.mini{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.mb .tiles.mini{grid-template-columns:1fr 1fr}
+.mb .tiles.lg>li>svg,.mb .tiles.lg>li .face>svg{width:60px;height:60px}
+.tiles.mini>li{aspect-ratio:auto;flex-direction:row;justify-content:flex-start;padding:8px 12px;gap:10px}
+.tiles.mini>li svg{width:34px;height:34px}
+.tiles.mini>li span{text-align:left;padding:0}
+.tiles.mini>li.on:after{display:none}
+.nest{margin:10px 0 14px;padding:12px 14px;background:var(--wash);border-radius:4px}
+.tiles>li.flip{perspective:800px;background:transparent;border:0;display:block;position:relative}
+.tiles>li.flip .face,.tiles>li.flip .back{position:absolute;inset:0;backface-visibility:hidden;border:1px solid var(--hair);border-radius:4px;background:#fff;transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+.tiles>li.flip .face{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+.tiles>li.flip .back{transform:rotateY(180deg);border-color:var(--ink);padding:10px 10px 8px;display:flex;flex-direction:column}
+.tiles>li.flip.on .face{transform:rotateY(-180deg)}
+.tiles>li.flip.on .back{transform:rotateY(0)}
+.tiles>li.flip.on:after{display:none}
+.back b{font-size:13px;font-weight:500;display:flex;justify-content:space-between;color:var(--ink);margin-bottom:14px}
+.back b i{font-style:normal;color:var(--grey);font-size:14px;cursor:pointer}
+.sub{display:flex;flex-direction:column;gap:4px;flex:1;justify-content:center}
+.sub{gap:6px}
+.sub li{display:flex;align-items:center;gap:10px;font-size:13.5px;color:#33322F;padding:9px 10px;border:1px solid var(--hair);border-radius:3px;background:var(--paper)}
+.sub li svg{width:26px;height:26px;flex:none}
+.sub li.on{border-color:var(--ink);color:var(--ink);font-weight:500;background:#fff;box-shadow:none;transform:none}
+.mb .sub li{font-size:12px;padding:6px 8px;gap:8px}
+.mb .back{padding:10px 10px 8px}
+.mb .back b{font-size:13px}
+.mb .sub li svg{width:22px;height:22px}
+.back{padding:12px 12px 10px}
+.mb .sub li svg{width:16px;height:16px}
+.nest .fl{margin-top:0}
+
+/* fields */
+.field{margin-bottom:22px}
+.field label{display:block;font-size:13px;color:var(--grey);margin-bottom:6px}
+.field .in{font-size:19px;color:var(--ink);padding:6px 0 10px;border-bottom:1px solid #BDBCB6}
+.mb .field .in{font-size:18px}
+.field .in.ph{color:#B5B4AE}
+.field .in.focus{border-bottom:1.5px solid var(--ink)}
+.ta{border:1px solid var(--hair);background:#fff;border-radius:4px;min-height:120px;padding:14px 16px;font-size:15.5px;color:#B5B4AE;line-height:1.45}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tags span{font-size:13px;color:#5A5955;border:1px solid var(--hair);border-radius:3px;padding:6px 10px;cursor:pointer}
+
+/* plan actions */
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mb .acts{grid-template-columns:1fr}
+.drop{background:#fff;border:1px solid var(--hair);border-radius:4px;padding:22px 16px 18px;text-align:center;cursor:pointer;transition:border-color .15s}
+.drop.solid{border:1px solid var(--ink);background:var(--paper)}
+.drop>svg{width:22px;height:22px;stroke:var(--ink);stroke-width:1.4;fill:none;margin-bottom:10px}
+.drop:hover{border-color:var(--ink)}
+.drop .big{font:300 19px/1.25 var(--s);font-variation-settings:"opsz" 30;color:var(--ink)}
+.drop .big u{text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px}
+.drop .sm{font-size:12.5px;color:var(--grey);margin-top:8px}
+.act{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 0;border-bottom:1px solid var(--hair);cursor:pointer}
+.act .t{font-size:15.5px;color:var(--ink);font-weight:500}
+.act .t small{display:block;font-size:12.5px;color:var(--grey);font-weight:400;margin-top:2px}
+.act .go{width:40px;height:40px}
+.act .go svg{width:16px;height:16px}
+.act .go.pen{background:transparent;border:1px solid var(--ink)}
+.act .go.pen svg{stroke:var(--ink)}
+.file{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--hair);font-size:14.5px}
+.file .ic{width:34px;height:42px;border:1px solid #CFCEC8;border-radius:2px;background:#fff;position:relative;flex:none}
+.file .ic:after{content:"PDF";position:absolute;bottom:4px;left:0;right:0;text-align:center;font-size:8px;letter-spacing:.06em;color:var(--grey)}
+.file small{display:block;color:var(--grey);font-size:12.5px;margin-top:2px}
+.file .x{margin-left:auto;color:var(--grey);font-size:18px;line-height:1}
+.blk{padding:16px 0 14px;border-top:1px solid var(--hair)}
+.blk:last-of-type{border-bottom:1px solid var(--hair)}
+.blk h4{font:400 20px/1.1 var(--s);font-variation-settings:"opsz" 30;margin-bottom:12px}
+@media (max-width:760px){.dk{flex-direction:column}.dk .art,.dk.dense .art{width:100%;height:220px}.dk .side{padding:22px}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+<defs>
+ <style>.o{fill:#F7F6F2;stroke:#1A1917;stroke-width:1.1;stroke-linejoin:round}.d{fill:#2A2825;stroke:#1A1917;stroke-width:1.1;stroke-linejoin:round}.g{fill:#DDD9D0;stroke:#1A1917;stroke-width:1.1}.l{fill:none;stroke:#1A1917;stroke-width:1.1;stroke-linecap:round}.t{fill:none;stroke:#1A1917;stroke-width:.7;stroke-linecap:round}.w{fill:#FFFFFF;stroke:#1A1917;stroke-width:1.1}</style>
+ <symbol id="i-fridge" viewBox="0 0 64 64"><rect class="o" x="19" y="5" width="26" height="54" rx="1.5"/><path class="l" d="M19 25h26"/><path class="l" d="M40 10v10M40 31v18"/><path class="t" d="M21 59v2M43 59v2"/></symbol>
+ <symbol id="i-freezer" viewBox="0 0 64 64"><rect class="o" x="8" y="26" width="48" height="28" rx="1.5"/><rect class="o" x="8" y="21" width="48" height="6" rx="1"/><path class="l" d="M27 21v-2h10v2"/><path class="t" d="M12 54v2M52 54v2M14 40h36"/></symbol>
+ <symbol id="i-wine" viewBox="0 0 64 64"><rect class="o" x="19" y="5" width="26" height="54" rx="1.5"/><rect class="d" x="22" y="9" width="20" height="46" rx="1"/><path class="t" d="M24 20h16M24 34h16M24 48h16" style="stroke:#8C877E"/><rect x="27" y="22" width="2.4" height="11" rx="1.2" fill="#B7B0A3"/><rect x="31" y="22" width="2.4" height="11" rx="1.2" fill="#B7B0A3"/><rect x="35" y="22" width="2.4" height="11" rx="1.2" fill="#B7B0A3"/><rect x="27" y="36" width="2.4" height="11" rx="1.2" fill="#B7B0A3"/><rect x="31" y="36" width="2.4" height="11" rx="1.2" fill="#B7B0A3"/><path class="l" d="M42 26v12" style="stroke:#F7F6F2"/></symbol>
+ <symbol id="i-combi" viewBox="0 0 64 64"><rect class="o" x="21" y="6" width="22" height="52" rx="1.5"/><path class="l" d="M21 24h22M39 11v8M39 30v16"/></symbol>
+ <symbol id="i-sbs" viewBox="0 0 64 64"><rect class="o" x="12" y="6" width="40" height="52" rx="1.5"/><path class="l" d="M32 6v52M29 20v16M35 20v16"/></symbol>
+ <symbol id="i-built" viewBox="0 0 64 64"><rect class="g" x="10" y="4" width="44" height="56"/><rect class="o" x="16" y="9" width="32" height="46" rx="1"/><path class="l" d="M16 31h32M45 14v11M45 35v11"/></symbol>
+ <symbol id="i-esp" viewBox="0 0 64 64"><rect class="d" x="14" y="10" width="36" height="11" rx="1.5"/><rect class="o" x="14" y="21" width="9" height="26"/><rect class="o" x="41" y="21" width="9" height="26"/><rect class="o" x="26" y="21" width="12" height="9"/><path class="l" d="M32 30v3"/><path class="w" d="M27 36h10v6a4 4 0 0 1-4 4h-2a4 4 0 0 1-4-4z"/><rect class="d" x="14" y="47" width="36" height="6" rx="1"/><circle cx="45" cy="15.5" r="1.8" class="t"/><path class="t" d="M20 14h6"/></symbol>
+ <symbol id="i-caps" viewBox="0 0 64 64"><rect class="o" x="22" y="8" width="20" height="38" rx="5"/><rect class="d" x="26" y="13" width="12" height="6" rx="1.5"/><path class="l" d="M22 30h20"/><path class="w" d="M27 34h10v6a3.5 3.5 0 0 1-3.5 3.5h-3A3.5 3.5 0 0 1 27 40z"/><rect class="d" x="18" y="46" width="28" height="7" rx="1.5"/><circle cx="32" cy="24" r="1.4" fill="#1A1917"/></symbol>
+ <symbol id="i-ibric" viewBox="0 0 64 64"><path class="o" d="M17 26h26l-2 24H19z"/><path class="l" d="M15 26l2-5h24l2 5"/><path class="l" d="M43 32l14-8" style="stroke-width:2.6"/><path class="t" d="M22 34h16"/></symbol>
+ <symbol id="i-filter" viewBox="0 0 64 64"><rect class="d" x="16" y="8" width="32" height="13" rx="1.5"/><rect class="d" x="16" y="21" width="9" height="30"/><rect class="d" x="16" y="51" width="32" height="5" rx="1"/><path class="w" d="M30 24h16l-2 22H32z"/><path class="g" d="M32.5 38h11l-.8 8H33.3z" style="fill:#6B5646"/><path class="t" d="M22 14h6"/></symbol>
+ <symbol id="i-moka" viewBox="0 0 64 64"><path class="o" d="M23 8h18l-2 17H25z"/><path class="o" d="M21 29h22l2 24H19z"/><path class="l" d="M21 29h22M21 25h22"/><rect class="d" x="29" y="4" width="6" height="4" rx="1.5"/><path class="l" d="M45 35c6 0 6 10 0 10" style="stroke-width:2.6"/></symbol>
+ <symbol id="i-none" viewBox="0 0 64 64"><path class="o" d="M18 24h24v13a10 10 0 0 1-10 10h-4a10 10 0 0 1-10-10z"/><path class="l" d="M42 28h3a4.5 4.5 0 0 1 0 9h-3"/><path class="l" d="M15 51L49 17" style="stroke-width:1.6"/></symbol>
+</defs>
+</svg>
+
+<div id="root"></div>
+
+<template id="screens">
+
+<section data-n="1 · Despre tine, date" data-img="1771287490579-afd6e8d3c09a" data-ct="1 / 2" data-back="Cuprins" data-go="off">
+  <div class="q">Hai să începem cu tine.</div>
+  <div class="sub">Numele și emailul cu care ai făcut plata, ca să legăm răspunsurile de proiectul tău.</div>
+  <div class="field"><label>Prenume și nume</label><div class="in">Ana Popescu</div></div>
+  <div class="field"><label>Emailul cu care ai făcut plata</label><div class="in ph focus">ana@exemplu.ro</div></div>
+</section>
+
+<section data-n="2 · Camere de optimizat, listă de cuvinte" data-img="1665067687320-a21e174ed245" data-ct="2 / 2">
+  <div class="q">Ce cameră vrei să optimizezi?</div>
+  <ul class="gseg multi">
+    <li class="on">Bucătărie</li><li class="on">Living</li><li>Dormitor</li><li>Cameră de copil</li><li>Birou</li><li>Baie</li><li>Hol</li><li>Altă cameră</li>
+  </ul>
+</section>
+
+<section data-n="3 · Planul, două acțiuni" data-img="1714456054360-8b8a1300bd69" data-ct="Planuri">
+  <div class="q">Planul pentru bucătărie</div>
+  <div class="sub">Un PDF de la dezvoltator, o poză a planului tipărit, un DWG, orice ai. Până la două fișiere.</div>
+  <div class="acts">
+    <div class="drop"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16l-1 4zM14 7l3 3"/></svg><div class="big"><u>Desenează-l tu</u><br>dacă nu ai un plan</div><div class="sm">Câteva minute, direct aici</div></div>
+    <div class="drop solid"><svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 16v4h16v-4"/></svg><div class="big"><u>Alege fișierele</u><br>sau trage-le aici</div><div class="sm">PDF, poză, DWG, DXF · 25 MB</div></div>
+  </div>
+  <div class="file"><div class="ic"></div><div>rituri_de_trecere.pdf<small>878 KB · 1 din 2 fișiere</small></div><span class="x">×</span></div>
+</section>
+
+<section data-n="4 · Etapa locuinței" data-img="1600684388091-627109f3cd60" data-ct="1 / 2">
+  <div class="q">În ce etapă este locuința?</div>
+  <ul class="opts single">
+    <li><span class="k">A</span><span class="t">E nouă, goală<small>Nu e nimic în ea încă.</small></span></li>
+    <li><span class="k">B</span><span class="t">E în construcție<small>O primim în curând.</small></span></li>
+    <li class="on"><span class="k">C</span><span class="t">Renovăm<small>Scoatem tot ce e acum.</small></span></li>
+    <li><span class="k">D</span><span class="t">Păstrăm camerele cum sunt<small>Schimbăm doar mobila.</small></span></li>
+  </ul>
+</section>
+
+<section data-n="5 · Cine locuiește, contoare și segmente" data-noart="1" data-img="1757344454333-cc666252e596" data-ct="2 / 2" data-dense="1">
+  <div class="q">Cine va locui aici?</div>
+  <div class="cnt"><span>Adulți</span><div class="st"><b>−</b><i>2</i><b>+</b></div></div>
+  <div class="cnt"><span>Copii</span><div class="st"><b>−</b><i>1</i><b>+</b></div></div>
+  <div class="cnt"><span>Persoane în vârstă</span><ul class="seg mini single"><li class="on">Nu</li><li>Da</li></ul></div>
+  <div class="fl">Vârstele copiilor</div>
+  <ul class="seg multi"><li>Sub 3</li><li>3–6</li><li class="on">7–12</li><li>12+</li></ul>
+  <div class="fl">Animale de companie</div>
+  <ul class="seg multi"><li class="on">Câine</li><li class="on">Pisică</li><li>Altceva</li><li>Nu</li></ul>
+</section>
+
+<section data-n="6 · Ce se gătește, până la trei" data-img="1610276173132-c47d148ab626" data-ct="4 / 16">
+  <div class="q">Ce se gătește, de obicei?</div>
+  <ul class="opts multi max3">
+    <li class="on"><span class="k">A</span><span class="t">Mâncăruri care stau mult pe foc<small>Ciorbe, tocănițe, sarmale.</small></span></li>
+    <li class="dim"><span class="k">B</span><span class="t">Rapid, la tigaie<small>Totul se întâmplă pe plită.</small></span></li>
+    <li class="on"><span class="k">C</span><span class="t">Copt<small>Pâine, prăjituri, cozonac.</small></span></li>
+    <li class="on"><span class="k">D</span><span class="t">La cuptor<small>Fripturi, legume coapte.</small></span></li>
+    <li class="dim"><span class="k">E</span><span class="t">Mult tocat și tăiat<small>Salate, legume, lucruri proaspete.</small></span></li>
+  </ul>
+</section>
+
+<section data-n="6b · Bucătăria e și locul unde…, opțional" data-img="1665067687320-a21e174ed245" data-ct="5 / 16" data-go="skip" data-opt="1">
+  <div class="q" style="margin-bottom:12px">Bucătăria e și locul unde…</div>
+  <div class="tag">Opțional</div>
+  <div class="sub">Bifează doar ce se mai întâmplă aici, în afară de gătit și mâncat. Dacă nimic, treci mai departe.</div>
+  <ul class="opts multi">
+    <li><span class="k">A</span><span class="t">…stăm la povești în timp ce se gătește</span></li>
+    <li><span class="k">B</span><span class="t">…ne strângem cu prietenii când avem musafiri</span></li>
+    <li><span class="k">C</span><span class="t">…lucrează cineva, cu laptopul pe masă</span></li>
+  </ul>
+</section>
+
+<section data-n="7 · Refrigerare, obiecte" data-noart="1" data-img="1772475385442-9e2c59cab288" data-ct="6 / 16">
+  <div class="q sm">Ce electrocasnice mari o să aibă bucătăria?</div>
+  <div class="sub">Refrigerare. Ce ai și păstrezi, sau ce vei cumpăra.</div>
+  <ul class="tiles c2 lg multi flipset">
+    <li class="on flip"><div class="face"><svg><use href="#i-fridge"/></svg><span>Frigider</span></div>
+      <div class="back"><b>Ce fel de frigider?<i>×</i></b><ul class="sub single"><li class="on"><svg><use href="#i-combi"/></svg>Combină</li><li><svg><use href="#i-sbs"/></svg>Side-by-side</li><li><svg><use href="#i-built"/></svg>Încorporabil</li></ul></div></li>
+    <li><svg><use href="#i-freezer"/></svg><span>Congelator separat<small>sau ladă frigorifică</small></span></li>
+    <li><svg><use href="#i-wine"/></svg><span>Frigider de vinuri</span></li>
+  </ul>
+</section>
+
+<section data-n="8 · Preferințe de plasare" data-noart="1" data-img="1665067687320-a21e174ed245" data-ct="10 / 17" data-dense="1">
+  <div class="q sm">Preferințe de plasare</div>
+  <div class="sub">Dacă nu ai, le găsim noi cel mai bun loc.</div>
+  <div class="blk"><h4>Cuptor</h4><ul class="seg single"><li>Oriunde</li><li class="on">Pe podea, sub plită</li><li>În coloană</li></ul></div>
+  <div class="blk"><h4>Frigider de vinuri</h4><ul class="seg single"><li class="on">Oriunde</li><li>Sub blat</li><li>În coloană</li></ul></div>
+</section>
+
+<section data-n="9 · Cafeaua, obiecte" data-noart="1" data-img="1653267408946-c4f8421392cd" data-ct="11 / 17">
+  <div class="q">Cum preparați cafeaua?</div>
+  <ul class="tiles single">
+    <li><svg><use href="#i-esp"/></svg><span>Espressor</span></li>
+    <li class="on"><svg><use href="#i-caps"/></svg><span>Espressor capsule</span></li>
+    <li><svg><use href="#i-filter"/></svg><span>Cafetieră cu filtru</span></li>
+    <li><svg><use href="#i-moka"/></svg><span>Manual<small>moka, French press</small></span></li>
+    <li><svg><use href="#i-none"/></svg><span>Nu bem cafea</span></li>
+  </ul>
+  <div class="fl">Cât de des folosiți aparatul?</div>
+  <ul class="seg single"><li class="on">Zilnic</li><li>Săptămânal</li><li>Rar</li></ul>
+</section>
+
+<section data-n="10 · Text liber, opțional" data-img="1774612673121-7da610a4e1aa" data-ct="15 / 17" data-go="skip">
+  <div class="q">Ce vrei să faci diferit de data asta?</div>
+  <div class="sub">Ce te enervează la bucătăria în care gătești acum. O greșeală pe care nu vrei s-o mai repeți.</div>
+  <div class="ta">Scrie liber, oricât de mărunt.</div>
+  <div class="tags"><span>n-avem loc pentru…</span><span>prea puțin blat</span><span>frigiderul stă pe hol</span><span>electrocasnice peste tot</span><span>ne încurcăm unul pe altul</span><span>nu ajung la rafturile de sus</span></div>
+</section>
+
+</template>
+
+<script>
+const arrow='<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+const root=document.getElementById('root');
+document.getElementById('screens').content.querySelectorAll('section').forEach(sec=>{
+  const d=sec.dataset, dense=(d.dense?' dense':'')+(d.noart?' noart':'')+(d.opt?' optional':'');
+  const go=d.go==='off'?`<span class="go off">${arrow}</span>`:d.go==='skip'?`<span class="go w"><span>Sar peste</span>${arrow}</span>`:`<span class="go">${arrow}</span>`;
+  const top=`<div class="top"><span class="wm">Urban Moon</span><span class="ct">${d.ct}</span></div>`;
+  const bot=`<div class="bot"><span class="lnk">${d.back||'Înapoi'}</span>${go}</div>`;
+  const img=w=>`<div class="art"><img src="https://images.unsplash.com/photo-${d.img}?auto=format&fit=crop&w=${w}&q=78" alt=""></div>`;
+  const body=sec.innerHTML;
+  root.insertAdjacentHTML('beforeend',`<div class="lbl">${d.n}</div><div class="pair">
+    <div class="dk${dense}">${img(1200)}<div class="side">${top}<div class="mid">${body}</div>${bot}</div></div>
+    <div class="mb${dense}">${top}${img(800)}<div class="side"><div class="mid">${body}</div>${bot}</div></div>
+  </div>`);
+});
+document.querySelectorAll('ul.single,ul.multi').forEach(ul=>{
+  ul.addEventListener('click',e=>{
+    const li=e.target.closest('li'); if(!li||li.parentElement!==ul) return;
+    if(e.target.closest('.back b i')){li.classList.remove('on');return;}
+    if(li.classList.contains('flip')&&li.classList.contains('on')&&e.target.closest('.back')) return;
+    if(ul.classList.contains('single')){ul.querySelectorAll('li').forEach(x=>x.classList.remove('on'));li.classList.add('on');}
+    else{li.classList.toggle('on');
+      const pg=ul.closest('.optional');
+      if(pg){const any=ul.querySelectorAll('li.on').length>0;pg.querySelectorAll('.go').forEach(g=>{g.classList.toggle('w',!any);g.querySelector('span').style.display=any?'none':'';});}
+      if(ul.classList.contains('max3')){const n=ul.querySelectorAll('li.on').length;ul.querySelectorAll('li').forEach(x=>x.classList.toggle('dim',n>=3&&!x.classList.contains('on')));}}
+  });
+});
+</script>
+</body>
+</html>

@@ -84,6 +84,13 @@ export function planFilesValue(files: SubmitRequest['files']): string {
 		.join('\n');
 }
 
+/** One `url | name | roomId-or-"-" | group` per line. */
+export function photoFilesValue(photos: SubmitRequest['photos']): string {
+	return (photos ?? [])
+		.map((f) => `${str(f?.url)} | ${str(f?.name)} | ${str(f?.roomId) || '-'} | ${str(f?.group)}`)
+		.join('\n');
+}
+
 export function buildSubmission(req: SubmitRequest): HubSpotSubmission {
 	const answers: Answers = record(req.answers) as Answers;
 	const identity = record(answers.c_identity);
@@ -113,6 +120,7 @@ export function buildSubmission(req: SubmitRequest): HubSpotSubmission {
 	put('um_readback', str(req.readback));
 	put('um_answers_json', JSON.stringify(req.answers ?? {}));
 	put('um_plan_files', planFilesValue(req.files));
+	put('um_photo_files', photoFilesValue(req.photos));
 
 	if (req.drawing) {
 		put('um_plan_drawing_json', JSON.stringify(req.drawing.room ?? null));

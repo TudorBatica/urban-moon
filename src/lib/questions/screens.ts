@@ -1,6 +1,6 @@
 import type { Answers, RoomId } from '$lib/types';
 import { ROOMS, SMALL } from './rooms';
-import { kids, notCooking, peopleCount, picked, toddlers, yn } from './predicates';
+import { kids, notCooking, peopleCount, picked, yn } from './predicates';
 
 export { picked, kids, toddlers, notCooking, hasMachine, hh, peopleCount, yn } from './predicates';
 
@@ -37,6 +37,13 @@ export interface FollowUp {
 	when?: (value: string) => boolean;
 }
 
+/** An "Altceva" option whose text the user types in, kept in the draft at `key`. */
+export interface OtherText {
+	value: string;
+	key: string;
+	placeholder?: string;
+}
+
 /** A field inside a `compound` screen. `heading` fields are separators without a key. */
 export interface Field {
 	key?: string;
@@ -49,6 +56,8 @@ export interface Field {
 	tiles?: boolean;
 	/** value that clears every other value in the group */
 	exclusive?: string;
+	/** picking this value opens a text box for the user's own answer */
+	other?: OtherText;
 	/** the prototype passes the compound draft; answers are available as the 2nd argument */
 	showIf?: (fieldData: Record<string, unknown>, a: Answers) => boolean;
 	allowEmpty?: boolean;
@@ -83,6 +92,14 @@ export interface AppCard {
 	showIf?: Predicate;
 }
 
+/** A step of the journey shown on the first screen. */
+export interface JourneyStep {
+	label: string;
+	state: 'done' | 'now' | 'next';
+	/** when it happens, set to the right */
+	meta?: string;
+}
+
 interface Base {
 	id: string;
 	chapter: ChapterId;
@@ -90,6 +107,8 @@ interface Base {
 	title?: string;
 	subtitle?: string;
 	room?: RoomId;
+	/** how the question reads in the answers list, when the title does not */
+	short?: string;
 }
 
 export interface SingleScreen extends Base {
@@ -112,6 +131,10 @@ export interface MultiScreen extends Base {
 export interface CompoundScreen extends Base {
 	kind: 'compound';
 	fields: Field[];
+	/** the journey, listed under the title */
+	steps?: JourneyStep[];
+	/** a line above the fields */
+	lead?: string;
 }
 export interface TextScreen extends Base {
 	kind: 'text';
@@ -128,6 +151,16 @@ export interface CardsScreen extends Base {
 	/** an empty section still lets the user continue */
 	allowEmpty?: boolean;
 }
+/** The furniture the user keeps: a list of objects with their size, plus optional photos.
+ *  Answer shape: `{ items: FurnitureItem[] }`; the photos live in the photos store. */
+export interface FurnitureScreen extends Base {
+	kind: 'furniture';
+	room: RoomId;
+	/** example object, e.g. "masa" */
+	example: string;
+	/** example size in cm, [length, width] */
+	exampleSize: [number, number];
+}
 export interface CardScreen extends Base {
 	kind: 'card';
 	minutes?: string;
@@ -138,16 +171,37 @@ export interface RouteScreen extends Base {
 	href: string;
 }
 
+export interface FurnitureItem {
+	name: string;
+	length: string;
+	width: string;
+}
+
 export type Screen =
 	| SingleScreen
 	| MultiScreen
 	| CompoundScreen
 	| TextScreen
 	| CardsScreen
+	| FurnitureScreen
 	| CardScreen
 	| RouteScreen;
 
-/* ================= screens — ported from `S` in ../index.html ================= */
+/* ================= the plans step (/planuri) ================= */
+
+/** "Ești dispus să modifici spațiul?" — asked on the plans step, kept at `p_modify`. */
+export const PLAN_MODIFY_KEY = 'p_modify';
+/** "Am măsurat spațiul" — ticked on the plans step before anything can be added, kept at `p_measured`. */
+export const PLAN_MEASURED_KEY = 'p_measured';
+export const PLAN_MODIFY_TITLE = 'Ești dispus să modifici spațiul sau va rămâne exact așa cum este?';
+export const PLAN_MODIFY: Option[] = [
+	{ value: 'pereti', label: 'Pot modifica pereții', icon: 'hammer' },
+	{ value: 'usa', label: 'Pot modifica poziția ușii dacă este avantajos', icon: 'hall' },
+	{ value: 'instalatii', label: 'Pot modifica prize / scurgeri', icon: 'pipe' },
+	{ value: 'nu', label: 'Nu vreau să modific spațiul', icon: 'none' }
+];
+
+/* ================= screens ================= */
 
 export const S: Screen[] = [];
 
@@ -157,9 +211,17 @@ S.push(
 		id: 'c_identity',
 		chapter: 'despre_tine',
 		kind: 'compound',
-		title: 'Hai să începem cu tine.',
-		subtitle:
-			'Numele și emailul cu care ai făcut plata, ca să legăm răspunsurile de proiectul tău.',
+		short: 'Numele și emailul',
+		title: 'Mulțumesc pentru plată!',
+		subtitle: 'Următorul pas: trimite informațiile spațiului tău pentru a pregăti întâlnirea.',
+		steps: [
+			{ label: 'Plată', state: 'done' },
+			{ label: 'Trimiți detaliile spațiului', state: 'now', meta: 'acum, cam 20 min' },
+			{ label: 'Programezi întâlnirea', state: 'next', meta: 'după trimitere' },
+			{ label: 'Ne vedem online', state: 'next', meta: '30 min' },
+			{ label: 'Primești materialele', state: 'next', meta: 'după feedbackul tău' }
+		],
+		lead: 'Numele și emailul cu care ai făcut plata.',
 		fields: [
 			{ key: 'name', kind: 'input', label: 'Prenume și nume', placeholder: 'Ana Popescu' },
 			{
@@ -175,33 +237,41 @@ S.push(
 		chapter: 'despre_tine',
 		kind: 'multi',
 		title: 'Ce cameră vrei să optimizezi?',
-		subtitle: 'Poți alege mai multe. Pentru fiecare, vin câteva întrebări doar despre ea.',
+		subtitle: 'Poți alege mai multe. Pentru fiecare, răspunde la câteva întrebări.',
 		options: ROOMS.map((r) => ({ value: r.id, label: r.label, icon: r.icon }))
 	},
-	/* ---- PLANURI (new: the plans step lives on its own route) ---- */
+	/* ---- PLANURI: the question, then the plans step on its own route ---- */
+	{
+		id: PLAN_MODIFY_KEY,
+		chapter: 'planuri',
+		kind: 'multi',
+		exclusive: 'nu',
+		title: PLAN_MODIFY_TITLE,
+		subtitle: 'Selectează varianta potrivită.',
+		options: PLAN_MODIFY
+	},
 	{ id: 'planuri', chapter: 'planuri', kind: 'route', href: '/planuri' },
 	/* ---- LOCUINȚA ---- */
 	{
 		id: 'c_stage',
 		chapter: 'locuinta',
 		kind: 'single',
-		title: 'În ce etapă este locuința?',
+		title: 'În ce etapă este locuința ta?',
 		options: [
-			{ value: 'noua', label: 'E nouă, goală', hint: 'nu e nimic în ea încă', icon: 'houseNew' },
-			{
-				value: 'constructie',
-				label: 'E în construcție',
-				hint: 'o primim în curând',
-				icon: 'crane'
-			},
-			{ value: 'renovam', label: 'Renovăm', hint: 'scoatem tot ce e acum', icon: 'hammer' },
-			{
-				value: 'pastram',
-				label: 'Păstrăm camerele cum sunt',
-				hint: 'schimbăm doar mobila',
-				icon: 'sofa'
-			}
-		]
+			{ value: 'neconstruita', label: 'Nu este construită', icon: 'crane' },
+			{ value: 'renovez', label: 'Urmează să o renovez', icon: 'hammer' },
+			{ value: 'instalatii', label: 'Fac instalațiile electrice/sanitare', icon: 'pipe' },
+			{ value: 'finisaje', label: 'Aleg finisajele', icon: 'houseNew' },
+			{ value: 'mobilier', label: 'Aleg mobilierul', icon: 'sofa' },
+			{ value: 'altceva', label: 'Altceva', icon: 'other' }
+		],
+		followUp: {
+			when: (v) => v === 'altceva',
+			key: 'c_stage_other',
+			kind: 'input',
+			label: 'Ce anume?',
+			placeholder: 'Scrie pe scurt'
+		}
 	},
 	{
 		id: 'c_household',
@@ -229,6 +299,7 @@ S.push(
 				kind: 'pillsMulti',
 				label: 'Animale de companie?',
 				exclusive: 'nu',
+				other: { value: 'altceva', key: 'petsOther', placeholder: 'Ce animal?' },
 				options: [
 					{ value: 'caine', label: 'Câine', icon: 'dog' },
 					{ value: 'pisica', label: 'Pisică', icon: 'cat' },
@@ -243,12 +314,7 @@ S.push(
 /* ---- BUCĂTĂRIE ---- */
 const K: Predicate = (a) => picked(a, 'bucatarie');
 
-const ANYWHERE: Option = {
-	value: 'oriunde',
-	label: 'Oriunde',
-	hint: 'te ajutăm noi',
-	icon: 'anywhere'
-};
+const DONT_KNOW: Option = { value: 'oriunde', label: 'Nu știu', icon: 'anywhere' };
 
 /** The appliances whose placement we ask about — each only when it was actually chosen. */
 const placeableCards: AppCard[] = [
@@ -263,9 +329,9 @@ const placeableCards: AppCard[] = [
 				key: 'ovenWhere',
 				default: 'oriunde',
 				options: [
-					ANYWHERE,
-					{ value: 'podea', label: 'Pe podea', hint: 'sub plită', icon: 'ovenFloor' },
-					{ value: 'coloana', label: 'În coloană', hint: 'la înălțime', icon: 'ovenColumn' }
+					DONT_KNOW,
+					{ value: 'podea', label: 'Sub plită', icon: 'ovenFloor' },
+					{ value: 'coloana', label: 'În coloană (la înălțime)', icon: 'ovenColumn' }
 				]
 			}
 		]
@@ -281,9 +347,9 @@ const placeableCards: AppCard[] = [
 				key: 'microWhere',
 				default: 'oriunde',
 				options: [
-					ANYWHERE,
+					DONT_KNOW,
 					{ value: 'blat', label: 'Pe blat', icon: 'counterTop' },
-					{ value: 'coloana', label: 'În coloană', icon: 'microColumn' }
+					{ value: 'coloana', label: 'În coloană (la înălțime)', icon: 'microColumn' }
 				]
 			}
 		]
@@ -299,14 +365,21 @@ const placeableCards: AppCard[] = [
 				key: 'wineWhere',
 				default: 'oriunde',
 				options: [
-					ANYWHERE,
+					DONT_KNOW,
 					{ value: 'sub_blat', label: 'Sub blat', icon: 'underCounter' },
-					{ value: 'coloana', label: 'În coloană', icon: 'ovenColumn' }
+					{ value: 'coloana', label: 'În coloană (la înălțime)', icon: 'ovenColumn' }
 				]
 			}
 		]
 	}
 ];
+
+const MEALS: Option[] = [
+	{ value: 'gatim', label: 'Gătim', icon: 'pans' },
+	{ value: 'incalzim', label: 'Încălzim ceva gătit de noi dinainte', icon: 'reheat' },
+	{ value: 'comandam', label: 'Comandăm sau mâncăm în oraș', icon: 'delivery' }
+];
+
 S.push(
 	{
 		id: 'k_card',
@@ -314,8 +387,7 @@ S.push(
 		kind: 'card',
 		room: 'bucatarie',
 		when: K,
-		minutes: 'Cam 3 minute.',
-		blurb: 'Următoarele întrebări sunt doar despre bucătărie.'
+		minutes: '3 minute.'
 	},
 	{
 		id: 'k1',
@@ -323,31 +395,15 @@ S.push(
 		kind: 'single',
 		when: K,
 		title: 'Cum arată o cină obișnuită la tine acasă, într-o zi din săptămână?',
-		options: [
-			{ value: 'gatim', label: 'Gătim', icon: 'pans' },
-			{
-				value: 'incalzim',
-				label: 'Încălzim ceva gătit de noi dinainte',
-				icon: 'reheat'
-			},
-			{ value: 'comandam', label: 'Comandăm sau mâncăm în oraș', icon: 'delivery' }
-		]
+		options: MEALS
 	},
 	{
 		id: 'k2',
 		chapter: 'bucatarie',
 		kind: 'single',
 		when: K,
-		title: 'Și în weekend?',
-		options: [
-			{ value: 'gatim', label: 'Gătim', icon: 'pans' },
-			{
-				value: 'incalzim',
-				label: 'Încălzim ceva gătit de noi dinainte',
-				icon: 'reheat'
-			},
-			{ value: 'comandam', label: 'Comandăm sau mâncăm în oraș', icon: 'delivery' }
-		]
+		title: 'Dar în weekend?',
+		options: MEALS
 	},
 	{
 		id: 'k3',
@@ -356,8 +412,8 @@ S.push(
 		when: (a) => K(a) && !notCooking(a),
 		title: 'Cine gătește, de obicei?',
 		options: [
-			{ value: 'una', label: 'Mai mult o singură persoană', icon: 'person' },
-			{ value: 'doi', label: 'Doi, în același timp', icon: 'two' }
+			{ value: 'una', label: 'O singură persoană', icon: 'person' },
+			{ value: 'doi', label: 'Două sau mai multe persoane, în același timp', icon: 'two' }
 		]
 	},
 	{
@@ -367,7 +423,7 @@ S.push(
 		when: (a) => K(a) && !notCooking(a),
 		max: 3,
 		title: 'Ce se gătește, de obicei?',
-		subtitle: 'Bifează ce se întâmplă de obicei — până la trei.',
+		subtitle: 'Bifează până la trei variante.',
 		options: [
 			{
 				value: 'lent',
@@ -375,13 +431,13 @@ S.push(
 				hint: 'ciorbe, tocănițe, sarmale',
 				icon: 'kitchen'
 			},
-			{ value: 'tigaie', label: 'Rapid, la tigaie', hint: 'totul se întâmplă pe plită', icon: 'pan' },
-			{ value: 'copt', label: 'Copt', hint: 'pâine, prăjituri, cozonac', icon: 'bread' },
+			{ value: 'tigaie', label: 'La tigaie, rapid', hint: 'gătim mai mult pe plită', icon: 'pan' },
+			{ value: 'copt', label: 'Patiserie', hint: 'pâine, prăjituri, cozonac', icon: 'bread' },
 			{ value: 'cuptor', label: 'La cuptor', hint: 'fripturi, legume coapte', icon: 'oven' },
 			{
-				value: 'taiat',
-				label: 'Mult tocat și tăiat',
-				hint: 'salate, legume, lucruri proaspete',
+				value: 'rapide',
+				label: 'Preparate rapide',
+				hint: 'salate, aperitive, sandvișuri',
 				icon: 'knife'
 			}
 		]
@@ -397,7 +453,7 @@ S.push(
 			'Opțional. Bifează doar ce se mai întâmplă aici, în afară de gătit și mâncat — sau treci mai departe.',
 		options: [
 			{ value: 'povesti', label: '…stăm la povești în timp ce se gătește', icon: 'chat' },
-			{ value: 'prieteni', label: '…ne strângem cu prietenii când avem musafiri', icon: 'cheers' },
+			{ value: 'prieteni', label: '…ne strângem cu prietenii din când în când', icon: 'cheers' },
 			{ value: 'copii', label: '…copiii își fac temele sau desenează', icon: 'homework', showIf: kids },
 			{ value: 'laptop', label: '…lucrează cineva, cu laptopul pe masă', icon: 'laptop' }
 		]
@@ -410,8 +466,7 @@ S.push(
 		allowEmpty: true,
 		eyebrow: 'Ce electrocasnice mari o să aibă bucătăria?',
 		title: 'Refrigerare',
-		subtitle:
-			'Cele pe care le ai deja și le păstrezi, sau pe care le vei cumpăra.',
+		subtitle: 'Cele pe care le ai deja și le păstrezi, sau pe care le vei cumpăra.',
 		cards: [
 			{
 				value: 'fridge',
@@ -429,7 +484,7 @@ S.push(
 					}
 				]
 			},
-			{ value: 'freezer', label: 'Congelator separat', hint: 'sau ladă frigorifică', icon: 'chest' },
+			{ value: 'freezer', label: 'Congelator separat', icon: 'chest' },
 			{ value: 'wine', label: 'Frigider de vinuri', icon: 'wine' }
 		]
 	},
@@ -511,18 +566,30 @@ S.push(
 		kind: 'multi',
 		when: K,
 		allowEmpty: true,
-		title: 'Care dintre acestea le ai prin casă?',
-		subtitle: 'Bifează tot ce ai. Dacă nimic, mergi mai departe.',
-		options: SMALL
+		title: 'Ce alte electrocasnice folosești?',
+		subtitle: 'Bifează tot ce ai nevoie. Dacă nu vrei nimic, mergi mai departe.',
+		options: [
+			...SMALL,
+			{
+				value: 'altii',
+				label: 'Alți roboți',
+				icon: 'mixer',
+				followUp: {
+					key: 'k6a_other',
+					kind: 'input',
+					label: 'Ce alți roboți?',
+					placeholder: 'De exemplu: robot de bucătărie, aparat de vidat'
+				}
+			}
+		]
 	},
 	{
 		id: 'k5_plasare',
 		chapter: 'bucatarie',
 		kind: 'cards',
 		when: (a) => K(a) && placeableCards.some((c) => !c.showIf || c.showIf(a)),
-		title: 'Preferințe de plasare',
-		subtitle:
-			'Spune-ne dacă ai preferințe de plasare pentru ele. Dacă nu ai, le găsim noi cel mai bun loc.',
+		title: 'Preferințe de amplasare',
+		subtitle: 'Ce preferințe de amplasare ai pentru electrocasnice?',
 		cards: placeableCards
 	},
 	{
@@ -530,20 +597,19 @@ S.push(
 		chapter: 'bucatarie',
 		kind: 'single',
 		when: K,
-		title: 'Cum preparați cafeaua?',
+		title: 'Cum preferi cafeaua?',
 		options: [
 			{ value: 'espressor', label: 'Espressor', icon: 'espresso' },
-			{ value: 'capsule', label: 'Espressor capsule', icon: 'capsule' },
-			{ value: 'ibric', label: 'La ibric', icon: 'ibric' },
+			{ value: 'capsule', label: 'Espressor cu capsule', icon: 'capsule' },
+			{ value: 'ibric', label: 'La ibric / moka / french press etc.', icon: 'ibric' },
 			{ value: 'filtru', label: 'Cafetieră cu filtru', icon: 'filter' },
-			{ value: 'manual', label: 'Manual', hint: 'moka, French press', icon: 'moka' },
-			{ value: 'nu', label: 'Nu bem cafea', icon: 'nocoffee' }
+			{ value: 'nu', label: 'Nu beau cafea', icon: 'nocoffee' }
 		],
 		followUp: {
-			when: (v) => ['espressor', 'capsule', 'filtru', 'manual'].includes(v),
+			when: (v) => ['espressor', 'capsule', 'filtru'].includes(v),
 			key: 'k7_freq',
 			kind: 'pills',
-			label: 'Cât de des folosiți aparatul?',
+			label: 'Cât de des folosești aparatul?',
 			options: [
 				{ value: 'zilnic', label: 'Zilnic' },
 				{ value: 'saptamanal', label: 'Săptămânal' },
@@ -557,12 +623,11 @@ S.push(
 		kind: 'multi',
 		when: K,
 		exclusive: 'nu',
-		title: 'Depozitezi alimente sau ustensile de bucătărie și în afara bucătăriei?',
+		title: 'Depozitezi alimente sau obiecte de bucătărie și în altă parte?',
 		options: [
 			{ value: 'balcon', label: 'Da, pe balcon', icon: 'balconyClosed' },
 			{ value: 'debara', label: 'Da, în debara sau cămară', icon: 'pantry' },
-			{ value: 'pivnita', label: 'Da, în pivniță', icon: 'cellar' },
-			{ value: 'hol', label: 'Da, pe hol', icon: 'hallway' },
+			{ value: 'beci', label: 'Da, în beci', icon: 'cellar' },
 			{
 				value: 'nu',
 				label: 'Nu',
@@ -608,7 +673,7 @@ S.push(
 			when: (v) => v !== 'nu',
 			key: 'k10_seats',
 			kind: 'stepper',
-			label: 'Câte persoane trebuie să încapă la masă',
+			label: 'Câte persoane trebuie să încapă la masă?',
 			min: 1,
 			max: 12,
 			defaultOf: peopleCount
@@ -621,16 +686,16 @@ S.push(
 		when: K,
 		title: 'Ce vrei să faci diferit de data asta?',
 		subtitle:
-			'Ce te enervează la bucătăria în care gătești acum? O greșeală pe care nu vrei s-o mai repeți. Ceva care n-a avut niciodată un loc al lui.',
+			'Ce te enervează la bucătăria în care gătești acum? O greșeală pe care nu vrei s-o mai repeți.',
 		fields: [
 			{
 				key: 'text',
 				placeholder: 'Scrie liber, oricât de mărunt.',
 				chips: [
-					'n-avem loc pentru…',
+					'nu am loc pentru anumite electrocasnice',
 					'prea puțin blat',
 					'frigiderul stă pe hol',
-					'electrocasnice peste tot',
+					'electrocasnice mici la vedere',
 					'ne încurcăm unul pe altul',
 					'nu ajung la rafturile de sus'
 				]
@@ -647,64 +712,57 @@ S.push(
 			{
 				key: 'text',
 				placeholder: 'Un singur lucru e de ajuns.',
-				chips: [
-					'multă lumină',
-					'o masă mare',
-					'un blat lung, liber',
-					'o insulă',
-					'să se închidă ușa',
-					'totul la îndemână',
-					'loc pentru toată lumea'
-				]
+				chips: ['o masă mare', 'un blat liber', 'insulă', 'totul la îndemână', 'loc pentru toată lumea']
 			}
 		]
 	},
 	{
 		id: 'k13',
 		chapter: 'bucatarie',
-		kind: 'text',
+		kind: 'furniture',
+		room: 'bucatarie',
 		when: K,
 		title: 'Ai deja mobilier pe care vrei să-l păstrezi în bucătărie?',
-		subtitle:
-			'Scrie ce vrei să păstrezi și cam ce dimensiuni are — trebuie să-l încadrăm astfel încât să încapă.',
-		fields: [
-			{
-				key: 'text',
-				placeholder: 'De exemplu: masa, 140 × 80 cm',
-				chips: ['masa și scaunele', 'colțarul', 'un bufet sau dulap', 'nimic']
-			}
-		]
+		subtitle: 'Scrie ce vrei să păstrezi și ce dimensiuni are (lungime și lățime).',
+		example: 'masa',
+		exampleSize: [140, 80]
 	}
 );
+
+/* ---- the three screens every room ends with ---- */
+
+const PROBLEM = (chips: string[]): Field => ({
+	key: 'problem',
+	label: 'Problema',
+	placeholder: 'Ce problemă ai?',
+	chips
+});
+const MUST = (chips: string[]): Field => ({
+	key: 'must',
+	label: 'Nu poate lipsi',
+	placeholder: 'Ce trebuie neapărat să aibă?',
+	chips
+});
+
+function card(room: RoomId, when: Predicate): CardScreen {
+	return { id: `${room}_card`, chapter: room, kind: 'card', room, when, minutes: '1 minut.' };
+}
 
 /* ---- LIVING ---- */
 const L: Predicate = (a) => picked(a, 'living');
 S.push(
-	{
-		id: 'l_card',
-		chapter: 'living',
-		kind: 'card',
-		room: 'living',
-		when: L,
-		minutes: 'Cam un minut.',
-		blurb: 'Următoarele întrebări sunt doar despre living.'
-	},
+	{ ...card('living', L), id: 'l_card' },
 	{
 		id: 'l1',
 		chapter: 'living',
 		kind: 'multi',
 		when: L,
-		title: 'Ce se întâmplă în living?',
-		subtitle: 'Bifează tot ce se aplică.',
+		title: 'Cum îți petreci timpul în living?',
+		subtitle: 'Poți bifa mai multe.',
 		options: [
-			{ value: 'tv', label: 'Ne uităm la filme, la televizor', icon: 'tv' },
-			{
-				value: 'vorba',
-				label: 'Stăm de vorbă',
-				hint: 'între noi sau cu musafirii',
-				icon: 'chat'
-			},
-			{ value: 'lucru', label: 'Lucrează cineva', hint: 'birou, laptop', icon: 'laptop' },
+			{ value: 'tv', label: 'Mă uit la TV sau la filme', icon: 'tv' },
+			{ value: 'vorba', label: 'Stăm de vorbă', icon: 'chat' },
+			{ value: 'lucru', label: 'Lucrează cineva', hint: 'am nevoie de birou', icon: 'laptop' },
 			{
 				value: 'masa',
 				label: 'Luăm masa aici',
@@ -712,7 +770,7 @@ S.push(
 				followUp: {
 					key: 'l1_seats',
 					kind: 'stepper',
-					label: 'Pentru câte persoane?',
+					label: 'Câte persoane trebuie să încapă?',
 					min: 1,
 					max: 12,
 					default: 4
@@ -722,10 +780,10 @@ S.push(
 			{
 				value: 'dormit',
 				label: 'Doarme cineva aici din când în când',
-				hint: 'musafiri, canapea extensibilă',
+				hint: 'am nevoie de canapea extensibilă',
 				icon: 'moon'
 			},
-			{ value: 'citit', label: 'Citit, liniște, un colț doar al meu', icon: 'book' }
+			{ value: 'citit', label: 'Citesc, vreau un colț doar al meu', icon: 'book' }
 		]
 	},
 	{
@@ -746,74 +804,53 @@ S.push(
 		title:
 			'Care e problema principală pe care vrei să o rezolvi în living? Și ce nu poate lipsi?',
 		fields: [
-			{
-				key: 'problem',
-				label: 'Problema',
-				placeholder: 'Ce nu merge acum',
-				chips: [
-					'nu știu unde să pun canapeaua',
-					'televizorul se bate cu fereastra',
-					'prea puțin spațiu de depozitare',
-					'masa nu încape',
-					'e loc de trecere, nu de stat'
-				]
-			},
-			{
-				key: 'must',
-				label: 'Nu poate lipsi',
-				placeholder: 'Ce trebuie neapărat să aibă',
-				chips: [
-					'o canapea mare',
-					'masă de 6 persoane',
-					'un birou',
-					'bibliotecă',
-					'loc de joacă',
-					'multă lumină'
-				]
-			}
+			PROBLEM([
+				'nu știu unde să pun canapeaua',
+				'am prea puțin spațiu de depozitare',
+				'masa nu încape',
+				'vreau să am spațiu de trecere'
+			]),
+			MUST(['un colțar', 'masă de dining', 'un birou', 'bibliotecă', 'loc de joacă', 'lampadar'])
 		]
 	},
 	{
 		id: 'l4',
 		chapter: 'living',
-		kind: 'text',
+		kind: 'furniture',
+		room: 'living',
 		when: L,
 		title: 'Ai deja mobilier pe care vrei să îl păstrezi în living?',
-		subtitle:
-			'Scrie ce vrei să păstrezi și cam ce dimensiuni are — trebuie să-l încadrăm astfel încât să încapă.',
-		fields: [
-			{
-				key: 'text',
-				placeholder: 'De exemplu: canapeaua, 240 cm',
-				chips: ['canapeaua', 'masa', 'biblioteca', 'un dulap', 'nimic']
-			}
-		]
+		subtitle: 'Scrie ce vrei să păstrezi și ce dimensiuni au obiectele (lungime și lățime).',
+		example: 'canapea',
+		exampleSize: [240, 95]
 	}
 );
 
 /* ---- DORMITOR ---- */
 const D: Predicate = (a) => picked(a, 'dormitor');
 S.push(
-	{
-		id: 'd_card',
-		chapter: 'dormitor',
-		kind: 'card',
-		room: 'dormitor',
-		when: D,
-		minutes: 'Cam un minut.',
-		blurb: 'Următoarele întrebări sunt doar despre dormitor.'
-	},
+	{ ...card('dormitor', D), id: 'd_card' },
 	{
 		id: 'd1',
 		chapter: 'dormitor',
 		kind: 'single',
 		when: D,
-		title: 'Pentru cine e dormitorul?',
+		title: 'Cine va dormi aici?',
 		options: [
-			{ value: 'doi', label: 'Pentru noi doi', icon: 'two' },
-			{ value: 'una', label: 'Pentru o persoană', icon: 'person' },
-			{ value: 'patut', label: 'Pentru noi doi, plus un pătuț', icon: 'cot', showIf: toddlers }
-		]
+			{ value: 'cuplu', label: 'Cuplu', icon: 'two' },
+			{ value: 'adult', label: 'Un adult', icon: 'person' },
+			{ value: 'copil', label: 'Un copil', icon: 'child' },
+			{ value: 'doi_copii', label: 'Doi copii', icon: 'kids' },
+			{ value: 'oaspeti', label: 'Oaspeți', icon: 'moon' },
+			{ value: 'altcineva', label: 'Altcineva', icon: 'other' }
+		],
+		followUp: {
+			when: (v) => v === 'altcineva',
+			key: 'd1_other',
+			kind: 'input',
+			label: 'Cine?',
+			placeholder: 'Scrie pe scurt'
+		}
 	},
 	{
 		id: 'd2',
@@ -821,18 +858,23 @@ S.push(
 		kind: 'compound',
 		when: D,
 		title: 'Ce vrei în dormitor?',
-		subtitle: 'Bifează tot ce se aplică.',
+		subtitle: 'Bifează tot ce ai nevoie.',
 		fields: [
 			{
 				key: 'bed',
 				kind: 'pills',
-				label: 'Patul — lățime',
+				label: 'Patul — lățime saltea',
+				other: { value: 'altceva', key: 'bedOther', placeholder: 'Ce fel de pat?' },
 				options: [
+					{ value: '90', label: '90 cm' },
+					{ value: '120', label: '120 cm' },
 					{ value: '140', label: '140 cm' },
 					{ value: '160', label: '160 cm' },
 					{ value: '180', label: '180 cm' },
 					{ value: '200', label: '200 cm' },
-					{ value: 'nu_stim', label: 'Nu știm încă' }
+					{ value: 'canapea', label: 'Canapea extensibilă' },
+					{ value: 'suspendate', label: 'Paturi suspendate' },
+					{ value: 'altceva', label: 'Altceva' }
 				]
 			},
 			{
@@ -840,14 +882,15 @@ S.push(
 				kind: 'pillsMulti',
 				tiles: true,
 				label: 'În afară de pat',
-				exclusive: 'doar',
+				other: { value: 'altceva', key: 'wantsOther', placeholder: 'Ce anume?' },
 				options: [
-					{ value: 'dressing', label: 'Dressing sau dulap mare', icon: 'wardrobe' },
+					{ value: 'dulap', label: 'Dulap', icon: 'wardrobe' },
+					{ value: 'noptiera', label: 'Noptieră', icon: 'bedroom' },
 					{ value: 'machiaj', label: 'Măsuță de machiaj', icon: 'mirror' },
 					{ value: 'tv', label: 'Televizor', icon: 'tv' },
-					{ value: 'birou', label: 'Birou, loc de lucru', icon: 'office' },
+					{ value: 'birou', label: 'Birou', icon: 'office' },
 					{ value: 'fotoliu', label: 'Un fotoliu, colț de citit', icon: 'armchair' },
-					{ value: 'doar', label: 'Doar patul și dulapul', icon: 'bedroom' }
+					{ value: 'altceva', label: 'Altceva', icon: 'other' }
 				]
 			}
 		]
@@ -860,102 +903,184 @@ S.push(
 		title:
 			'Care e problema principală pe care vrei să o rezolvi în dormitor? Și ce nu poate lipsi?',
 		fields: [
-			{
-				key: 'problem',
-				label: 'Problema',
-				placeholder: 'Ce nu merge acum',
-				chips: [
-					'dulapul nu încape',
-					'patul stă lipit de perete',
-					'n-avem unde pune hainele',
-					'e prea întuneric',
-					'se aude tot'
-				]
-			},
-			{
-				key: 'must',
-				label: 'Nu poate lipsi',
-				placeholder: 'Ce trebuie neapărat să aibă',
-				chips: ['pat mare', 'dressing', 'liniște', 'măsuță de machiaj', 'un loc de lucru']
-			}
+			PROBLEM(['nu știu unde să pun patul', 'nu am loc pentru un dulap mai mare', 'nu știu ce încape']),
+			MUST(['pat mare', 'dulap', 'birou', 'TV'])
 		]
 	},
 	{
 		id: 'd4',
 		chapter: 'dormitor',
-		kind: 'text',
+		kind: 'furniture',
+		room: 'dormitor',
 		when: D,
 		title: 'Ai deja mobilier pe care vrei să îl păstrezi în dormitor?',
-		subtitle:
-			'Scrie ce vrei să păstrezi și cam ce dimensiuni are — trebuie să-l încadrăm astfel încât să încapă.',
-		fields: [
-			{
-				key: 'text',
-				placeholder: 'De exemplu: patul, 180 × 200 cm',
-				chips: ['patul', 'dulapul', 'noptierele', 'comoda', 'nimic']
-			}
-		]
+		subtitle: 'Scrie ce vrei să păstrezi și cam ce dimensiuni are (lungime și lățime).',
+		example: 'pat',
+		exampleSize: [172, 220]
 	}
 );
 
-/* ---- ORICE ALTĂ CAMERĂ ---- */
-for (const r of ROOMS.filter((x) => x.chips)) {
-	const W: Predicate = (a) => picked(a, r.id);
-	S.push(
-		{
-			id: `x_card_${r.id}`,
-			chapter: r.id,
-			kind: 'card',
-			room: r.id,
-			when: W,
-			minutes: 'Sub un minut.',
-			blurb: `Următoarele întrebări sunt doar despre ${r.the}.`
-		},
-		{
-			id: `x1_${r.id}`,
-			chapter: r.id,
-			kind: 'text',
-			when: W,
-			title: `Ce se întâmplă ${r.in} și ce vrei să aibă?`,
-			fields: [
-				{ key: 'text', placeholder: 'Activități, obiecte, oricum îți vine', chips: r.chips }
+/* ---- BIROU · BAIE · HOL · ALTĂ CAMERĂ ---- */
+
+interface ExtraRoom {
+	id: RoomId;
+	x1: TextScreen['fields'] | Omit<MultiScreen, keyof Base | 'kind'>;
+	x1Title: string;
+	x1Subtitle?: string;
+	problem: string[];
+	must: string[];
+	keepTitle: string;
+	keepSubtitle: string;
+	example: string;
+	exampleSize: [number, number];
+}
+
+const EXTRA_ROOMS: ExtraRoom[] = [
+	{
+		id: 'birou',
+		x1Title: 'Ce ai nevoie în birou?',
+		x1: [
+			{
+				key: 'text',
+				placeholder: 'Obiecte, activități etc.',
+				chips: ['un birou', 'loc pentru playstation', 'bibliotecă', 'canapea pentru musafiri', 'imprimantă']
+			}
+		],
+		problem: [
+			'nu știu unde să pun biroul',
+			'nu am suficient spațiu de depozitare',
+			'nu știu dacă încape o canapea extensibilă',
+			'nu am loc de dulap'
+		],
+		must: ['un birou de 150 cm', 'comodă / dulap', 'spațiu pentru acte', 'fotolii'],
+		keepTitle: 'Ai deja mobilier pe care vrei să îl păstrezi în birou?',
+		keepSubtitle: 'Scrie ce vrei să păstrezi și ce dimensiuni au (lungime și lățime).',
+		example: 'birou',
+		exampleSize: [120, 60]
+	},
+	{
+		id: 'baie',
+		x1Title: 'Ce obiecte sanitare vrei în baie?',
+		x1Subtitle: 'Selectează din listă tot ce îți dorești să ai în baie.',
+		x1: {
+			options: [
+				{ value: 'cada', label: 'Cadă' },
+				{ value: 'dus_cabina', label: 'Duș cu cabină' },
+				{ value: 'dus_rigola', label: 'Duș cu rigolă în pardoseală' },
+				{ value: 'masina_spalat', label: 'Mașină de spălat' },
+				{ value: 'uscator', label: 'Uscător de rufe' },
+				{ value: 'dulap', label: 'Dulap' },
+				{ value: 'lavoar', label: 'Lavoar' },
+				{ value: 'doua_lavoare', label: '2 lavoare' },
+				{ value: 'toaleta', label: 'Toaletă' },
+				{ value: 'bideu', label: 'Bideu' },
+				{ value: 'portprosop', label: 'Portprosop' },
+				{
+					value: 'altceva',
+					label: 'Altceva',
+					followUp: { key: 'x1_baie_other', kind: 'input', label: 'Ce anume?', placeholder: 'Scrie pe scurt' }
+				}
 			]
 		},
+		problem: [
+			'nu încape cada',
+			'nu am loc de mașină de spălat',
+			'nu știu unde să pun lavoarul',
+			'prea puțin spațiu de depozitare'
+		],
+		must: ['bideu', 'duș', 'toaletă separată', 'depozitare'],
+		keepTitle: 'Ai deja obiecte pe care vrei să le păstrezi în baie?',
+		keepSubtitle: 'Scrie ce vrei să păstrezi și ce dimensiuni au (lungime și lățime).',
+		example: 'mașina de spălat',
+		exampleSize: [60, 60]
+	},
+	{
+		id: 'hol',
+		x1Title: 'Ce obiecte ai nevoie în hol?',
+		x1Subtitle: 'Selectează din lista de mai jos.',
+		x1: {
+			options: [
+				{ value: 'cuier', label: 'Cuier' },
+				{ value: 'pantofar', label: 'Pantofar' },
+				{ value: 'dulap', label: 'Dulap' },
+				{ value: 'oglinda', label: 'Oglindă' },
+				{ value: 'banca', label: 'Scaun / banchetă' },
+				{ value: 'polita', label: 'Poliță' },
+				{
+					value: 'altceva',
+					label: 'Altceva',
+					followUp: { key: 'x1_hol_other', kind: 'input', label: 'Ce anume?', placeholder: 'Scrie pe scurt' }
+				}
+			]
+		},
+		problem: [
+			'nu am loc de geci / genți',
+			'nu am loc de pantofi',
+			'nu știu unde să pun dulapul',
+			'nu am loc suficient'
+		],
+		must: ['pantofar', 'loc pentru geci', 'loc unde să mă încalț', 'spațiu de depozitare cât mai mare'],
+		keepTitle: 'Ai deja mobilier pe care vrei să îl păstrezi în hol?',
+		keepSubtitle: 'Scrie ce vrei să păstrezi și ce dimensiuni au obiectele (lungime și lățime).',
+		example: 'pantofar',
+		exampleSize: [80, 30]
+	},
+	{
+		id: 'alta',
+		x1Title: 'Ce cameră este?',
+		x1: [
+			{ key: 'room', placeholder: 'cameră tehnică, terasă, spălătorie etc.' },
+			{
+				key: 'text',
+				label: 'Ce vrei să aibă această cameră?',
+				placeholder: 'Obiecte, activități, descrie ce ai nevoie aici',
+				chips: ['depozitare', 'centrală', 'mașină de spălat', 'lavoar', 'tablou electric']
+			}
+		],
+		problem: ['nu știu unde să pun centrala', 'nu am loc pentru depozitare'],
+		must: ['canapea', 'depozitare', 'lavoar'],
+		keepTitle: 'Ai deja mobilier pe care vrei să îl păstrezi în cameră?',
+		keepSubtitle: 'Scrie ce vrei să păstrezi și ce dimensiuni au obiectele (lungime și lățime).',
+		example: 'centrală',
+		exampleSize: [35, 50]
+	}
+];
+
+for (const r of EXTRA_ROOMS) {
+	const W: Predicate = (a) => picked(a, r.id);
+	const x1: Screen = Array.isArray(r.x1)
+		? { id: `x1_${r.id}`, chapter: r.id, kind: 'text', when: W, title: r.x1Title, fields: r.x1 }
+		: {
+				id: `x1_${r.id}`,
+				chapter: r.id,
+				kind: 'multi',
+				when: W,
+				allowEmpty: true,
+				title: r.x1Title,
+				subtitle: r.x1Subtitle,
+				...r.x1
+			};
+	S.push(
+		{ ...card(r.id, W), id: `x_card_${r.id}` },
+		x1,
 		{
 			id: `x2_${r.id}`,
 			chapter: r.id,
 			kind: 'text',
 			when: W,
-			title: `Care e problema principală pe care vrei să o rezolvi ${r.in}? Și ce nu poate lipsi?`,
-			fields: [
-				{
-					key: 'problem',
-					label: 'Problema',
-					placeholder: 'Ce nu merge acum',
-					chips: [
-						'nu încape tot',
-						'e prea întuneric',
-						'nu știu unde să pun…',
-						'prea puțin spațiu de depozitare'
-					]
-				},
-				{
-					key: 'must',
-					label: 'Nu poate lipsi',
-					placeholder: 'Ce trebuie neapărat să aibă',
-					chips: ['lumină', 'depozitare', 'liniște', 'loc de lucru']
-				}
-			]
+			title: `Care e problema principală pe care vrei să o rezolvi ${ROOMS.find((x) => x.id === r.id)!.in}? Și ce nu poate lipsi?`,
+			fields: [PROBLEM(r.problem), MUST(r.must)]
 		},
 		{
 			id: `x3_${r.id}`,
 			chapter: r.id,
-			kind: 'text',
+			kind: 'furniture',
+			room: r.id,
 			when: W,
-			title: `Ai deja mobilier pe care vrei să îl păstrezi ${r.in}?`,
-			subtitle:
-				'Scrie ce vrei să păstrezi și cam ce dimensiuni are — trebuie să-l încadrăm astfel încât să încapă.',
-			fields: [{ key: 'text', placeholder: 'Obiectul și dimensiunile lui', chips: ['nimic'] }]
+			title: r.keepTitle,
+			subtitle: r.keepSubtitle,
+			example: r.example,
+			exampleSize: r.exampleSize
 		}
 	);
 }
@@ -1000,30 +1125,15 @@ export function resolveFieldOptions(f: Field, a: Answers): Option[] {
 	return raw.filter((o) => !o.showIf || o.showIf(a));
 }
 
-/** The label of an answer value, as in the prototype's `lbl`. */
-export function lbl(screenId: string, value: string, fieldKey?: string, a: Answers = {}): string {
-	const s = screenById(screenId);
-	if (!s) return value;
-	let opts: Option[] =
-		s.kind === 'single' || s.kind === 'multi'
-			? typeof s.options === 'function'
-				? s.options(a)
-				: s.options || []
-			: [];
-	if (s.kind === 'cards') {
-		/* A ticked card is stored as `<card>: true`; the label is the card's own. */
-		const card = fieldKey ? s.cards.find((c) => c.value === fieldKey) : undefined;
-		if (card && value === 'true') return card.label;
-		const all = s.cards.flatMap((c) => c.groups ?? []);
-		const g = fieldKey ? all.find((x) => x.key === fieldKey) : undefined;
-		opts = g
-			? g.options
-			: [...all.flatMap((x) => x.options), ...s.cards.map((c) => ({ value: c.value, label: c.label }))];
-	}
-	if (fieldKey && (s.kind === 'compound' || s.kind === 'text')) {
-		const f = s.fields.find((x) => x.key === fieldKey);
-		opts = f && f.options ? (typeof f.options === 'function' ? f.options(a) : f.options) : [];
-	}
-	const o = opts.find((x) => x.value === value);
-	return o ? o.label.replace(/^…/, '') : value;
+/** The furniture rows of a `furniture` answer, empty rows dropped. */
+export function furnitureItems(v: unknown): FurnitureItem[] {
+	const items = (v as { items?: unknown } | undefined)?.items;
+	if (!Array.isArray(items)) return [];
+	return (items as Partial<FurnitureItem>[])
+		.map((x) => ({
+			name: String(x?.name ?? '').trim(),
+			length: String(x?.length ?? '').trim(),
+			width: String(x?.width ?? '').trim()
+		}))
+		.filter((x) => x.name || x.length || x.width);
 }

@@ -65,7 +65,12 @@ npm run deploy
 ```
 
 Non-secret config already lives in `wrangler.jsonc` under `vars`
-(`HUBSPOT_API_BASE`, `HUBSPOT_FORMS_BASE`, `HUBSPOT_FILES_FOLDER`, `MOCK_ADMIN_BASE`).
+(`HUBSPOT_API_BASE`, `HUBSPOT_FORMS_BASE`, `HUBSPOT_FILES_FOLDER`, `MOCK_ADMIN_BASE`,
+`PUBLIC_CALENDLY_URL`). Set `PUBLIC_CALENDLY_URL` to the Calendly event link to turn on the
+booking step after the send; left empty, the send goes straight to the thanks page.
+
+The HubSpot form also needs the multi-line text property `um_photo_files` (photos of the space
+and of kept furniture, one `url | name | room | group` per line).
 
 Verify it actually flipped over:
 

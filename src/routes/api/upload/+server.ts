@@ -7,7 +7,6 @@ const ROOM_IDS = new Set([
 	'bucatarie',
 	'living',
 	'dormitor',
-	'copil',
 	'birou',
 	'baie',
 	'hol',
