@@ -41,7 +41,8 @@ fail() { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 x() {
 	if $DRY; then printf '  +'; printf ' %q' "$@"; echo; else "$@"; fi
 }
-run=(gcloud run --project="$PROJECT_ID" --region="$REGION")
+# --region is not a global flag: it goes after the subcommand (gcloud run deploy … --region=…)
+where=(--project="$PROJECT_ID" --region="$REGION")
 json_field() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const f=new Function("s","return ("+process.argv[1]+")");console.log(f(JSON.parse(s))??"")})' "$1"; }
 
 # ---------------------------------------------------------------- preflight
@@ -60,7 +61,7 @@ VERSION=$(git describe --always --dirty)
 IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO/$SERVICE:$VERSION"
 
 SERVICE_JSON=""
-$DRY || SERVICE_JSON=$("${run[@]}" services describe "$SERVICE" --format=json 2>/dev/null || true)
+$DRY || SERVICE_JSON=$(gcloud run services describe "$SERVICE" "${where[@]}" --format=json 2>/dev/null || true)
 EXISTING_URL=""
 PREVIOUS_REVISION=""
 if [[ -n "$SERVICE_JSON" ]]; then
@@ -116,7 +117,7 @@ args=(
 $CANDIDATE && args+=(--no-traffic --tag=candidate)
 
 step "Deploy a new revision"
-x "${run[@]}" deploy "$SERVICE" "${args[@]}"
+x gcloud run deploy "$SERVICE" "${where[@]}" "${args[@]}"
 
 if $DRY; then
 	if [[ -z "$ORIGIN_VALUE" ]]; then echo "  (a first deploy then sets ORIGIN to the new service URL)"; fi
@@ -124,15 +125,15 @@ if $DRY; then
 	exit 0
 fi
 
-SERVICE_JSON=$("${run[@]}" services describe "$SERVICE" --format=json)
+SERVICE_JSON=$(gcloud run services describe "$SERVICE" "${where[@]}" --format=json)
 URL=$(json_field 's.status.url' <<<"$SERVICE_JSON")
 REVISION=$(json_field 's.status.latestCreatedRevisionName' <<<"$SERVICE_JSON")
 
 # The first deploy cannot know its own URL beforehand.
 if [[ -z "$ORIGIN_VALUE" ]]; then
 	step "Set ORIGIN to $URL (first deploy)"
-	x "${run[@]}" services update "$SERVICE" --update-env-vars="ORIGIN=$URL" --quiet
-	SERVICE_JSON=$("${run[@]}" services describe "$SERVICE" --format=json)
+	x gcloud run services update "$SERVICE" "${where[@]}" --update-env-vars="ORIGIN=$URL" --quiet
+	SERVICE_JSON=$(gcloud run services describe "$SERVICE" "${where[@]}" --format=json)
 	REVISION=$(json_field 's.status.latestCreatedRevisionName' <<<"$SERVICE_JSON")
 fi
 
