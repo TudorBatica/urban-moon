@@ -172,7 +172,7 @@ submissions/{submissionId}/
       "fileId": "b1e2…",
       "kind": "plan" | "photo",
       "group": null | "spatiu" | "mobilier",   // photos only (PhotoMeta.group)
-      "roomId": null | "bucatarie",
+      "roomId": null | "bucatarie",            // furniture photos only; null for plans and space photos
       "originalName": "plan-bucatarie.pdf",    // sanitised with safeFileName()
       "contentType": "application/pdf",        // as SNIFFED by the server at commit
       "size": 31457280,
@@ -471,7 +471,7 @@ For each `kind: plan` file with `contentType: application/pdf`:
    scaling ever misbehaves on a CropBox≠MediaBox file, fallback: pdf-lib `embedPdf` of each
    normalised page into a fresh page (memory 5× — only for files ≤ 20 MB) **[fallback untested]**.
 6. The **separator page** (in the body document, before the imported pages):
-   "Document încărcat de client", file name, room label (`roomOf(roomId).label`), page count,
+   "Document încărcat de client", file name, page count,
    size, and "Paginile următoare sunt reproduse exact așa cum au fost trimise." Set in the body's
    own type so it is obviously *ours*, while the stamped pages are obviously *theirs*.
 

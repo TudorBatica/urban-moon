@@ -121,13 +121,13 @@ describe('manifest rules', () => {
 		expect(issuesOf(m)).toContain('files.1.size: file over the size limit');
 	});
 
-	it('keeps rooms in step with the answers and with file tags', () => {
+	it('keeps rooms in step with the answers and with the files', () => {
 		const m = clone(base);
 		m.rooms = ['living'];
 		expect(issuesOf(m)).toContain('rooms: rooms must match answers.c_rooms');
 		const n = clone(base);
 		n.files[0].roomId = 'baie';
-		expect(issuesOf(n)).toContain('files.0.roomId: file tagged with a room that was not picked');
+		expect(issuesOf(n)).toContain('files.0.roomId: file of a room that was not picked');
 	});
 
 	it('requires a plan file or a drawing', () => {

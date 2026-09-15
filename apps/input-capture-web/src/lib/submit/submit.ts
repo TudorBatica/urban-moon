@@ -151,6 +151,13 @@ export function planSteps(plans: PlansState, photos: PhotoMeta[] = []): string[]
 	return labels;
 }
 
+/** The photos a send includes. Furniture photos of a room that is no longer picked stay in the
+ *  browser but are left out: that room's chapter is gone, and the manifest would be refused. */
+export function photosToSend(answers: Answers, photos: PhotoMeta[]): PhotoMeta[] {
+	const rooms: unknown[] = Array.isArray(answers.c_rooms) ? answers.c_rooms : [];
+	return photos.filter((p) => p.group !== 'mobilier' || rooms.includes(p.roomId));
+}
+
 interface UploadJob {
 	index: number;
 	label: string;
@@ -175,7 +182,7 @@ export async function runSubmission(opts: RunSubmissionOptions): Promise<SubmitR
 		answers,
 		plans,
 		getBlob,
-		photos = [],
+		photos: allPhotos = [],
 		getPhotoBlob = async () => undefined,
 		onProgress,
 		fetchImpl = typeof fetch !== 'undefined' ? fetch : undefined,
@@ -183,6 +190,7 @@ export async function runSubmission(opts: RunSubmissionOptions): Promise<SubmitR
 		newId = randomId
 	} = opts;
 	if (!fetchImpl) return { ok: false, error: GENERIC_ERROR };
+	const photos = photosToSend(answers, allPhotos);
 
 	const pageUri = opts.pageUri ?? (typeof location !== 'undefined' ? location.href : 'http://localhost/');
 	const labels = planSteps(plans, photos);
@@ -329,11 +337,16 @@ export async function runSubmission(opts: RunSubmissionOptions): Promise<SubmitR
 	/* ---------- commit ---------- */
 
 	report(commitIndex, 'uploading');
-	const fileOf = (m: PlanFileMeta, kind: 'plan' | 'photo', group: PhotoMeta['group'] | null) => ({
+	const fileOf = (
+		m: PlanFileMeta,
+		kind: 'plan' | 'photo',
+		group: PhotoMeta['group'] | null,
+		roomId: PhotoMeta['roomId']
+	) => ({
 		fileId: m.id,
 		kind,
 		group,
-		roomId: m.roomId,
+		roomId,
 		name: m.name,
 		type: m.type,
 		size: m.size,
@@ -343,7 +356,10 @@ export async function runSubmission(opts: RunSubmissionOptions): Promise<SubmitR
 		pageUri,
 		answers,
 		drawing: d ? { room: d.room, svg: d.svg, updatedAt: d.updatedAt } : null,
-		files: [...plans.files.map((m) => fileOf(m, 'plan', null)), ...photos.map((p) => fileOf(p, 'photo', p.group))]
+		files: [
+			...plans.files.map((m) => fileOf(m, 'plan', null, null)),
+			...photos.map((p) => fileOf(p, 'photo', p.group, p.roomId))
+		]
 	};
 
 	try {

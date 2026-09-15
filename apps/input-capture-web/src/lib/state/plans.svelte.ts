@@ -1,6 +1,5 @@
 import { browser } from '$app/environment';
 import { del, get, set } from 'idb-keyval';
-import { pickedRooms } from './answers.svelte';
 import {
 	ACCEPTED_CONTENT_TYPES,
 	ACCEPTED_EXTENSIONS,
@@ -8,7 +7,7 @@ import {
 	acceptedTypeOf,
 	maxPlanFiles
 } from '@urban-moon/domain-data';
-import type { Drawing, PlanFileMeta, PlansState, RoomId } from '$lib/types';
+import type { Drawing, PlanFileMeta, PlansState } from '$lib/types';
 
 const KEY = 'um.plans';
 const blobKey = (id: string): string => `plan-file:${id}`;
@@ -78,8 +77,6 @@ export async function addFiles(
 	const max = maxFiles(roomCount);
 	const added: PlanFileMeta[] = [];
 	const rejected: { name: string; reason: string }[] = [];
-	/* One picked room means every plan can only be that room's. */
-	const autoRoom: RoomId | null = roomCount === 1 ? (pickedRooms()[0] ?? null) : null;
 
 	for (const file of files) {
 		if (!isAcceptedFile(file.name, file.type)) {
@@ -108,7 +105,6 @@ export async function addFiles(
 			name: file.name,
 			type: file.type,
 			size: file.size,
-			roomId: autoRoom,
 			addedAt: Date.now()
 		};
 		await set(blobKey(meta.id), file);
@@ -126,13 +122,6 @@ export async function removeFile(id: string): Promise<void> {
 	plans.files.splice(i, 1);
 	persist();
 	await del(blobKey(id));
-}
-
-export function setFileRoom(id: string, roomId: RoomId | null): void {
-	const f = plans.files.find((x) => x.id === id);
-	if (!f) return;
-	f.roomId = roomId;
-	persist();
 }
 
 export async function getFileBlob(id: string): Promise<Blob | undefined> {

@@ -91,8 +91,9 @@ x1–x3). The copy follows `COPY-chestionar(1).md`. The child room is gone — c
 
 - **One room**: upload *or* draw. The "Desenează planul" tile opens `/deseneaza`, the full-screen
   editor (no app chrome); "Gata" saves `{model, room, svg, pngDataUrl, updatedAt}` and returns.
-  Uploaded files are tagged with that room automatically.
-- **Two rooms or more**: upload only, and each file can be tagged with the room it shows.
+- **Two rooms or more**: upload only.
+- Plan files carry no room. Furniture photos do: the room whose "mobilier păstrat" screen they
+  were added on. Photos of a room that is later unpicked stay in the browser but are not sent.
 - Limit: `rooms × 2` files, never fewer than 2. Accepted: PDF, JPG, PNG (the lists and limits
   live in `@urban-moon/domain-data`); images up to 10 MB, PDFs up to 25 MB for now. Rejections —
   wrong type, too big, over the limit, duplicate — are listed in Romanian and never silently drop

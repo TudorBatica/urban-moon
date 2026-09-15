@@ -14,7 +14,7 @@ const photo = (group: PhotoMeta['group'], roomId: PhotoMeta['roomId']): PhotoMet
 });
 
 const up: Uploads = {
-	plans: { files: [{ id: 'f', name: 'plan.pdf', type: 'application/pdf', size: 1, roomId: null, addedAt: 1 }], drawing: null },
+	plans: { files: [{ id: 'f', name: 'plan.pdf', type: 'application/pdf', size: 1, addedAt: 1 }], drawing: null },
 	photos: [photo('spatiu', null), photo('spatiu', null), photo('mobilier', 'bucatarie')]
 };
 

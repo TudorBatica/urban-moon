@@ -80,7 +80,8 @@ describe('commitSubmission', () => {
 			rooms: ['bucatarie']
 		});
 		expect(stored.files).toEqual([
-			expect.objectContaining({ fileId: 'f1', originalName: 'plan.pdf', contentType: 'application/pdf', object: 'uploads/f1.pdf', crc32c: 'crc==' }),
+			/* the request tags the plan with a room, as the old app did; the manifest drops it */
+			expect.objectContaining({ fileId: 'f1', roomId: null, originalName: 'plan.pdf', contentType: 'application/pdf', object: 'uploads/f1.pdf', crc32c: 'crc==' }),
 			expect.objectContaining({ fileId: 'p1', contentType: 'image/jpeg', object: 'uploads/p1.jpg' })
 		]);
 	});

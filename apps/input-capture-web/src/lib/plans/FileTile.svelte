@@ -1,19 +1,15 @@
 <script lang="ts">
 	import { getFileBlob } from '$lib/state/plans.svelte';
-	import { roomOf } from '@urban-moon/domain-data';
-	import type { PlanFileMeta, RoomId } from '$lib/types';
+	import type { PlanFileMeta } from '$lib/types';
 
 	interface Props {
 		file: PlanFileMeta;
-		rooms: RoomId[];
-		showTags?: boolean;
 		/** where the thumbnail's blob comes from; the plans store by default */
 		getBlob?: (id: string) => Promise<Blob | undefined>;
 		onremove: (id: string) => void;
-		ontag?: (id: string, roomId: RoomId | null) => void;
 	}
 
-	let { file, rooms, showTags = false, getBlob = getFileBlob, onremove, ontag }: Props = $props();
+	let { file, getBlob = getFileBlob, onremove }: Props = $props();
 
 	/** Browsers cannot decode HEIC/HEIF, so those show their extension like PDF and DWG do. */
 	function thumbable(name: string, type: string): boolean {
@@ -60,21 +56,6 @@
 	<div class="fm">
 		<span class="fname" title={file.name}>{file.name}</span>
 		<small data-testid="file-size">{fmtSize(file.size)}</small>
-		{#if showTags}
-			<div class="ftags" role="group" aria-label="Ce cameră arată">
-				{#each rooms as id (id)}
-					<button
-						type="button"
-						class:on={file.roomId === id}
-						data-testid="tag-{id}"
-						aria-pressed={file.roomId === id}
-						onclick={() => ontag?.(file.id, file.roomId === id ? null : id)}
-					>
-						{roomOf(id)?.label ?? id}
-					</button>
-				{/each}
-			</div>
-		{/if}
 	</div>
 	<button
 		type="button"

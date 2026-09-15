@@ -17,13 +17,14 @@ export interface PlanFileMeta {
 	name: string;
 	type: string; // mime
 	size: number; // bytes
-	roomId: RoomId | null; // tag
 	addedAt: number;
 }
 
 /** A photo: of the space (`spatiu`) or of the furniture kept in a room (`mobilier`). */
 export interface PhotoMeta extends PlanFileMeta {
 	group: PhotoGroup;
+	/** the room whose furniture screen the photo was added on; null for the space */
+	roomId: RoomId | null;
 }
 
 export interface Drawing {

@@ -32,8 +32,6 @@ const ls = vi.hoisted(() => {
 	if (!('localStorage' in globalThis)) {
 		Object.defineProperty(globalThis, 'localStorage', { value: shim, configurable: true });
 	}
-	/* One picked room, so addFiles can auto-tag. */
-	globalThis.localStorage.setItem('um.answers', JSON.stringify({ c_rooms: ['bucatarie'] }));
 	return store;
 });
 
@@ -47,8 +45,7 @@ const {
 	plans,
 	removeFile,
 	resetPlans,
-	setDrawing,
-	setFileRoom
+	setDrawing
 } = await import('./plans.svelte');
 
 const meta = (id: string): PlanFileMeta => ({
@@ -56,7 +53,6 @@ const meta = (id: string): PlanFileMeta => ({
 	name: `${id}.pdf`,
 	type: 'application/pdf',
 	size: 1024,
-	roomId: null,
 	addedAt: 0
 });
 
@@ -219,28 +215,6 @@ describe('addFiles — rejecting', () => {
 		const res = await addFiles([mk('plan.pdf', 'application/pdf', 4096)], 3);
 		expect(res.rejected).toEqual([]);
 		expect(plans.files).toHaveLength(2);
-	});
-});
-
-describe('room tagging', () => {
-	it('tags the single picked room automatically', async () => {
-		const { added } = await addFiles([mk('plan.pdf', 'application/pdf')], 1);
-		expect(added[0].roomId).toBe('bucatarie');
-		expect(plans.files[0].roomId).toBe('bucatarie');
-	});
-
-	it('leaves the tag empty with several rooms', async () => {
-		const { added } = await addFiles([mk('plan.pdf', 'application/pdf')], 3);
-		expect(added[0].roomId).toBeNull();
-	});
-
-	it('setFileRoom sets and clears the tag, and persists', async () => {
-		const { added } = await addFiles([mk('plan.pdf', 'application/pdf')], 3);
-		setFileRoom(added[0].id, 'living');
-		expect(plans.files[0].roomId).toBe('living');
-		expect(JSON.parse(ls.get('um.plans') as string).files[0].roomId).toBe('living');
-		setFileRoom(added[0].id, null);
-		expect(plans.files[0].roomId).toBeNull();
 	});
 });
 

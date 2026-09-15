@@ -8,8 +8,7 @@
 		maxFiles,
 		plans,
 		removeFile,
-		setDrawing,
-		setFileRoom
+		setDrawing
 	} from '$lib/state/plans.svelte';
 	import { roomOf } from '@urban-moon/domain-data';
 	import { PLAN_MEASURED_KEY, PLAN_MODIFY_KEY } from '@urban-moon/domain-data';
@@ -22,7 +21,6 @@
 	import DrawingCard from '$lib/plans/DrawingCard.svelte';
 	import PhotoField from '$lib/plans/PhotoField.svelte';
 	import Rejections from '$lib/plans/Rejections.svelte';
-	import type { RoomId } from '$lib/types';
 
 	const rooms = $derived(pickedRooms());
 	const count = $derived(rooms.length);
@@ -56,10 +54,6 @@
 		if (!measured) return;
 		const res = await addFiles(files, count);
 		rejected = res.rejected;
-	}
-
-	function ontag(id: string, roomId: RoomId | null): void {
-		setFileRoom(id, roomId);
 	}
 
 	function onremove(id: string): void {
@@ -143,7 +137,7 @@
 		{#if plans.files.length > 0}
 			<div class="files" data-testid="counter">
 				{#each plans.files as file (file.id)}
-					<FileTile {file} {rooms} showTags={!single} {onremove} {ontag} />
+					<FileTile {file} {onremove} />
 				{/each}
 			</div>
 		{/if}

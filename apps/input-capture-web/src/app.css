@@ -274,9 +274,6 @@ button{ cursor:pointer; -webkit-tap-highlight-color:transparent; }
 .file small{ display:block; color:var(--grey); font-size:12.5px; margin-top:2px; }
 .file .x{ margin-left:auto; flex:none; width:36px; height:36px; background:none; border:0; color:var(--grey); font-size:20px; line-height:1; }
 .file .x:hover{ color:var(--ink); }
-.ftags{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
-.ftags button{ font-size:12px; padding:4px 9px; border:1px solid var(--hair); border-radius:3px; background:var(--white); color:var(--soft); transition:background var(--fast) var(--ease), color var(--fast) var(--ease); }
-.ftags button.on{ background:var(--ink); border-color:var(--ink); color:var(--white); }
 .thumbs{ display:grid; grid-template-columns:repeat(auto-fill, minmax(76px,1fr)); gap:8px; margin-top:10px; }
 .thumb{ position:relative; aspect-ratio:1 / 1; overflow:hidden; border-radius:2px; background:var(--wash); display:flex; align-items:center; justify-content:center; font-size:10px; letter-spacing:.06em; color:var(--grey); text-transform:uppercase; }
 .thumb img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; animation:rise var(--base) var(--ease) both; }

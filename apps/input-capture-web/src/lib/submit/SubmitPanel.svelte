@@ -5,7 +5,7 @@
 	import { answers } from '$lib/state/answers.svelte';
 	import { getFileBlob, plans } from '$lib/state/plans.svelte';
 	import { getPhotoBlob, photos } from '$lib/state/photos.svelte';
-	import { planSteps, runSubmission, type StepProgress, type StepState } from './submit';
+	import { photosToSend, planSteps, runSubmission, type StepProgress, type StepState } from './submit';
 
 	const CONSENT_TEXT =
 		'Sunt de acord ca Urban Moon să prelucreze răspunsurile și planurile trimise pentru pregătirea proiectului meu.';
@@ -26,7 +26,7 @@
 		if (!consent || sending) return;
 		sending = true;
 		error = '';
-		steps = planSteps(plans, photos.list).map((label, index, all) => ({
+		steps = planSteps(plans, photosToSend(answers, photos.list)).map((label, index, all) => ({
 			index,
 			total: all.length,
 			label,

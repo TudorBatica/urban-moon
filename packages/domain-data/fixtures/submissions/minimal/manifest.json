@@ -41,7 +41,7 @@
 			"fileId": "plan-bucatarie",
 			"kind": "plan",
 			"group": null,
-			"roomId": "bucatarie",
+			"roomId": null,
 			"originalName": "plan.pdf",
 			"contentType": "application/pdf",
 			"size": 1510,

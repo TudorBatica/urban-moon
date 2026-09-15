@@ -139,7 +139,8 @@ export async function commitSubmission(o: {
 		fileId: f.fileId,
 		kind: f.kind,
 		group: f.group,
-		roomId: f.roomId as ManifestFile['roomId'],
+		/* Plans carry no room; a tab still running the old app may send one. */
+		roomId: f.kind === 'plan' ? null : (f.roomId as ManifestFile['roomId']),
 		originalName: safeFileName(f.name),
 		contentType: checks[i].expect,
 		size: f.size,

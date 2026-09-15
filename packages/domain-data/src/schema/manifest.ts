@@ -29,6 +29,8 @@ export const ManifestFileSchema = z
 		kind: FileKindSchema,
 		/** photos only: the space, or furniture kept in a room */
 		group: PhotoGroupSchema.nullable(),
+		/** furniture photos: the room they belong to. The app sends null for everything else;
+		    manifests from before plan tags were removed may still carry one on a plan. */
 		roomId: RoomIdSchema.nullable(),
 		originalName: z.string().min(1).max(200),
 		/** as sniffed by the server from the file's first bytes */
@@ -96,7 +98,7 @@ export const ManifestSchema = z
 			if (ids.has(f.fileId)) issue(['files', i, 'fileId'], 'duplicate fileId');
 			ids.add(f.fileId);
 			if (f.roomId && !m.rooms.includes(f.roomId))
-				issue(['files', i, 'roomId'], 'file tagged with a room that was not picked');
+				issue(['files', i, 'roomId'], 'file of a room that was not picked');
 		});
 
 		const plans = m.files.filter((f) => f.kind === 'plan');

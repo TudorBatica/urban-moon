@@ -69,8 +69,8 @@ const answers: Answers = {
 	c_rooms: ['bucatarie']
 };
 
-function meta(id: string, name: string, roomId: PlanFileMeta['roomId'] = null): PlanFileMeta {
-	return { id, name, type: 'application/pdf', size: 7, roomId, addedAt: 1 };
+function meta(id: string, name: string): PlanFileMeta {
+	return { id, name, type: 'application/pdf', size: 7, addedAt: 1 };
 }
 
 const room: RoomSnapshot = {
@@ -144,7 +144,7 @@ describe('runSubmission — happy path', () => {
 		const progress: StepProgress[] = [];
 
 		const res = await run(server, {
-			plans: statePlans({ files: [meta('a', 'plan.pdf', 'bucatarie')], drawing }),
+			plans: statePlans({ files: [meta('a', 'plan.pdf')], drawing }),
 			photos: [photo],
 			storage,
 			onProgress: (p) => progress.push(p)
@@ -165,7 +165,7 @@ describe('runSubmission — happy path', () => {
 			answers,
 			drawing: { room, svg: '<svg/>', updatedAt: 5 },
 			files: [
-				{ fileId: 'a', kind: 'plan', group: null, roomId: 'bucatarie', name: 'plan.pdf', type: 'application/pdf', size: 7, addedAt: 1 },
+				{ fileId: 'a', kind: 'plan', group: null, roomId: null, name: 'plan.pdf', type: 'application/pdf', size: 7, addedAt: 1 },
 				{ fileId: 'p1', kind: 'photo', group: 'mobilier', roomId: 'bucatarie', name: 'colt.jpg', type: 'image/jpeg', size: 3, addedAt: 2 }
 			]
 		});
@@ -174,6 +174,16 @@ describe('runSubmission — happy path', () => {
 		expect([...last.values()]).toEqual(['done', 'done', 'done', 'done']);
 		expect(storage.data[SUBMISSION_ID_KEY]).toBeUndefined();
 		expect(storage.data[UPLOADS_KEY]).toBeUndefined();
+	});
+
+	it('leaves out furniture photos of a room that is no longer picked', async () => {
+		const server = fakeServer();
+		const stale: PhotoMeta = { ...photo, id: 'p2', name: 'dulap.jpg', roomId: 'dormitor' };
+		const res = await run(server, { plans: statePlans({ files: [meta('a', 'plan.pdf')] }), photos: [photo, stale] });
+		expect(res).toEqual({ ok: true });
+		expect(server.puts.sort()).toEqual(['a', 'p1']);
+		const { files } = server.commits[0].body as { files: { fileId: string }[] };
+		expect(files.map((f) => f.fileId)).toEqual(['a', 'p1']);
 	});
 });
 
