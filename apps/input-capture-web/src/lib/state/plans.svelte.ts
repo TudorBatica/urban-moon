@@ -4,6 +4,8 @@ import {
 	ACCEPTED_CONTENT_TYPES,
 	ACCEPTED_EXTENSIONS,
 	MAX_IMAGE_BYTES,
+	MAX_PDF_BYTES,
+	MB,
 	acceptedTypeOf,
 	maxPlanFiles
 } from '@urban-moon/domain-data';
@@ -21,12 +23,12 @@ export const ACCEPTED_TYPES: string[] = [
 	...ACCEPTED_CONTENT_TYPES.flatMap((t) => ACCEPTED_EXTENSIONS[t])
 ];
 
-/** The upload route still passes files through the server (Cloudflare), so plan PDFs stay under
- *  25 MB until uploads go straight to the bucket; images follow domain-data's 10 MB. */
-export const MAX_FILE_BYTES: number = 25 * 1024 * 1024;
+/** The largest plan file: a PDF's limit from domain-data, which the server checks too. Images are
+ *  held to `MAX_IMAGE_BYTES` further down. */
+export const MAX_FILE_BYTES: number = MAX_PDF_BYTES;
 
 export const REASON_TYPE = 'Tipul de fișier nu e acceptat (PDF, JPG, PNG).';
-export const REASON_SIZE = 'Fișierul are peste 25 MB.';
+export const REASON_SIZE = `Fișierul are peste ${MAX_PDF_BYTES / MB} MB.`;
 export const REASON_IMAGE_SIZE = 'Poza are peste 10 MB.';
 export const REASON_DUPLICATE = 'Fișierul e deja adăugat.';
 export const reasonLimit = (max: number): string => `Ai atins limita de ${max} fișiere.`;

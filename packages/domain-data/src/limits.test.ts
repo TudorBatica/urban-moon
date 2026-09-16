@@ -27,11 +27,11 @@ describe('acceptedTypeOf', () => {
 });
 
 describe('limits', () => {
-	it('allows 10 MB images and 100 MB PDFs', () => {
+	it('allows 10 MB images and 25 MB PDFs', () => {
 		expect(maxBytesFor('image/jpeg')).toBe(MAX_IMAGE_BYTES);
 		expect(MAX_IMAGE_BYTES).toBe(10 * 1024 * 1024);
 		expect(maxBytesFor('application/pdf')).toBe(MAX_PDF_BYTES);
-		expect(MAX_PDF_BYTES).toBe(100 * 1024 * 1024);
+		expect(MAX_PDF_BYTES).toBe(25 * 1024 * 1024);
 	});
 
 	it('gives two plan files per room, never fewer than two', () => {

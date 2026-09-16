@@ -21,7 +21,7 @@ export const OBJECT_EXTENSION: Record<AcceptedContentType, 'jpg' | 'png' | 'pdf'
 };
 
 export const MAX_IMAGE_BYTES = 10 * MB;
-export const MAX_PDF_BYTES = 100 * MB;
+export const MAX_PDF_BYTES = 25 * MB;
 /** Everything one submission may carry, files and drawing together. */
 export const MAX_SUBMISSION_BYTES = 400 * MB;
 /** Per group: the photos of the space, or one room's furniture. */

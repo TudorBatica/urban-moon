@@ -190,10 +190,10 @@ describe('runSubmission — happy path', () => {
 describe('runSubmission — failures', () => {
 	it("shows the server's reason when it refuses a file, and does not commit", async () => {
 		const server = fakeServer({
-			start: () => json({ ok: false, error: 'Fișierul „plan.pdf" depășește 100 MB.' }, 400)
+			start: () => json({ ok: false, error: 'Fișierul „plan.pdf" depășește 25 MB.' }, 400)
 		});
 		const res = await run(server, { plans: statePlans({ files: [meta('a', 'plan.pdf')] }) });
-		expect(res).toEqual({ ok: false, error: 'Fișierul „plan.pdf" depășește 100 MB.', step: 'plan.pdf' });
+		expect(res).toEqual({ ok: false, error: 'Fișierul „plan.pdf" depășește 25 MB.', step: 'plan.pdf' });
 		expect(server.commits).toHaveLength(0);
 	});
 

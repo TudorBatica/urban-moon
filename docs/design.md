@@ -5,6 +5,8 @@ asking the question, and answers that feel like keys you press. The source of tr
 two mockups, `urban-moon-screens(1).html` (screens, web and phone) and
 `urban-moon-motion.html` (motion). Tokens live in `src/app.css`; the parts in `src/lib/ui/`.
 
+Every path here is relative to `apps/input-capture-web/`, where the app and both mockups live.
+
 ## 1. Principles
 
 1. **One question, one photograph.** The photograph sets the mood; it never carries
@@ -34,7 +36,7 @@ two mockups, `urban-moon-screens(1).html` (screens, web and phone) and
 | `--place` | `#B5B4AE` | placeholders, "Fără răspuns" |
 
 Radius is 4px everywhere (3px on keys and chips). The old brass/stone tokens remain only
-because the floorplan editor and the dev inbox still read them.
+because the floorplan editor still reads them.
 
 ## 3. Typography
 
@@ -126,8 +128,9 @@ to a handful of shapes, and check it at 26px and 88px.
 
 ## 8. Copy
 
-Address the user as *tu*. The wording of every question lives in `src/lib/questions/screens.ts`
-and follows `COPY-chestionar(1).md`; the design never rewrites it.
+Address the user as *tu*. The wording of every question lives in the shared catalog
+(`../../packages/domain-data/src/catalog/screens.ts`) and follows `COPY-chestionar(1).md`; the
+design never rewrites it.
 
 ## 9. What not to do
 

@@ -1,0 +1,17 @@
+{
+  "displayName": "pdf worker: failures",
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "pdf_failed / delivery_failed / submission_waiting / run_failed / failed_marker_not_written, or the container out of memory",
+      "conditionMatchedLog": {
+        "filter": "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${SERVICE}\" AND (jsonPayload.event=(\"pdf_failed\" OR \"delivery_failed\" OR \"submission_waiting\" OR \"run_failed\" OR \"failed_marker_not_written\") OR textPayload:\"Memory limit\")"
+      }
+    }
+  ],
+  "alertStrategy": {
+    "notificationRateLimit": { "period": "300s" },
+    "autoClose": "1800s"
+  },
+  "notificationChannels": ["${CHANNEL}"]
+}

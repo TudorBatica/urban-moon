@@ -5,7 +5,6 @@ out
 .output
 .vercel
 .netlify
-.wrangler
 .svelte-kit
 build
 
@@ -29,6 +28,3 @@ playwright-report
 blob-report
 playwright/.cache
 
-# Cloudflare
-.dev.vars
-.wrangler

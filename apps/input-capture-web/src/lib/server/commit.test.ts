@@ -15,6 +15,8 @@ function memoryBucket(seed: Record<string, Uint8Array> = {}) {
 			return b ? { size: b.length, contentType: '', crc32c: 'crc==', generation: '1' } : null;
 		},
 		readHead: async (o, n) => objects.get(o)!.slice(0, n),
+		read: async (o) => objects.get(o)!,
+		list: async () => [],
 		createOnly: async (o, body) => {
 			if (objects.has(o)) return false;
 			writes.push(o);
@@ -23,8 +25,9 @@ function memoryBucket(seed: Record<string, Uint8Array> = {}) {
 		},
 		put: async (o, body) => {
 			writes.push(o);
-			objects.set(o, new TextEncoder().encode(body));
-		}
+			objects.set(o, typeof body === 'string' ? new TextEncoder().encode(body) : body);
+		},
+		delete: async (o) => objects.delete(o)
 	};
 	return { bucket, objects, writes };
 }

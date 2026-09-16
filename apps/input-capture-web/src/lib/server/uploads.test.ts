@@ -30,7 +30,12 @@ describe('uploadTarget', () => {
 			ok: false,
 			reason: 'too_big'
 		});
-		expect(uploadTarget(req({ size: 100 * 1024 * 1024 }))).toMatchObject({ ok: true });
+		expect(uploadTarget(req({ size: 25 * 1024 * 1024 }))).toMatchObject({ ok: true });
+		expect(uploadTarget(req({ size: 25 * 1024 * 1024 + 1 }))).toMatchObject({
+			ok: false,
+			reason: 'too_big',
+			error: 'Fișierul „plan.pdf" depășește 25 MB.'
+		});
 	});
 
 	it('keeps the drawing in its fixed place', () => {

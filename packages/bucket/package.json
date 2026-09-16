@@ -1,0 +1,21 @@
+{
+	"name": "@urban-moon/bucket",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"sideEffects": false,
+	"description": "A small Cloud Storage JSON API client over fetch, shared by the web app and the PDF worker; works against Google and the local emulator.",
+	"exports": {
+		".": "./src/index.ts",
+		"./memory": "./src/memory.ts"
+	},
+	"scripts": {
+		"check": "tsc --noEmit -p tsconfig.json",
+		"test": "vitest run"
+	},
+	"devDependencies": {
+		"@types/node": "^24.13.4",
+		"typescript": "^6.0.3",
+		"vitest": "^5.0.0"
+	}
+}

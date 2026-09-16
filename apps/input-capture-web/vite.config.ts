@@ -1,11 +1,8 @@
-import cloudflareAdapter from '@sveltejs/adapter-cloudflare';
-import nodeAdapter from '@sveltejs/adapter-node';
+import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
-/* A Node server (for Cloud Run, `node build`) by default; ADAPTER=cloudflare keeps the old
-   Cloudflare Worker build for `npm run deploy` until that deploy is retired. */
-const adapter = process.env.ADAPTER === 'cloudflare' ? cloudflareAdapter() : nodeAdapter();
+/* A Node server for Cloud Run: `npm run build` then `node build`, listening on PORT. */
 
 export default defineConfig({
 	plugins: [
@@ -15,7 +12,7 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			adapter
+			adapter: adapter()
 		})
 	]
 });

@@ -4,20 +4,24 @@ The client questionnaire and everything that turns a submission into one PDF, in
 
 ```
 apps/
-  input-capture-web/     the SvelteKit questionnaire (deployed to Cloudflare today)
-  input-pdf-worker/      builds the submission PDF from a committed manifest and its files
+  input-capture-web/     the SvelteKit questionnaire (Cloud Run)
+  input-pdf-worker/      works through pending/: builds each committed submission's PDF into the bucket
 packages/
   domain-data/           the shared source of truth: question catalog, answer + manifest schemas,
                          upload limits, fixture submissions
+  bucket/                the Cloud Storage client both apps use (Google or the emulator)
 docs/
-  pdf-pipeline-design.md the upload → manifest → PDF → HubSpot design
-  deployment.md          shipping a new version of the web app (the release process)
-  deploy-web-gcp.md      the one-time Google Cloud setup
-  pdf-worker-plan.md     the next step for the worker
-infra/                   deploy settings (deploy/web.env), bucket lifecycle/CORS, image cleanup, alert policies
+  arhitecture.md         the whole design: components, the flow end to end, what is built and what is not
+  design.md              the design language of the questionnaire: tokens, type, components, motion
+  deployment.md          shipping a new version of the web app or the worker (the release process)
+  deploy-web-gcp.md      the one-time Google Cloud setup for the web app
+  deploy-worker-gcp.md   the one-time Google Cloud setup for the PDF worker
+infra/                   deploy settings (deploy/web.env, deploy/worker.env), bucket lifecycle/CORS,
+                         image cleanup, alert policies
 compose.yaml             local dependencies only (the Cloud Storage emulator); the apps run on your machine
 scripts/bucket.mjs       look into the local bucket
 scripts/deploy-web.sh    build, push and deploy the web app (npm run deploy:web)
+scripts/deploy-worker.sh build, push and deploy the PDF worker (npm run deploy:worker)
 ```
 
 ## Commands (from the repo root)
@@ -30,7 +34,10 @@ npm run check          # type-check every package
 npm test               # every package's tests
 npm run build          # build what has a build (the web app)
 npm run pdf:demo       # build PDFs from the fixture submissions → apps/input-pdf-worker/out/demo/
-npm run bucket:ls      # submissions in the local bucket, committed or still uploading
+npm run worker:dev     # the PDF worker on :3001, working through pending/ every minute
+npm run pdf:tick       # make the running worker do one run now
+npm run pdf:reprocess -- <id> [--force]   # put a submission back in pending/
+npm run bucket:ls      # submissions in the local bucket: uploading, committed, pending, done, failed
 npm run bucket:files -- <id>  # every object of one submission, with size, type and date
 npm run bucket:pull -- <id>   # download one into out/bucket/<id>/
 npm run deps:down      # stop the emulator (uploads are kept) · deps:reset also deletes them
@@ -43,15 +50,18 @@ Per package: `npm run <script> -w @urban-moon/<package>` (e.g. `-w @urban-moon/i
 ```bash
 npm run deps:up
 cp apps/input-capture-web/.env.example apps/input-capture-web/.env   # once; points the app at the emulator
+cp apps/input-pdf-worker/.env.example apps/input-pdf-worker/.env     # once; the same for the worker
 npm run dev
+npm run worker:dev     # in a second terminal
 ```
 
 1. Fill in the questionnaire on <http://localhost:5173>, add plans and photos, press **Trimite
    răspunsurile**. Each file goes from the browser straight to the emulator; then the app checks
-   them and writes `manifest.json`.
-2. `npm run bucket:ls` shows the submission as `✓ committed`.
-3. `npm run bucket:pull -- <id>`, then
-   `npm run pdf:build -w @urban-moon/input-pdf-worker -- --dir ../../out/bucket/<id>` builds its PDF.
+   them, writes `manifest.json` and the `pending/<id>` marker.
+2. `npm run bucket:ls` shows the submission as `pending`; within a minute (or after
+   `npm run pdf:tick`) as `done`.
+3. `npm run bucket:files -- <id>` lists `output/raspunsuri.pdf`; `npm run bucket:pull -- <id>`
+   downloads it into `out/bucket/<id>/`.
 
 ## Keeping the web app and the worker in sync
 

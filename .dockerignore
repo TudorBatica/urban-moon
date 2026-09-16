@@ -4,11 +4,9 @@
 **/.svelte-kit
 **/build
 **/out
-**/.wrangler
 **/.env
 **/.env.*
 !**/.env.example
-**/.dev.vars
 compose.yaml
 docs
 infra

@@ -1,10 +1,10 @@
 # Deploying the web app to Google Cloud
 
-Status: guide, 2026-09-14. Covers `apps/input-capture-web` only; the PDF worker gets its own
-section once it exists (`docs/pdf-worker-plan.md`). Everything is done with the `gcloud` CLI;
+Status: guide, 2026-09-14. Covers `apps/input-capture-web` only; the PDF worker's setup is
+`docs/deploy-worker-gcp.md`, which builds on this guide up to §5.8. Everything is done with the `gcloud` CLI;
 the web console is for looking at things, the one-time billing-account setup, and manual tests.
 
-Flags below were checked against the installed Google Cloud SDK 520.0.0 (`gcloud … --help`).
+Flags below were checked against the installed Google Cloud SDK (`gcloud … --help`).
 Prices are approximate list prices from memory — check the pricing calculator before relying on
 them. Anything not checked is marked **[verify]**.
 
@@ -17,7 +17,7 @@ browser ──HTTPS──▶ Cloud Run service "input-capture-web"  (the SvelteK
    │                    │ runs as service account web-sa
    │                    │ opens upload sessions, checks files, writes manifest + pending marker
    │                    ▼
-   └──PUT file bytes──▶ Cloud Storage bucket "um-submissions-…"  (europe-west1, private)
+   └──PUT file bytes──▶ Cloud Storage bucket "urban-moon-intake"  (europe-west1, private)
 
 Artifact Registry  ← holds the container images Cloud Run runs
 Cloud Logging      ← the app's JSON log lines
@@ -34,7 +34,7 @@ only handles small JSON requests.
 
 | Google Cloud | What it does for us | AWS equivalent |
 |---|---|---|
-| **Project** | The container for everything: resources, IAM, enabled APIs, logs. One project, e.g. `urban-moon-prod`. | An AWS account (a member account under Organizations) |
+| **Project** | The container for everything: resources, IAM, enabled APIs, logs. One project, e.g. `urban-moon-508616`. | An AWS account (a member account under Organizations) |
 | **Billing account** | The payment method. Projects are *linked* to it; budgets are defined on it. | Billing on the management (payer) account |
 | **APIs & services** | Each service must be switched on per project (`gcloud services enable …`). | Nothing — AWS services are on by default |
 | **`gcloud` CLI, configurations** | CLI; `gcloud config set project/region` sets defaults. | `aws` CLI, profiles |
@@ -56,7 +56,7 @@ only handles small JSON requests.
 | **Uptime check** | Calls `/api/health` from several regions every few minutes. | Route 53 health checks / CloudWatch Synthetics |
 | **Error Reporting** | Groups exceptions found in logs, emails on new ones. | No direct one (CloudWatch + X-Ray; think Sentry) |
 | **Budgets & alerts** | Emails at spend thresholds. Alerts only — never stops spending. | AWS Budgets |
-| Cloud Scheduler (worker, later) | Cron that calls an HTTP endpoint. | EventBridge Scheduler |
+| Cloud Scheduler (the worker: `docs/deploy-worker-gcp.md`) | Cron that calls an HTTP endpoint. | EventBridge Scheduler |
 | Domain mapping (later) | A custom domain with managed TLS on the Cloud Run service. | App Runner custom domains / ACM + Route 53 |
 
 ---
@@ -103,9 +103,9 @@ Run every command in this guide from the repo root.
 
 | File | What |
 |---|---|
-| `apps/input-capture-web/vite.config.ts` | Builds a Node server with `@sveltejs/adapter-node` (`node build`, listens on `PORT`; Cloud Run sets 8080). `ADAPTER=cloudflare` still builds the old Cloudflare Worker for `npm run deploy` in the app folder. |
+| `apps/input-capture-web/vite.config.ts` | Builds a Node server with `@sveltejs/adapter-node` (`node build`, listens on `PORT`; Cloud Run sets 8080). |
 | `apps/input-capture-web/Dockerfile` | Built from the repo root so the workspace is there: a build stage (`npm ci`, the SvelteKit build) and a `node:24-slim` runtime with the build output and production dependencies only, running as the `node` user. ~240 MB. |
-| `.dockerignore` | Keeps `.git`, `node_modules`, `.env` files, build output and unrelated folders out of the build context. |
+| `.dockerignore` | Keeps `.git`, `node_modules`, `.env` files, build output and unrelated folders out of the build context. (The worker's image uses its own `apps/input-pdf-worker/Dockerfile.dockerignore`.) |
 | `infra/gcs/lifecycle.json` | Delete `submissions/` and `failed/` objects after 45 days. |
 | `infra/gcs/cors.template.json` | Bucket CORS; `${WEB_ORIGINS}` is filled in with `envsubst` (§5.10). |
 | `infra/artifact-registry/cleanup.json` | Keep the 10 newest images, delete older ones after 30 days. |
@@ -146,9 +146,9 @@ gcloud billing accounts list              # note the ACCOUNT_ID (XXXXXX-XXXXXX-X
 
 ```bash
 export BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX
-export PROJECT_ID=urban-moon-prod         # globally unique; add a suffix if taken
+export PROJECT_ID=urban-moon-508616         # globally unique; add a suffix if taken
 export REGION=europe-west1
-export BUCKET=um-submissions-$PROJECT_ID  # bucket names are global too
+export BUCKET=urban-moon-intake            # bucket names are global too
 export SERVICE=input-capture-web
 export ALERT_EMAIL=you@example.com
 ```
@@ -331,7 +331,7 @@ settings.
 |---|---|
 | Service, revisions, request/latency/instance charts | Cloud Run → `input-capture-web` |
 | Logs, filter by `jsonPayload.submissionId` | Logging → Logs Explorer |
-| Uploaded files, markers | Cloud Storage → Buckets → `um-submissions-…` |
+| Uploaded files, markers | Cloud Storage → Buckets → `urban-moon-intake` |
 | Alerts, uptime check, incidents | Monitoring → Alerting / Uptime checks |
 | Spend so far, by service | Billing → Reports |
 | Budget and its thresholds | Billing → Budgets & alerts |
@@ -342,8 +342,7 @@ settings.
 
 - **Custom domain** (DNS stays on Cloudflare): `gcloud beta run domain-mappings create
   --service=$SERVICE --domain=…` or a load balancer; then add the domain to `cors.json` and
-  `ORIGIN`. Decide with design doc §15.
-- **The PDF worker**: its own service, service account, Scheduler job and Secret Manager token.
+  `ORIGIN`. See `docs/arhitecture.md`, the feature table.
+- **The PDF worker**: `docs/deploy-worker-gcp.md`.
 - **CI/CD**: `scripts/deploy-web.sh` in a GitHub Action with Workload Identity Federation (no key files).
-- **Retiring the Cloudflare deploy** once this one is live.
 - **Tearing everything down**: `gcloud projects delete $PROJECT_ID` (recoverable for 30 days).
