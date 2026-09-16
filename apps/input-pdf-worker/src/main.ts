@@ -9,7 +9,13 @@ const config = configFromEnv();
 const { server, trigger } = createWorkerServer({
 	log,
 	run: () =>
-		runOnce({ bucket: config.bucket, concurrency: config.concurrency, budgetMs: config.budgetMs, version: config.version })
+		runOnce({
+			bucket: config.bucket,
+			deliver: config.deliver,
+			concurrency: config.concurrency,
+			budgetMs: config.budgetMs,
+			version: config.version
+		})
 });
 
 server.listen(config.port, () => {
@@ -18,7 +24,8 @@ server.listen(config.port, () => {
 		bucket: config.bucket.name,
 		concurrency: config.concurrency,
 		tickSeconds: config.tickSeconds,
-		version: config.version
+		version: config.version,
+		delivers: config.delivers
 	});
 	if (config.tickSeconds) {
 		/* A failed run is logged by the server; the next tick tries again. */

@@ -20,6 +20,10 @@ export interface DeliveryRecord {
 
 export type Deliver = (input: DeliveryInput) => Promise<DeliveryRecord>;
 
+/** The name the PDF carries in HubSpot, where it is listed with no other context. The client's name
+ *  stays out of it: the file's URL is unguessable but public, and names should not travel in URLs. */
+export const deliveryFileName = (submissionId: string): string => `intake-${submissionId}.pdf`;
+
 export const skipDelivery: Deliver = async ({ submissionId, log }) => {
 	log('INFO', 'delivery_skipped', { submissionId, reason: 'hubspot_not_implemented' });
 	return { hubspot: null };

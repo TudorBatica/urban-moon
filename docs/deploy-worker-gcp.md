@@ -11,8 +11,9 @@ are approximate list prices; anything not checked is marked **[verify]**.
 and its notification channel, the enabled APIs, Artifact Registry and the bucket all exist and are
 shared by the worker.
 
-HubSpot delivery is not built yet: the worker builds the PDF, stores it next to the submission and
-records that nothing was sent (`output/delivery.json`). Its token (Secret Manager) comes with it.
+The worker also delivers each PDF to HubSpot (§5.9). Until its token exists in Secret Manager it
+builds and stores PDFs and records that nothing was sent (`output/delivery.json`), which is a fine
+state to deploy in: add the secret and deploy again when you are ready.
 
 ---
 
@@ -225,6 +226,55 @@ gcloud alpha monitoring policies list --format='table(displayName, enabled)'
 
 ---
 
+### 5.9 HubSpot token
+
+The worker uploads each PDF to HubSpot's Files API and submits the client's form
+(`docs/arhitecture.md`, step 12). Its private app token is the one secret this system has: it is
+kept in Secret Manager, read by `pdf-worker-sa` only, and never written into `worker.env` or an
+image.
+
+```bash
+gcloud services enable secretmanager.googleapis.com
+
+# --data-file=- reads the value from stdin, so the token is never a shell argument. tr drops the
+# trailing newline: kept, it ends up inside the Authorization header and every call answers 401.
+tr -d '\n' < <path to the token file> |
+  gcloud secrets create hubspot-token --replication-policy=automatic --data-file=-
+
+# check the length against the file, without printing the token
+gcloud secrets versions access latest --secret=hubspot-token | wc -c
+
+gcloud secrets add-iam-policy-binding hubspot-token \
+  --member=serviceAccount:$WORKER_SA --role=roles/secretmanager.secretAccessor
+```
+
+`infra/deploy/worker.env` names the secret (`HUBSPOT_SECRET=hubspot-token`) and holds the portal,
+form and folder, which are not secret. The deploy script mounts the secret as the `HUBSPOT_TOKEN`
+environment variable; deploy again so the running revision picks it up:
+
+```bash
+npm run deploy:worker
+gcloud run services describe $WORKER --region=$REGION \
+  --format='value(spec.template.spec.containers[0].env)' | tr ',' '\n'   # HUBSPOT_TOKEN: from hubspot-token
+```
+
+The next run's logs then show `hubspot_file_uploaded` and `hubspot_form_submitted` per submission,
+and `output/delivery.json` records the file id. With `HUBSPOT_SECRET` empty the worker still builds
+and stores PDFs, logging `delivery_skipped` — which is how it ran before this step.
+
+**Rotating the token** adds a version and restarts the service; the mount is `:latest`:
+
+```bash
+tr -d '\n' < <path to the new token file> | gcloud secrets versions add hubspot-token --data-file=-
+npm run deploy:worker -- --skip-checks
+```
+
+The token belongs to a HubSpot private app and needs the files and forms scopes. Nothing else in
+this project may read the secret, and it is not in the image, the repo or the service's plain
+environment variables — only the running container's memory.
+
+---
+
 ## 6. Every deploy after that
 
 `docs/deployment.md`: `npm run deploy:worker`, checks after a deploy, rollback, pausing, re-running a
@@ -246,8 +296,7 @@ submission.
 
 ## 8. Not covered yet
 
-- **HubSpot delivery** (`docs/arhitecture.md`, step 12): its token in Secret Manager, given to the service with
-  `--set-secrets`, readable by `pdf-worker-sa` only.
+- **Custom domain** for the web app instead of the `run.app` URL.
 - **`qpdf` and `sharp`** for very large client PDFs and photos: packages in the
   image, and memory measured with the worst-case fixture.
 - **CI/CD**: `scripts/deploy-worker.sh` in a GitHub Action with Workload Identity Federation.

@@ -12,7 +12,7 @@ Deploying is `docs/deployment.md` (every release), `docs/deploy-web-gcp.md` and
 
 A client fills in a questionnaire about their home, uploads or draws floor plans and adds photos.
 Everything lands in one Cloud Storage bucket. A worker turns each submission into a single PDF for
-the architect and (later) delivers it to HubSpot.
+the architect and delivers it to HubSpot.
 
 **There is no database.** The bucket holds the state: which objects exist for a submission says
 where it stands. Nothing needs a migration, and a submission can be inspected with `gcloud storage`.
@@ -37,9 +37,9 @@ where it stands. Nothing needs a migration, and a submission can be inspected wi
 | **Artifact Registry** | The container images, with a cleanup policy. |
 | **Cloud Logging / Monitoring** | One JSON line per event; alerts on failures and on the site being down. |
 | **Cloud Billing budget** | Email at spend thresholds. |
-| **Secret Manager** (todo) | The HubSpot token, once delivery exists. |
+| **Secret Manager** | The HubSpot token, mounted into the worker as `HUBSPOT_TOKEN`. The only secret in the system. |
 | **Calendly** (external) | The booking step after sending. |
-| **HubSpot** (external, todo) | Where the client and the PDF end up. |
+| **HubSpot** (external) | Where the client and the PDF end up: a contact and a form submission. |
 
 ### The picture
 
@@ -56,7 +56,7 @@ flowchart TB
 
     SCH["Cloud Scheduler<br/>pdf-run · every minute"]
     CAL["Calendly"]
-    HS["HubSpot<br/>(todo)"]
+    HS["HubSpot<br/>Files API · form"]
 
     subgraph bucket["Cloud Storage bucket"]
         UP["submissions/id/uploads/"]
@@ -223,20 +223,25 @@ Fonts (Figtree, Newsreader) are embedded and subset, because the standard PDF fo
 ă, ș, ț. A client file that cannot be read does not fail the submission: the separator page says why
 and the original is attached inside the PDF (`pdf_degraded`).
 
-### 12. Delivery to HubSpot — **todo**
+### 12. Delivery to HubSpot
 
-Today delivery writes `{"hubspot": null}` and logs `delivery_skipped`; the PDF waits in the bucket.
-The planned steps, in order, each recorded in `delivery.json` so a re-run never repeats one:
+Three calls, in order, with the token from Secret Manager:
 
-1. **Upload the PDF** to the HubSpot Files API, store the returned file id and URL.
-2. **Submit the form** `app_input_client` (authenticated form submission) with the client's email,
-   first name, last name and the file field `app_input_capture`. The submission creates the contact
-   when the email is new and updates it when it exists, so no CRM scopes are needed.
-3. A notification goes to the studio's HubSpot user, which the form already does on its own.
+1. **Upload the PDF** to the Files API as `intake-<submissionId>.pdf`, into one File Manager folder,
+   with access `PUBLIC_NOT_INDEXABLE`.
+2. **Read that URL back with no credentials**, and stop unless the status and the size match: the
+   form fetches the file this way and stores whatever comes back without checking it.
+3. **Submit the form** `app_input_client` (authenticated submission) with the client's email, first
+   and last name, and the file's URL in the field `app_input_capture`. HubSpot creates the contact
+   when the email is new, copies the file into its own private storage under
+   `/form-uploads/<formId>/`, and points the contact at that copy through a signed redirect. The
+   uploaded source stays in the folder.
 
-Open points before it can be built: whether the beta service key is accepted by the submission
-endpoint, whether the file field takes the uploaded file's URL, and which access level that file
-needs so the link opens from the contact.
+`delivery.json` records the file id, name, URL, form and email. A 429 or 5xx is tried three times;
+anything else fails the submission with the step that failed (`upload_failed`, `file_not_readable`,
+`submit_failed`).
+
+With `HUBSPOT_TOKEN` unset, delivery writes `{"hubspot": null}` and logs `delivery_skipped`.
 
 ### 13. When something fails
 
@@ -248,7 +253,8 @@ needs so the link opens from the contact.
 | A build fails | `failed/<id>` with the stage and code; the marker is removed so runs move on. |
 | The worker crashes or is killed mid-run | The marker stays; the next run retries the submission. |
 | A submission crashes every run | Its marker never leaves `pending/`; after 15 minutes each run logs `submission_waiting`, which alerts. |
-| HubSpot is down (once built) | The PDF stays in the bucket; the submission moves to `failed/` and is re-run later. |
+| HubSpot is down or rate-limits | Three attempts; then the PDF stays in the bucket, the submission moves to `failed/` with the step that failed, and `pdf:reprocess` re-runs it. |
+| The uploaded file cannot be read back | Delivery stops before the form, so HubSpot never copies an error page as the client's PDF. `failed/<id>` says `file_not_readable`. |
 
 Re-running: `npm run pdf:reprocess -- <id>` moves `failed/<id>` back to `pending/`; `--force` also
 deletes `output/`, so a finished submission is built again.
@@ -274,7 +280,7 @@ submissions/<id>/
   manifest.json                       written once at commit
   output/raspunsuri.pdf               the deliverable
   output/build.json                   pages, sections, client documents, warnings, timings, version
-  output/delivery.json                what delivery did ({"hubspot": null} today)
+  output/delivery.json                what delivery did: the HubSpot file id, url, form and email
   output/done.json                    written last: finished
 ```
 
@@ -350,8 +356,9 @@ address set up with the budget.
 - **The browser never holds a bucket credential**: it gets one resumable session URI per file,
   which is good for that object alone.
 - **The worker is private**: only Cloud Scheduler's identity may call it.
-- **Client data leaves the EU only for HubSpot** (once delivery is built), and the bucket is in
-  `europe-west1`.
+- **Client data leaves the EU only for HubSpot**, and the bucket is in `europe-west1`.
+- **The delivered PDF is reachable by URL**: the upload is `PUBLIC_NOT_INDEXABLE`, unguessable and
+  carrying no client name. HubSpot's copy, which the contact links to, is private.
 - **Retention:** 45 days, then everything about a submission is deleted.
 - **Known gap:** submission ids are random UUIDs, but nothing binds an id to the browser that
   created it, so someone who learns an id could write into that prefix. The fix is a signed
@@ -394,7 +401,7 @@ create a Cloud Run revision with every setting from `infra/deploy/*.env`. See `d
 | Degrading instead of failing on an unreadable client file | worker | **Built** |
 | `pdf:reprocess` to re-run one submission | worker | **Built** |
 | `qpdf` for very large client PDFs, `sharp` for photo normalisation | worker | **Todo** |
-| HubSpot: upload the PDF, submit the form, create/update the contact | worker | **Todo** |
+| HubSpot: upload the PDF, submit the form, create/update the contact | worker | **Built** |
 | HubSpot token in Secret Manager | GCP | **Todo** |
 | Cloud Run deployment of both apps, scripted and repeatable | infra | **Built** |
 | Bucket lifecycle (45 days), CORS, private access | infra | **Built** |

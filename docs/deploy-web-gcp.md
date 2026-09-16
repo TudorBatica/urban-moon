@@ -49,7 +49,7 @@ only handles small JSON requests.
 | · CORS config | Lets the browser on our domain PUT to the bucket. | S3 CORS configuration |
 | **Service account** (`web-sa`) | The identity the app runs as. No key files: the code gets short-lived tokens from the metadata server. | An IAM role assumed by the task (App Runner instance role / ECS task role); the container credentials endpoint |
 | **IAM binding on the bucket** | `web-sa` may create, read and delete objects in this bucket only. | A bucket policy, or a role policy scoped to the bucket ARN |
-| **Secret Manager** | Secrets as env vars (not needed by the web app today; the worker's HubSpot token later). | Secrets Manager |
+| **Secret Manager** | Secrets as env vars (not needed by the web app; the worker reads its HubSpot token from here). | Secrets Manager |
 | **Cloud Logging** | Collects stdout; JSON lines become searchable fields (`jsonPayload.event`). Logs Explorer to search. | CloudWatch Logs + Logs Insights |
 | **Log-based alert** | Notifies when a log line matches a filter (e.g. `commit_failed`). | CloudWatch metric filter + alarm |
 | **Cloud Monitoring alert policy + notification channel** | Alerting rules and where they go (email, Slack…). | CloudWatch Alarms + SNS topic subscriptions |

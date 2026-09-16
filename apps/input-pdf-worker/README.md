@@ -2,8 +2,8 @@
 
 Works through `pending/` in the bucket: for each committed submission it builds one PDF from
 `manifest.json` and the uploaded files, stores it next to the submission and marks the submission
-done (or failed, with the reason). HubSpot delivery is not built yet: delivery records that nothing
-was sent.
+done (or failed, with the reason), then delivers it to HubSpot. Without `HUBSPOT_TOKEN` — the local
+default — the PDF is built and stored and delivery records that nothing was sent.
 
 What a run does, and where it sits in the whole system: `../../docs/arhitecture.md`. Deploying:
 `../../docs/deployment.md`.
@@ -85,7 +85,7 @@ After fixing the cause: `npm run pdf:reprocess -- <id>`.
 src/main.ts               the process: config, server, local tick, SIGTERM
 src/server.ts             POST /run (429 while running), GET /health
 src/run.ts                runOnce: one pass through pending/
-src/deliver/              delivery; a stub until HubSpot
+src/deliver/              index.ts (the Deliver type, the no-op) · hubspot.ts (upload, check, form)
 src/reprocess.ts          back to pending/ (the pdf:reprocess script)
 src/retry.ts              retries on transient bucket errors
 src/objects.ts            object names: pending/, failed/, output/

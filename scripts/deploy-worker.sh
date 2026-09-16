@@ -35,6 +35,11 @@ set +a
 for key in PROJECT_ID REGION SERVICE REPO BUCKET SERVICE_ACCOUNT SCHEDULER_JOB PDF_CONCURRENCY RUN_BUDGET_SECONDS CPU MEMORY NODE_HEAP_MB TIMEOUT; do
 	[[ -n "${!key:-}" ]] || { echo "$key is not set in $DEPLOY_ENV" >&2; exit 1; }
 done
+if [[ -n "${HUBSPOT_SECRET:-}" ]]; then
+	for key in HUBSPOT_PORTAL_ID HUBSPOT_FORM_ID HUBSPOT_FOLDER_PATH; do
+		[[ -n "${!key:-}" ]] || { echo "$key is not set in $DEPLOY_ENV (needed with HUBSPOT_SECRET)" >&2; exit 1; }
+	done
+fi
 if (( RUN_BUDGET_SECONDS >= TIMEOUT )); then
 	echo "RUN_BUDGET_SECONDS ($RUN_BUDGET_SECONDS) must be below TIMEOUT ($TIMEOUT), or a run is cut off mid-build" >&2
 	exit 1
@@ -103,6 +108,16 @@ x docker push "$IMAGE"
 # "^|^" makes | the separator, so values may contain commas and "=".
 env_vars="GCS_BUCKET=$BUCKET|APP_VERSION=$VERSION|PDF_CONCURRENCY=$PDF_CONCURRENCY|RUN_BUDGET_SECONDS=$RUN_BUDGET_SECONDS|NODE_OPTIONS=--max-old-space-size=$NODE_HEAP_MB"
 
+# The HubSpot token is a secret, mounted as HUBSPOT_TOKEN from Secret Manager (§5.9). Without
+# HUBSPOT_SECRET the worker has no token, builds PDFs and records that nothing was delivered.
+secrets_args=()
+if [[ -n "${HUBSPOT_SECRET:-}" ]]; then
+	env_vars="$env_vars|HUBSPOT_PORTAL_ID=$HUBSPOT_PORTAL_ID|HUBSPOT_FORM_ID=$HUBSPOT_FORM_ID|HUBSPOT_FOLDER_PATH=$HUBSPOT_FOLDER_PATH"
+	secrets_args=(--set-secrets="HUBSPOT_TOKEN=$HUBSPOT_SECRET:latest")
+else
+	secrets_args=(--clear-secrets)
+fi
+
 # Private (only the Scheduler's invoker may call it), one instance, one request at a time: a call
 # that arrives while a run is in progress is refused instead of starting a second run. Request-based
 # billing (the default): nothing is billed between runs.
@@ -114,6 +129,7 @@ args=(
 	--concurrency=1 --min-instances=0 --max-instances=1
 	--timeout="$TIMEOUT" --cpu-boost
 	--set-env-vars="^|^$env_vars"
+	"${secrets_args[@]}"
 	--quiet
 )
 

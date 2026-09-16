@@ -211,6 +211,9 @@ gcloud scheduler jobs resume pdf-run --project=urban-moon-508616 --location=euro
 | `CPU`, `MEMORY` | Per-instance sizing, billed only while a run is in progress. |
 | `NODE_HEAP_MB` | Node's heap limit, kept below `MEMORY`. |
 | `TIMEOUT` | Longest a `/run` request may take, in seconds. At most 1800 (the Scheduler job's deadline). |
+| `HUBSPOT_SECRET` | The Secret Manager secret holding the private app token, mounted as `HUBSPOT_TOKEN` (`docs/deploy-worker-gcp.md` §5.9). Empty: the worker builds PDFs and delivers nothing. |
+| `HUBSPOT_PORTAL_ID`, `HUBSPOT_FORM_ID` | The account and the form the client's PDF is submitted to. Not secret. |
+| `HUBSPOT_FOLDER_PATH` | File Manager folder for the uploaded PDFs. |
 
 Not settings, fixed in the script: private, `--concurrency=1`, `--min-instances=0`,
 `--max-instances=1`. The design relies on them to never run twice at once.
