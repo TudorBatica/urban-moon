@@ -5,8 +5,8 @@ Works through `pending/` in the bucket: for each committed submission it builds 
 done (or failed, with the reason), then delivers it to HubSpot. Without `HUBSPOT_TOKEN` — the local
 default — the PDF is built and stored and delivery records that nothing was sent.
 
-What a run does, and where it sits in the whole system: `../../docs/arhitecture.md`. Deploying:
-`../../docs/deployment.md`.
+What a run does, and where it sits in the whole system: `../../docs/architecture/flow.md`. Deploying:
+`../../docs/operations/deployment.md`; operating it: `../../docs/operations/runbook.md`.
 
 ## Run it
 

@@ -7,8 +7,8 @@ SvelteKit 2 · Svelte 5 (runes) · TypeScript strict · `@sveltejs/adapter-node`
 plan blobs. No UI library: plain CSS with the tokens in `src/app.css`.
 
 What the app does inside the whole system, and the send protocol it speaks:
-`../../docs/arhitecture.md`. The design language: `../../docs/design.md`. Deploying:
-`../../docs/deployment.md`.
+`../../docs/architecture/flow.md`. The design language: `../../docs/ux/design.md`. Deploying:
+`../../docs/operations/deployment.md`.
 
 ## Run it
 
@@ -37,7 +37,7 @@ metadata server), `GCS_ACCESS_TOKEN` (to try a real bucket from a laptop), `APP_
 
 ```
 src/app.html                  lang="ro", fonts, title
-src/app.css                   the tokens and every shared class (../../docs/design.md)
+src/app.css                   the tokens and every shared class (../../docs/ux/design.md)
 src/lib/types.ts              the app's own types; the shared ones come from @urban-moon/domain-data
 src/lib/state/answers.svelte.ts   answers store, persisted to localStorage "um.answers"
 src/lib/state/plans.svelte.ts     plans store: "um.plans" metadata + blobs in IndexedDB
@@ -81,15 +81,8 @@ limits live in `../../packages/domain-data`.
   arrive as options, so the tests drive a whole send without a browser or a bucket.
 - **The server only handles small JSON.** File bytes go from the browser straight to the bucket.
 
-## Known gaps (this app)
+## Against the emulator
 
-- **No submission token yet:** ids are random UUIDs, but nothing binds an id to the browser that
-  created it.
-- **The exported plan is captioned in English:** `src/lib/floorplan/export.ts` writes
-  `All dimensions in cm · Ceiling <n> cm · outline not closed` into the SVG/PNG footer (and
-  `export.test.ts` asserts it), while the editor's own chrome is Romanian.
-- **Consent is a checkbox only:** the panel blocks the send until it is ticked, but the consent text
-  is not recorded with the submission.
 - **The emulator is not Google:** `fake-gcs-server` ends an upload when asked for its status,
   ignores `ifGenerationMatch` and does not expose `Range` to the browser. The code copes with all
   three; those paths are proven against Google in unit tests only.

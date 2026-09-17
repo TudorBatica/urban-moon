@@ -1,4 +1,4 @@
-/* Delivery to HubSpot (docs/arhitecture.md, step 12). Three calls, in order:
+/* Delivery to HubSpot. Three calls, in order:
 
      1. upload the PDF to the Files API, PUBLIC_NOT_INDEXABLE, under one folder
      2. fetch that URL with no credentials — HubSpot's form fetches it the same way, and stores

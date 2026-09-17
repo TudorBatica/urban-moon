@@ -43,7 +43,7 @@ separately.
   valid (new keys are optional); the worker renders what is there.
 - **Breaking** — renaming or removing a question id or option value, changing an answer's shape,
   making a field required: bump `MANIFEST_SCHEMA_VERSION`, keep the previous schema importable,
-  teach the worker both versions, deploy the worker first, and remove the old version only once
-  the bucket's lifecycle rule has deleted the old manifests.
+  teach the worker both versions, and deploy the worker first. Submissions are never deleted from
+  the bucket, so the worker keeps supporting every version it has seen.
 - Answers to questions that no longer exist are stripped by `AnswersSchema` (`StrictAnswersSchema`
   refuses them, for tests).

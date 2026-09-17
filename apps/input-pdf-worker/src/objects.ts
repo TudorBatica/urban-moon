@@ -1,4 +1,4 @@
-/* Where the worker's objects live in the bucket (docs/arhitecture.md). */
+/* Where the worker's objects live in the bucket. */
 
 export const PENDING_PREFIX = 'pending/';
 export const FAILED_PREFIX = 'failed/';

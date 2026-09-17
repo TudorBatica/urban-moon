@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy the web app to Cloud Run: check, build the image, push it, deploy a new revision with every
 # setting from infra/deploy/web.env, smoke test. The same script does the first deploy and every
-# later one. Docs: docs/deployment.md.
+# later one.
 #
 #   npm run deploy:web                      deploy; the new revision takes all traffic
 #   npm run deploy:web -- --candidate       deploy without traffic, reachable on the "candidate" tag URL

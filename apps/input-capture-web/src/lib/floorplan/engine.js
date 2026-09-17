@@ -182,7 +182,7 @@ function notifyChange(){
    is decided by SNAPPING at draw time (press and release), never
    by array order. Closure is derived by walking the connectivity
    graph: when it forms a single ring covering every wall, the
-   room is closed. See README.md.
+   room is closed.
    ============================================================ */
 
 /* ======================================================================
@@ -2580,7 +2580,7 @@ function renderCtrlLayer(t){
    #cluster (see SELECTION CLUSTER, below) — the user's own split.
 
    This is the SECOND time this file has tried a control that lives
-   next to the piece it acts on. The first (see README) was a panel
+   next to the piece it acts on. The first was a panel
    that docked itself dynamically below the room's own bounding box
    with bespoke collision-avoidance of its own, and kept re-opening the
    exact "control blocks the canvas" bug every round it tried to close.

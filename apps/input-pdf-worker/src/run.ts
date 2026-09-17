@@ -7,7 +7,7 @@ import { OUTPUT, PENDING_PREFIX, failedMarker, outputPrefix, pendingMarker } fro
 import { retrying, type RetryOptions } from './retry';
 import { bucketSubmission } from './storage/bucket';
 
-/* One pass through pending/ (docs/arhitecture.md). For each waiting submission, oldest marker first, a few
+/* One pass through pending/. For each waiting submission, oldest marker first, a few
    at a time: build the PDF, store it and its report under output/, deliver, write done.json and
    remove the marker. A submission that fails gets failed/<id> with the reason instead. */
 
@@ -22,7 +22,7 @@ export interface RunOptions {
 	concurrency?: number;
 	/** no submission is started after this long; the next run continues with the rest */
 	budgetMs?: number;
-	/** a marker older than this is logged as submission_waiting (an alert) */
+	/** a marker older than this is logged as submission_waiting */
 	waitingAfterMs?: number;
 	/** recorded in build.json, done.json and failed/<id> */
 	version?: string;

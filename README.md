@@ -5,19 +5,21 @@ The client questionnaire and everything that turns a submission into one PDF, in
 ```
 apps/
   input-capture-web/     the SvelteKit questionnaire (Cloud Run)
-  input-pdf-worker/      works through pending/: builds each committed submission's PDF into the bucket
+  input-pdf-worker/      works through pending/: builds each committed submission's PDF and delivers it to HubSpot
 packages/
   domain-data/           the shared source of truth: question catalog, answer + manifest schemas,
                          upload limits, fixture submissions
   bucket/                the Cloud Storage client both apps use (Google or the emulator)
 docs/
-  arhitecture.md         the whole design: components, the flow end to end, what is built and what is not
-  design.md              the design language of the questionnaire: tokens, type, components, motion
-  deployment.md          shipping a new version of the web app or the worker (the release process)
-  deploy-web-gcp.md      the one-time Google Cloud setup for the web app
-  deploy-worker-gcp.md   the one-time Google Cloud setup for the PDF worker
-infra/                   deploy settings (deploy/web.env, deploy/worker.env), bucket lifecycle/CORS,
-                         image cleanup, alert policies
+  README.md              the map: where things are, which doc to read when
+  architecture/          how the built system works: overview, flow, storage, security; adr/ for decisions
+  backlog/               one file per piece of work not built yet
+  code/                  coding standards
+  operations/            infrastructure inventory, deploying, the runbook, observability
+  ux/                    the design language of the questionnaire
+infra/                   deploy settings (deploy/web.env, deploy/worker.env), bucket CORS, image cleanup,
+                         alert policy templates (not applied yet)
+CLAUDE.md                what every agent loads: the system in brief, the rules for all agents
 compose.yaml             local dependencies only (the Cloud Storage emulator); the apps run on your machine
 scripts/bucket.mjs       look into the local bucket
 scripts/deploy-web.sh    build, push and deploy the web app (npm run deploy:web)
@@ -63,23 +65,4 @@ npm run worker:dev     # in a second terminal
 3. `npm run bucket:files -- <id>` lists `output/raspunsuri.pdf`; `npm run bucket:pull -- <id>`
    downloads it into `out/bucket/<id>/`.
 
-## Keeping the web app and the worker in sync
-
-Everything both sides must agree on lives only in `@urban-moon/domain-data`:
-
-1. **One copy.** The question catalog, the answer schema (derived from the catalog), the manifest
-   schema, limits and fixtures. The apps import its TypeScript source directly; there is no build
-   step and no published version to drift.
-2. **Compile time.** `npm run check` type-checks all packages: renaming a question, removing an
-   option or changing an answer shape breaks whichever app still uses the old one.
-3. **Runtime, at both ends.** The web app validates the manifest before committing it; the worker
-   validates it again when reading, and refuses a schema version it does not know
-   (`manifest_unsupported`).
-4. **Shared fixtures are the contract.** `packages/domain-data/fixtures/submissions/{minimal,full}`
-   are validated by domain-data's tests and rendered by the worker's tests. `full` must answer
-   every question the catalog can ask — a new question without a fixture answer fails the tests.
-5. **Deploy order and versions.** The web app and the worker deploy separately and old manifests
-   stay in the bucket, so: additive changes (new question or option) keep `schemaVersion`;
-   breaking changes bump it, the worker supports both until old manifests expire, and the worker
-   deploys first. See `packages/domain-data/README.md`.
-6. **CI** should run `npm run check && npm test` from the root on every push, whatever changed.
+How the web app and the worker stay in agreement on the manifest: `docs/architecture/overview.md`.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy the PDF worker to Cloud Run: check, build the image, push it, deploy a new revision with
 # every setting from infra/deploy/worker.env, smoke test, and check the Scheduler job that calls it.
-# The same script does the first deploy and every later one. Docs: docs/deployment.md.
+# The same script does the first deploy and every later one.
 #
 #   npm run deploy:worker                    deploy; the new revision takes all traffic
 #   npm run deploy:worker -- --skip-checks   skip npm run check / npm test
@@ -108,7 +108,7 @@ x docker push "$IMAGE"
 # "^|^" makes | the separator, so values may contain commas and "=".
 env_vars="GCS_BUCKET=$BUCKET|APP_VERSION=$VERSION|PDF_CONCURRENCY=$PDF_CONCURRENCY|RUN_BUDGET_SECONDS=$RUN_BUDGET_SECONDS|NODE_OPTIONS=--max-old-space-size=$NODE_HEAP_MB"
 
-# The HubSpot token is a secret, mounted as HUBSPOT_TOKEN from Secret Manager (§5.9). Without
+# The HubSpot token is a secret, mounted as HUBSPOT_TOKEN from Secret Manager. Without
 # HUBSPOT_SECRET the worker has no token, builds PDFs and records that nothing was delivered.
 secrets_args=()
 if [[ -n "${HUBSPOT_SECRET:-}" ]]; then
@@ -167,7 +167,7 @@ echo "  ok"
 step "Scheduler job $SCHEDULER_JOB"
 JOB_JSON=$(gcloud scheduler jobs describe "$SCHEDULER_JOB" --project="$PROJECT_ID" --location="$REGION" --format=json 2>/dev/null || true)
 if [[ -z "$JOB_JSON" ]]; then
-	echo "  not found: nothing is processed until it exists (docs/deploy-worker-gcp.md, 'Scheduler job')"
+	echo "  not found: nothing is processed until it exists"
 else
 	JOB_STATE=$(json_field 's.state' <<<"$JOB_JSON")
 	JOB_URI=$(json_field '(s.httpTarget||{}).uri' <<<"$JOB_JSON")
@@ -177,7 +177,7 @@ else
 		*) echo "  state: $JOB_STATE" ;;
 	esac
 	if [[ "$JOB_URI" != "$URL/run" ]]; then
-		echo "  WARNING: the job calls $JOB_URI, not $URL/run (docs/deploy-worker-gcp.md, 'Scheduler job')"
+		echo "  WARNING: the job calls $JOB_URI, not $URL/run"
 	fi
 fi
 

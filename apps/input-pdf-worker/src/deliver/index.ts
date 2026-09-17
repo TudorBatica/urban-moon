@@ -2,8 +2,8 @@ import type { Bucket } from '@urban-moon/bucket';
 import type { Manifest } from '@urban-moon/domain-data/schema';
 import type { Logger } from '../log';
 
-/* Delivery: what happens to a built PDF (docs/arhitecture.md, step 12). HubSpot comes later; until then the PDF stays
-   in the bucket and delivery records that nothing was sent. */
+/* Delivery: what happens to a built PDF. Without a delivery configured the PDF stays in the bucket and delivery
+   records that nothing was sent. */
 
 export interface DeliveryInput {
 	bucket: Bucket;

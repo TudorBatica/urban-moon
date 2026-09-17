@@ -2,8 +2,8 @@
 
 How to ship a new version of the web app (`apps/input-capture-web`) and the PDF worker
 (`apps/input-pdf-worker`) to Cloud Run. There is no CI pipeline: this page is the release process,
-and `scripts/deploy-web.sh` and `scripts/deploy-worker.sh` are the pipeline. The one-time Google
-Cloud setup is in `docs/deploy-web-gcp.md` and `docs/deploy-worker-gcp.md`.
+and `scripts/deploy-web.sh` and `scripts/deploy-worker.sh` are the pipeline. What they deploy onto:
+`infrastructure.md`. When something goes wrong after a deploy: `runbook.md`.
 
 ## At a glance
 
@@ -33,7 +33,7 @@ all traffic. It takes a few minutes, mostly the image build.
 - **Which one, and in what order.** A change under `apps/input-capture-web` deploys the web app; under
   `apps/input-pdf-worker` the worker; under `packages/` usually both. When the manifest changes
   (`packages/domain-data`), **deploy the worker first**: it must read what the new web app writes
-  (root `README.md`, *Keeping the web app and the worker in sync*).
+  (`../architecture/overview.md`, *How the two apps stay in agreement*).
 
 ---
 
@@ -66,7 +66,7 @@ What it does, in order:
    point, so roll back (below).
 7. **Summary.** Prints the version, the new revision, the URL and the revision it replaced.
 
-### Settings — `infra/deploy/web.env`
+### Settings: `infra/deploy/web.env`
 
 | Key | Meaning |
 |---|---|
@@ -111,8 +111,6 @@ tag.
 
   The log should show `upload_session_created` per file, then `submission_committed`. Within a
   minute or two the worker turns the marker into `submissions/<id>/output/raspunsuri.pdf`.
-- **Alerts:** "web: submission errors" and "web: site down" email the alert address if something
-  breaks later.
 
 ### Rolling back
 
@@ -141,20 +139,6 @@ When the site gets a new address (a custom domain, or a candidate URL you want t
    gcloud storage buckets update gs://urban-moon-intake --cors-file=/tmp/cors.json
    ```
 
-### When something goes wrong
-
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| `uncommitted changes` | the tree is not clean | commit, or `--allow-dirty` for a throwaway test |
-| Push: `denied` / `unauthorized` | Docker cannot push to the registry from this machine | `gcloud auth configure-docker europe-west1-docker.pkg.dev` |
-| Deploy: `PERMISSION_DENIED` | the logged-in account lacks rights on the project | `gcloud auth list`; log in with the project's owner/deployer |
-| Smoke test fails | the new revision does not start (`exec format error`, a crash on boot) | read the logs the script prints; roll back; fix |
-| Browser: sending fails, the console shows a CORS error | the page's address is not in the bucket's CORS origins | *Changing the site's address*, step 2 |
-| Log: `storage_not_configured` | `GCS_BUCKET` missing | check `infra/deploy/web.env`, deploy |
-| Log: `upload_start_failed` or `commit_failed` with 403 | the service account lost its role on the bucket | `gcloud storage buckets get-iam-policy gs://…`; restore `roles/storage.objectUser` for the service account |
-| Log: `commit_rejected` with `missing` | a browser's upload did not finish; the client retries by itself | nothing, unless it keeps happening |
-| Log: `commit_rejected` with `manifest_invalid` | the app sent something its own schema refuses: a bug | the log's `issues` say which field; fix, deploy |
-
 ---
 
 ## The PDF worker
@@ -179,18 +163,17 @@ What it does, in order:
    **push** it.
 3. **Deploy** a revision: private (`--no-allow-unauthenticated`), one instance, one request at a
    time, the sizing and the env vars from the settings file (`GCS_BUCKET`, `APP_VERSION`,
-   `PDF_CONCURRENCY`, `RUN_BUDGET_SECONDS`, `NODE_OPTIONS`).
+   `PDF_CONCURRENCY`, `RUN_BUDGET_SECONDS`, `NODE_OPTIONS`, and the HubSpot settings), and the
+   `hubspot-token` secret mounted as `HUBSPOT_TOKEN`.
 4. **Smoke test.** Calls `/health` with your identity token for up to 30 s; on failure, prints the
    logs and rollback commands and exits with an error.
 5. **Scheduler job.** Reports whether `pdf-run` exists, is enabled and calls this service's `/run`.
    A paused or missing job means nothing gets processed, so read this line.
 6. **Summary.** Version, new revision, URL, the revision it replaced.
 
-**A deploy while a run is in progress:** the old revision finishes its request (up to `TIMEOUT`)
-while the next call goes to the new one, so for a short while two runs can overlap. A submission
-already finished is skipped (`done.json`); one being built by both is built twice, and the later
-copy of the outputs wins. That is harmless today. Once HubSpot delivery exists, avoid it by pausing
-first:
+**Pause processing around a deploy.** While a run is in progress, the old revision finishes its
+request (up to `TIMEOUT`) and the next call goes to the new one, so two runs can overlap. A
+submission built by both is delivered to HubSpot twice. Pause the Scheduler job first:
 
 ```bash
 gcloud scheduler jobs pause pdf-run --project=urban-moon-508616 --location=europe-west1
@@ -199,7 +182,7 @@ npm run deploy:worker
 gcloud scheduler jobs resume pdf-run --project=urban-moon-508616 --location=europe-west1
 ```
 
-### Settings — `infra/deploy/worker.env`
+### Settings: `infra/deploy/worker.env`
 
 | Key | Meaning |
 |---|---|
@@ -211,7 +194,7 @@ gcloud scheduler jobs resume pdf-run --project=urban-moon-508616 --location=euro
 | `CPU`, `MEMORY` | Per-instance sizing, billed only while a run is in progress. |
 | `NODE_HEAP_MB` | Node's heap limit, kept below `MEMORY`. |
 | `TIMEOUT` | Longest a `/run` request may take, in seconds. At most 1800 (the Scheduler job's deadline). |
-| `HUBSPOT_SECRET` | The Secret Manager secret holding the private app token, mounted as `HUBSPOT_TOKEN` (`docs/deploy-worker-gcp.md` §5.9). Empty: the worker builds PDFs and delivers nothing. |
+| `HUBSPOT_SECRET` | The Secret Manager secret holding the private app token, mounted as `HUBSPOT_TOKEN`. Empty: the worker builds PDFs and delivers nothing. |
 | `HUBSPOT_PORTAL_ID`, `HUBSPOT_FORM_ID` | The account and the form the client's PDF is submitted to. Not secret. |
 | `HUBSPOT_FOLDER_PATH` | File Manager folder for the uploaded PDFs. |
 
@@ -229,14 +212,12 @@ Not settings, fixed in the script: private, `--concurrency=1`, `--min-instances=
   ```
 
   With nothing pending, the request log shows `POST /run 200` and the worker logs nothing else.
-- **For changes to the PDF:** send a questionnaire (or re-run a finished submission with `--force`,
-  below) and open the result:
+- **For changes to the PDF or delivery:** send a questionnaire (or re-run a finished submission
+  with `--force`, `runbook.md`) and open the result:
 
   ```bash
   gcloud storage cp gs://urban-moon-intake/submissions/<id>/output/raspunsuri.pdf .
   ```
-
-- **Alerts:** "pdf worker: failures" and "pdf worker: scheduler calls failing".
 
 ### Rolling back
 
@@ -249,61 +230,4 @@ gcloud run services update-traffic input-pdf-worker --project=urban-moon-508616 
 ```
 
 Submissions that failed on the bad version stay in `failed/`; after the rollback or the fix,
-re-run them (below).
-
-### Pausing processing
-
-```bash
-gcloud scheduler jobs pause pdf-run --project=urban-moon-508616 --location=europe-west1
-gcloud scheduler jobs resume pdf-run --project=urban-moon-508616 --location=europe-west1
-```
-
-While paused, submissions wait in `pending/` and nothing is lost; the first run after resuming
-builds them all. Markers older than 15 minutes log `submission_waiting` then, which alerts.
-
-### Re-running a submission
-
-`npm run pdf:reprocess` works against the real bucket with your own credentials:
-
-```bash
-GCS_BUCKET=urban-moon-intake STORAGE_EMULATOR_HOST= \
-GCS_ACCESS_TOKEN=$(gcloud auth print-access-token) \
-  npm run pdf:reprocess -- <submissionId>            # failed/ → pending/; add --force to rebuild a done one
-```
-
-`STORAGE_EMULATOR_HOST=` (empty) overrides the emulator address in the worker's local `.env`. The
-next Scheduler call picks the submission up. To see what failed first:
-
-```bash
-gcloud storage ls gs://urban-moon-intake/failed/
-gcloud storage cat gs://urban-moon-intake/failed/<submissionId>
-```
-
-### When something goes wrong
-
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| Smoke test: 403 | your account may not invoke the service | `gcloud auth list`; use the project owner, or grant yourself `roles/run.invoker` on the service |
-| Smoke test: 404 from Google (not JSON) | a path like `/healthz`, which Google's frontend answers itself | the script calls `/health`; use that |
-| Smoke test fails otherwise | the revision does not start (`Cannot find module`, a crash on boot) | read the logs the script prints; roll back; fix |
-| Scheduler line: `not found` or `PAUSED` | the job was never created, or someone paused it | `docs/deploy-worker-gcp.md` §5.6, or `gcloud scheduler jobs resume …` |
-| Scheduler line: `WARNING: the job calls …` | the job points at another URL | `gcloud scheduler jobs update http pdf-run --location=europe-west1 --uri=<url>/run --oidc-token-audience=<url>` |
-| Scheduler log: 401/403 on every call | the invoker lost `roles/run.invoker`, or the token audience is wrong | `docs/deploy-worker-gcp.md` §5.5; check `--oidc-token-audience` is the service URL |
-| Scheduler log: an occasional 429 | a run took longer than a minute; the next call was refused | nothing |
-| Log: `pdf_failed` with `manifest_invalid` or `manifest_unsupported` | the web app writes a manifest this worker does not know: the worker is older | deploy the worker, then re-run the submissions in `failed/` |
-| Log: `pdf_failed` with `object_unreadable` or `bucket_error` 403 | `pdf-worker-sa` lost its role on the bucket | restore `roles/storage.objectUser` on the bucket for `pdf-worker-sa`; re-run |
-| Log: `submission_waiting` every minute for the same id | the worker crashes on that submission (e.g. `Memory limit … exceeded` in the logs), or runs are not happening | out of memory: lower `PDF_CONCURRENCY` or raise `MEMORY`, deploy. Crashes otherwise: move its marker aside (`gcloud storage mv gs://…/pending/<id> gs://…/failed/<id>`) and read its logs |
-| Log: `run_failed` | the run could not list `pending/` | usually the bucket role or `GCS_BUCKET`; the log has the message |
-
----
-
-## Where to look
-
-| What | Where |
-|---|---|
-| Revisions, traffic, requests, errors, instances | Console → Cloud Run → `input-capture-web` / `input-pdf-worker` |
-| The worker's job: last call, result, *Force run*, pause | Console → Cloud Scheduler → `pdf-run` |
-| Logs for one submission, both services | Console → Logging → Logs Explorer: `jsonPayload.submissionId="…"` |
-| Images and their tags | Console → Artifact Registry → `urban-moon` |
-| Uploads, markers, PDFs | Console → Cloud Storage → the submissions bucket (`pending/`, `failed/`, `submissions/<id>/output/`) |
-| Spend | Console → Billing → Reports |
+re-run them (`runbook.md`).

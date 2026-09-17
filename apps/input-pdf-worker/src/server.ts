@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http';
 import type { Logger } from './log';
 import type { RunSummary } from './run';
 
-/* The worker's HTTP face (docs/arhitecture.md):
+/* The worker's HTTP face:
    POST /run     work through pending/ once and answer the summary. Cloud Scheduler calls it every
                  minute. A call while a run is in progress gets 429: Cloud Run's max-instances=1 and
                  concurrency=1 do the same in the cloud, this flag does it locally.
