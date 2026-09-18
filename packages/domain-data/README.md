@@ -4,12 +4,12 @@ The questionnaire's shared source of truth, used by `input-capture-web` and `inp
 
 | Import | What | Runtime deps |
 |---|---|---|
-| `@urban-moon/domain-data` | question catalog (`S`, `ROOMS`, `CHAPTER_LABEL`, predicates, helpers such as `visibleScreens`, `activeFollowUp`), room ids, limits (`ACCEPTED_CONTENT_TYPES`, `MAX_IMAGE_BYTES`, `sniffContentType`, …), types (`Answers`, `RoomSnapshot`, `Manifest`, …) | none — safe for the browser bundle |
+| `@urban-moon/domain-data` | question catalog (`S`, `ROOMS`, `CHAPTER_LABEL`, predicates, helpers such as `visibleScreens`, `activeFollowUp`), landmark catalog (`LANDMARK_KINDS`, `landmarkKindOf`, `LANDMARK_SIZE_CM`), room ids, limits (`ACCEPTED_CONTENT_TYPES`, `MAX_IMAGE_BYTES`, `sniffContentType`, …), types (`Answers`, `RoomSnapshot`, `RoomLandmark`, `LandmarkKind`, `Manifest`, …) | none — safe for the browser bundle |
 | `@urban-moon/domain-data/schema` | zod schemas: `AnswersSchema` (derived from the catalog), `ManifestSchema`, `parseManifest`, `answerKeys()` | zod — app server and worker |
 | `@urban-moon/domain-data/fixtures/*` | fixture submissions laid out like the bucket: `submissions/<name>/manifest.json` + `uploads/` | — |
 
 ```
-src/catalog/      screens.ts · rooms.ts · predicates.ts — the questions, options, labels, visibility
+src/catalog/      screens.ts · rooms.ts · landmarks.ts · predicates.ts — the questions, options, labels, visibility
 src/schema/       answers.ts (catalog → schema) · manifest.ts · room.ts · json-schema.ts
 src/limits.ts     accepted types, size and count limits, magic-byte sniffing
 src/types.ts      shared types; the ones with a schema are inferred from it

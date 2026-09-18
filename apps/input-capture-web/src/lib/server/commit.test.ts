@@ -50,6 +50,16 @@ const room = {
 	finished: true
 };
 
+const wall = {
+	id: 'w0',
+	index: 0,
+	from: [0, 0],
+	to: [200, 0],
+	heading: 'N',
+	lengthCm: { value: 200, source: 'typed' },
+	segments: []
+};
+
 const body = (over: Partial<CommitRequest> = {}): CommitRequest => ({
 	pageUri: 'http://localhost:5173/rezumat',
 	answers: { c_identity: { name: 'Ana Pop', email: 'ana@exemplu.ro' }, c_rooms: ['bucatarie'] },
@@ -119,6 +129,30 @@ describe('commitSubmission', () => {
 		const withPng = seeded();
 		withPng.objects.set(at('uploads/drawing.png'), PNG);
 		expect(await commit(withPng.bucket, b)).toMatchObject({ ok: true });
+	});
+
+	it('keeps the landmarks of a drawn plan in the manifest', async () => {
+		const { bucket, objects } = seeded();
+		objects.set(at('uploads/drawing.png'), PNG);
+		const landmark = { id: 'lm1', kind: 'water', wallId: 'w0', offsetFromStartCm: 40, face: 'in', gapBeforeCm: 40, gapAfterCm: 130 };
+		const drawn = { ...room, walls: [wall], landmarks: [landmark] };
+		const res = await commit(bucket, body({ drawing: { room: drawn, svg: '<svg/>', updatedAt: 3 } }));
+		expect(res).toMatchObject({ ok: true });
+		const stored = JSON.parse(new TextDecoder().decode(objects.get(at('manifest.json'))));
+		expect(stored.drawing.room.landmarks).toEqual([landmark]);
+	});
+
+	it('refuses a landmark on a wall the snapshot does not have', async () => {
+		const { bucket, objects, writes } = seeded();
+		objects.set(at('uploads/drawing.png'), PNG);
+		const drawn = {
+			...room,
+			walls: [wall],
+			landmarks: [{ id: 'lm1', kind: 'water', wallId: 'w9', offsetFromStartCm: 40, face: 'in', gapBeforeCm: 0, gapAfterCm: 0 }]
+		};
+		const res = await commit(bucket, body({ drawing: { room: drawn, svg: '<svg/>', updatedAt: 3 } }));
+		expect(res).toMatchObject({ ok: false, status: 400, reason: 'manifest_invalid' });
+		expect(writes).toEqual([]);
 	});
 
 	it('refuses answers the manifest schema does not accept', async () => {

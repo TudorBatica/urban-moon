@@ -459,6 +459,26 @@
 					"wallId": "w2"
 				}
 			],
+			"landmarks": [
+				{
+					"id": "lm1",
+					"kind": "radiator",
+					"wallId": "w0",
+					"offsetFromStartCm": 150,
+					"face": "in",
+					"gapBeforeCm": 150,
+					"gapAfterCm": 220
+				},
+				{
+					"id": "lm2",
+					"kind": "boiler",
+					"wallId": "w1",
+					"offsetFromStartCm": 220,
+					"face": "out",
+					"gapBeforeCm": 20,
+					"gapAfterCm": 50
+				}
+			],
 			"unanswered": [],
 			"finished": true
 		},

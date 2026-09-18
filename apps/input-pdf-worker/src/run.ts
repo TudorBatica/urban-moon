@@ -1,6 +1,6 @@
 import { BucketError, type Bucket } from '@urban-moon/bucket';
 import { SubmissionIdSchema } from '@urban-moon/domain-data/schema';
-import { BuildError, buildSubmissionPdf } from './build';
+import { BuildError, buildSubmissionPdf } from './generation';
 import { skipDelivery, type Deliver } from './deliver';
 import { log as stdoutLog, type Logger } from './log';
 import { OUTPUT, PENDING_PREFIX, failedMarker, outputPrefix, pendingMarker } from './objects';

@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type {
 	ProvenanceSchema,
+	RoomLandmarkSchema,
 	RoomSegmentSchema,
 	RoomSnapshotSchema,
 	RoomWallSchema
@@ -24,4 +25,6 @@ export type PhotoGroup = 'spatiu' | 'mobilier';
 export type RoomSnapshot = z.infer<typeof RoomSnapshotSchema>;
 export type RoomWall = z.infer<typeof RoomWallSchema>;
 export type RoomSegment = z.infer<typeof RoomSegmentSchema>;
+/** What a room has that a plan cannot show, on a wall of the same snapshot. */
+export type RoomLandmark = z.infer<typeof RoomLandmarkSchema>;
 export type Provenance = z.infer<typeof ProvenanceSchema>;

@@ -4,7 +4,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { BuildError, buildSubmissionPdf } from './build';
+import { BuildError, buildSubmissionPdf } from './generation';
 import { log } from './log';
 import { diskSubmission } from './storage/disk';
 

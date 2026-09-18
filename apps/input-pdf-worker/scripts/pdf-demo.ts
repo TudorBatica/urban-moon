@@ -6,7 +6,7 @@ import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { BuildError, buildSubmissionPdf } from '../src/build';
+import { BuildError, buildSubmissionPdf } from '../src/generation';
 import { diskSubmission } from '../src/storage/disk';
 
 const { values } = parseArgs({

@@ -91,14 +91,14 @@ src/retry.ts              retries on transient bucket errors
 src/objects.ts            object names: pending/, failed/, output/
 src/config.ts             settings from the environment
 src/storage/              SubmissionSource: bucket and disk adapters
-src/build/index.ts        buildSubmissionPdf(source) → { bytes, manifest, report }
-src/build/answers.ts      catalog + answers → questions and answer lines
-src/build/sections/       cover · contents · answers · drawing · plans · photos
-src/build/images.ts       JPEG/PNG embedding, EXIF orientation, contained drawing
-src/build/stamp.ts        the client-document strip along the visual bottom edge
-src/build/layout.ts       text wrapping and a flowing page writer
-src/build/theme.ts        page size, margins, type scale, colours
-src/build/fonts.ts        font loading and subsetting
+src/generation/index.ts   buildSubmissionPdf(source) → { bytes, manifest, report }
+src/generation/answers.ts catalog + answers → questions and answer lines
+src/generation/sections/  cover · contents · answers · drawing · plans · photos
+src/generation/images.ts  JPEG/PNG embedding, EXIF orientation, contained drawing
+src/generation/stamp.ts   the client-document strip along the visual bottom edge
+src/generation/layout.ts  text wrapping and a flowing page writer
+src/generation/theme.ts   page size, margins, type scale, colours
+src/generation/fonts.ts   font loading and subsetting
 src/log.ts                one JSON log line per event
 src/cli.ts                pdf:build
 scripts/                  pdf-demo · pdf-tick · pdf-reprocess

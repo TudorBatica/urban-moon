@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { LANDMARK_KINDS, LANDMARK_SIZE_CM, landmarkKindOf } from '../catalog/landmarks';
 import { S } from '../catalog/screens';
 import { sniffContentType } from '../limits';
 import { AnswersSchema, StrictAnswersSchema, answerKeys, screenAnswerSchema } from './answers';
@@ -134,6 +135,76 @@ describe('manifest rules', () => {
 		const m = clone(base);
 		m.files = m.files.filter((f) => f.kind !== 'plan');
 		expect(issuesOf(m)).toContain('files: a plan file or a drawing is required');
+	});
+});
+
+describe('landmarks on the room snapshot', () => {
+	type Landmarks = NonNullable<Manifest['drawing']>['room']['landmarks'];
+	const withLandmarks = (landmarks: unknown[]): Manifest => {
+		const m = loadManifest('full');
+		m.drawing!.room.landmarks = landmarks as Landmarks;
+		return m;
+	};
+	const mark = (over: Record<string, unknown> = {}) => ({
+		id: 'lm9',
+		kind: 'water',
+		wallId: 'w0',
+		offsetFromStartCm: 10,
+		face: 'in',
+		gapBeforeCm: 10,
+		gapAfterCm: 0,
+		...over
+	});
+
+	it('accepts a snapshot with valid landmarks', () => {
+		expect(issuesOf(withLandmarks([mark(), mark({ id: 'lm10', kind: 'gas', face: 'out' })]))).toEqual([]);
+	});
+
+	it('refuses an unknown kind, an unknown wall, a duplicate id, a mark off the wall and a negative gap', () => {
+		const at = (json: unknown, path: string) => issuesOf(json).filter((i) => i.startsWith(path));
+		expect(at(withLandmarks([mark({ kind: 'sauna' })]), 'drawing.room.landmarks.0.kind').length).toBeGreaterThan(0);
+		expect(issuesOf(withLandmarks([mark({ wallId: 'w9' })]))).toContain(
+			'drawing.room.landmarks.0.wallId: landmark on a wall that is not in this room'
+		);
+		expect(issuesOf(withLandmarks([mark(), mark()]))).toContain(
+			'drawing.room.landmarks.1.id: duplicate landmark id'
+		);
+		/* w0 is 400 cm and a landmark takes 30. */
+		expect(issuesOf(withLandmarks([mark({ offsetFromStartCm: 380 })]))).toContain(
+			'drawing.room.landmarks.0.offsetFromStartCm: landmark does not fit within its wall'
+		);
+		expect(at(withLandmarks([mark({ gapBeforeCm: -1 })]), 'drawing.room.landmarks.0.gapBeforeCm').length).toBeGreaterThan(0);
+	});
+
+	it('reads a snapshot without landmarks as one with none', () => {
+		const m = loadManifest('full');
+		delete m.drawing!.room.landmarks;
+		expect(issuesOf(m)).toEqual([]);
+		const res = parseManifest(m);
+		expect(res.ok && res.manifest.drawing!.room.landmarks).toBeUndefined();
+	});
+
+	it('has the kinds the apps draw and label, in catalog order', () => {
+		expect(LANDMARK_KINDS.map((k) => k.kind)).toEqual([
+			'water',
+			'gas',
+			'boiler',
+			'airConditioning',
+			'fireplace',
+			'radiator',
+			'hoodVent'
+		]);
+		expect(landmarkKindOf('boiler')?.label).toBe('Centrală');
+		expect(landmarkKindOf('sauna')).toBeUndefined();
+		expect(LANDMARK_SIZE_CM).toBe(30);
+	});
+
+	it('is carried by the full fixture on two walls and both faces', () => {
+		const marks = loadManifest('full').drawing!.room.landmarks ?? [];
+		expect(marks).toHaveLength(2);
+		expect(new Set(marks.map((l) => l.kind)).size).toBe(2);
+		expect(new Set(marks.map((l) => l.wallId)).size).toBe(2);
+		expect(new Set(marks.map((l) => l.face))).toEqual(new Set(['in', 'out']));
 	});
 });
 

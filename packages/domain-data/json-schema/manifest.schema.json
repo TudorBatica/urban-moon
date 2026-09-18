@@ -1267,6 +1267,61 @@
 										"additionalProperties": false
 									}
 								},
+								"landmarks": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"kind": {
+												"type": "string",
+												"enum": [
+													"water",
+													"gas",
+													"boiler",
+													"airConditioning",
+													"fireplace",
+													"radiator",
+													"hoodVent"
+												]
+											},
+											"wallId": {
+												"type": "string"
+											},
+											"offsetFromStartCm": {
+												"type": "number",
+												"minimum": 0
+											},
+											"face": {
+												"type": "string",
+												"enum": [
+													"in",
+													"out"
+												]
+											},
+											"gapBeforeCm": {
+												"type": "number",
+												"minimum": 0
+											},
+											"gapAfterCm": {
+												"type": "number",
+												"minimum": 0
+											}
+										},
+										"required": [
+											"id",
+											"kind",
+											"wallId",
+											"offsetFromStartCm",
+											"face",
+											"gapBeforeCm",
+											"gapAfterCm"
+										],
+										"additionalProperties": false
+									}
+								},
 								"unanswered": {
 									"type": "array",
 									"items": {

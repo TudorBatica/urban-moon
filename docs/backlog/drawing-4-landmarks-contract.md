@@ -48,7 +48,7 @@ Additive; `MANIFEST_SCHEMA_VERSION` stays 1 (the versioning rules: `packages/dom
 
 ### `apps/input-pdf-worker`
 
-`src/build/sections/drawing.ts`:
+`src/generation/sections/drawing.ts`:
 
 - the summary line gains `Repere: <n>` when there are any;
 - after "Pereți", a list "Repere", one line per landmark, ordered by wall index then by offset:

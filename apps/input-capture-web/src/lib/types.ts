@@ -1,8 +1,10 @@
 import type {
 	Answers,
+	LandmarkKind,
 	PhotoGroup,
 	Provenance,
 	RoomId,
+	RoomLandmark,
 	RoomSegment,
 	RoomSnapshot,
 	RoomWall
@@ -10,7 +12,17 @@ import type {
 
 /* Room ids, answers and the room snapshot live in @urban-moon/domain-data; re-exported here
    so the app keeps importing them from $lib/types. */
-export type { Answers, PhotoGroup, Provenance, RoomId, RoomSegment, RoomSnapshot, RoomWall };
+export type {
+	Answers,
+	LandmarkKind,
+	PhotoGroup,
+	Provenance,
+	RoomId,
+	RoomLandmark,
+	RoomSegment,
+	RoomSnapshot,
+	RoomWall
+};
 
 export interface PlanFileMeta {
 	id: string; // uuid

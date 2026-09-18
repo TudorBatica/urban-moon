@@ -5,6 +5,7 @@
 export * from './types';
 export * from './limits';
 export * from './catalog/rooms';
+export * from './catalog/landmarks';
 export * from './catalog/predicates';
 export * from './catalog/screens';
 
