@@ -9,9 +9,6 @@
   /* motion: three durations, one exit curve, one curve with a slight recoil */
   --fast:180ms; --base:320ms; --slow:560ms;
   --ease:cubic-bezier(.2,.7,.2,1); --spring:cubic-bezier(.34,1.4,.4,1);
-  /* read by the floorplan editor and the dev inbox, which keep their own look */
-  --smoke:#5E5A52; --ash:#77726A; --line:#E8E2D7; --brass:#B69A5E; --brass-deep:#7F714A; --brass-tint:#F5EFE3;
-  --stone:#D6CFC2; --stone-soft:#E8E2D7; --gold:#C3AD83;
 }
 *,*::before,*::after{ box-sizing:border-box; }
 html,body{ margin:0; padding:0; }
@@ -50,6 +47,9 @@ button{ cursor:pointer; -webkit-tap-highlight-color:transparent; }
 .go:hover:not(:disabled) svg{ transform:translateX(3px); }
 .go:active:not(:disabled){ transform:scale(.94); }
 .go:disabled{ background:var(--off); cursor:default; }
+/* held down while what the client asked for is under way: still ink, and
+   it takes no second press */
+.go.press, .go.press:disabled{ background:var(--ink); transform:scale(.94); }
 .go.pop{ animation:pop var(--slow) var(--spring); }
 @keyframes pop{ from{ transform:scale(.86); } to{ transform:scale(1); } }
 /* a small bounce one second after the screen arrives; transform only, never blocks the click */

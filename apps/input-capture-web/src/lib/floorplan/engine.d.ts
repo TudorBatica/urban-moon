@@ -4,18 +4,25 @@
    consumers can import from a single place. */
 
 import type { Provenance, RoomSegment, RoomSnapshot, RoomWall } from '$lib/types';
+import type { ToolDef } from './tools';
+import type { SeenStorage } from './seen';
 
 export type { Provenance, RoomSegment, RoomSnapshot, RoomWall };
 
 /** The engine's internal, opaque editing model — what getModel/setModel move. */
 export interface FloorplanModel {
-	ceilingHeightCm: number | null;
 	walls: unknown[];
+	/** a model saved by an earlier editor still carries it; setModel ignores it */
+	ceilingHeightCm?: number | null;
 }
 
 export interface MountFloorplanOptions {
 	/** Called after every render in which the model actually changed. */
 	onChange?: (room: RoomSnapshot) => void;
+	/** The tools the plate offers; the first is the resting one. */
+	tools?: ToolDef[];
+	/** Where the seen-once flags are kept; defaults to the browser's localStorage. */
+	seenStorage?: SeenStorage | null;
 	/** Also publish window.__room / window.__reset (automation only). */
 	exposeGlobals?: boolean;
 }
@@ -25,10 +32,13 @@ export interface FloorplanHandle {
 	getModel(): FloorplanModel;
 	setModel(m: FloorplanModel): void;
 	reset(): void;
+	isEmpty(): boolean;
+	setHintState(state: string | null): void;
+	setKeysEnabled(on: boolean): void;
 	destroy(): void;
 }
 
-/** The prototype's DOM template, injected into the root by mountFloorplan. */
+/** The editor's DOM template, injected into the root by mountFloorplan. */
 export const TEMPLATE: string;
 
 export function mountFloorplan(root: HTMLElement, opts?: MountFloorplanOptions): FloorplanHandle;

@@ -20,9 +20,6 @@
 		api = mountFloorplan(host, {
 			onChange: (r: RoomSnapshot) => onchange?.(r)
 		});
-		/* The engine's own svg is `#roomSvg` / data-testid="room-svg"; the app's
-		   contract calls it `editor-svg`, so the mounted node carries that name. */
-		host.querySelector('#roomSvg')?.setAttribute('data-testid', 'editor-svg');
 		if (initialModel) api.setModel(initialModel as FloorplanModel);
 		return () => {
 			api?.destroy();
@@ -30,13 +27,24 @@
 		};
 	});
 
-	/** The window.__room() snapshot, or null before mount. */
+	/** The room snapshot, or null before mount. */
 	export function room(): RoomSnapshot | null {
 		return api ? api.room() : null;
 	}
 	/** The engine-internal, opaque model — persisted so the plan can be re-edited. */
 	export function getModel(): unknown {
 		return api ? api.getModel() : null;
+	}
+	export function isEmpty(): boolean {
+		return api ? api.isEmpty() : true;
+	}
+	/** An override for the hint line: 'saving' while the plan is being saved. */
+	export function setHintState(state: string | null): void {
+		api?.setHintState(state);
+	}
+	/** The editor's own keys stand down while a note is open. */
+	export function setKeysEnabled(on: boolean): void {
+		api?.setKeysEnabled(on);
 	}
 	export function reset(): void {
 		api?.reset();
@@ -46,21 +54,7 @@
 <div class="fp-host" data-testid="editor" bind:this={host}></div>
 
 <style>
-	/* The engine reads its own --fp-* tokens, each already `var(--app-token,
-	   fallback)`; naming them here keeps the mapping explicit and survives a
-	   host that scopes the palette to something other than :root. */
 	.fp-host {
-		--fp-paper: var(--paper);
-		--fp-ink: var(--ink);
-		--fp-brass: var(--brass);
-		--fp-brass-deep: var(--brass-deep);
-		--fp-stone: var(--stone);
-		--fp-stone-soft: var(--stone-soft);
-		--fp-smoke: var(--smoke);
-		--fp-ash: var(--ash);
-		--fp-white: var(--white);
-		--fp-sans: var(--sans);
-
 		display: block;
 		width: 100%;
 		height: 100%;

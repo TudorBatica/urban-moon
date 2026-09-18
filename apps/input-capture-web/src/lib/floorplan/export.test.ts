@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { roomToSvg, svgToPngDataUrl } from './export';
 import type { Provenance, RoomSegment, RoomSnapshot, RoomWall } from '$lib/types';
 
-/* The fixture is built by hand from the CONTRACTS.md types, not captured from
-   the engine: the export has to render whatever the contract allows. A closed
+/* The fixture is built by hand from the snapshot types, not captured from the
+   engine: the export has to render whatever those types allow. A closed
    420x310 room, a 90 cm door on the north wall, a 120 cm window on the east
    one, and a 100 cm `open` stretch on the south wall so the dashed style has
    something to prove. */
@@ -82,6 +82,17 @@ const room: RoomSnapshot = {
 	finished: true
 };
 
+const INK = '#141414';
+const GREY = '#7A7975';
+const PAPER = '#FFFFFF';
+
+/** The plan layer's own markup. */
+function planLayer(svg: string): string {
+	const plan = /<g data-layer="plan">([\s\S]*?)<\/g><g data-layer="dimensions">/.exec(svg);
+	expect(plan).not.toBeNull();
+	return (plan as RegExpExecArray)[1];
+}
+
 /** Every `<n> cm` label the dimensions layer carries, in document order. */
 function dimLabels(svg: string): string[] {
 	const layer = /<g data-layer="dimensions">([\s\S]*)<\/g><g data-layer="note">/.exec(svg);
@@ -121,21 +132,54 @@ describe('roomToSvg', () => {
 		expect(labels.filter((l) => l === '420 cm')).toHaveLength(2);
 	});
 
-	it('draws a swing arc for the door', () => {
+	it('draws a swing arc for the door, in ink', () => {
 		const arcs = [...svg.matchAll(/<path d="M [^"]*A (\d+(?:\.\d+)?) \1 0 0 [01] [^"]*"/g)];
 		expect(arcs.length).toBeGreaterThanOrEqual(1);
 		// The arc radius is the door's own width.
 		expect(arcs.some((m) => Number(m[1]) === 90)).toBe(true);
-		expect(svg).toContain('stroke="#8A835F"'); // the door's brass
+		const inked = [...svg.matchAll(/<path d="M [^"]*A [^"]*"[^>]*\/>/g)];
+		expect(inked.every((m) => m[0].includes(`stroke="${INK}"`))).toBe(true);
 	});
 
-	it('dashes the open segment', () => {
-		const plan = /<g data-layer="plan">([\s\S]*?)<\/g><g data-layer="dimensions">/.exec(svg);
-		expect(plan).not.toBeNull();
-		const dashedLines = [
-			...(plan as RegExpExecArray)[1].matchAll(/<line [^>]*stroke-dasharray="[^"]+"[^>]*\/>/g)
-		];
-		expect(dashedLines.length).toBeGreaterThanOrEqual(1);
+	it('draws walls as a solid ink band, with no hatch and no brass', () => {
+		const plan = planLayer(svg);
+		expect(plan).toContain(`<polygon points="-10,10 165,10 165,-10 -10,-10" fill="${INK}"/>`);
+		expect(svg).not.toContain('pattern');
+		expect(svg.toLowerCase()).not.toContain('#8a835f');
+		expect(svg.toLowerCase()).not.toContain('#b69a5e');
+	});
+
+	it('cuts the opening out of the band, in paper', () => {
+		const plan = planLayer(svg);
+		expect(plan).toContain(`fill="${PAPER}" stroke="none"`);
+	});
+
+	it('draws a Fără perete side as a dashed grey line with a tick at each end', () => {
+		const plan = planLayer(svg);
+		const dashed = [...plan.matchAll(/<line [^>]*stroke="#7A7975"[^>]*stroke-dasharray="[^"]+"[^>]*\/>/g)];
+		expect(dashed).toHaveLength(1);
+		const ticks = [...plan.matchAll(/<line [^>]*stroke="#7A7975"[^>]*\/>/g)].filter(
+			(m) => !m[0].includes('dasharray')
+		);
+		expect(ticks).toHaveLength(2);
+	});
+
+	it('writes every number in Figtree, ink when typed', () => {
+		expect(svg).toContain('font-family="Figtree');
+		expect(svg).not.toContain('Plus Jakarta Sans');
+		const labels = [...svg.matchAll(/<text[^>]*>(\d+) cm<\/text>/g)];
+		expect(labels.length).toBeGreaterThan(0);
+		// Every length in the fixture is typed, so none of them is italic.
+		expect(svg).not.toContain('font-style="italic"');
+	});
+
+	it('writes a length nobody typed in grey italic', () => {
+		const drawn = roomToSvg({
+			...room,
+			walls: room.walls.map((w) => ({ ...w, lengthCm: { value: w.lengthCm.value, source: 'drawn' } }))
+		});
+		expect(drawn).toContain('font-style="italic"');
+		expect(drawn).toContain(`fill="${GREY}"`);
 	});
 
 	it('notes the unit, the ceiling and an unclosed outline', () => {

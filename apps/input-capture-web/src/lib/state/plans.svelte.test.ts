@@ -238,6 +238,36 @@ describe('removeFile', () => {
 	});
 });
 
+describe('setDrawing', () => {
+	const drawing = {
+		model: null,
+		room: null,
+		svg: '<svg/>',
+		pngDataUrl: 'data:,',
+		updatedAt: 1
+	} as unknown as Drawing;
+
+	it('keeps the drawing and writes it', () => {
+		setDrawing(drawing);
+		expect(plans.drawing).toEqual(drawing);
+		expect(ls.get('um.plans')).toContain('<svg/>');
+	});
+
+	it('reports a refused write and keeps the drawing that was saved before', () => {
+		setDrawing(drawing);
+		const real = localStorage.setItem;
+		localStorage.setItem = (): never => {
+			throw new Error('quota');
+		};
+		try {
+			expect(() => setDrawing({ ...drawing, svg: '<svg id="new"/>' })).toThrow(/quota/);
+		} finally {
+			localStorage.setItem = real;
+		}
+		expect(plans.drawing).toEqual(drawing);
+	});
+});
+
 describe('resetPlans', () => {
 	it('clears files, drawing, blobs and localStorage', async () => {
 		await addFiles([mk('a.pdf', 'application/pdf'), mk('b.png', 'image/png')], 3);

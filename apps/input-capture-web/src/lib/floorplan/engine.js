@@ -1,44 +1,107 @@
 /* ======================================================================
-   floorplan/engine.js — Direction E's freehand room-capture editor, as a
-   framework-free ES module. Extracted verbatim from
-   prototypes/e-freehand/index.html: every rule, constant and comment in
-   the body below is the prototype's own. Three things changed and
-   nothing else — (1) the whole script is a FACTORY, so what used to be
-   module-level state is per-instance closure state and two editors can
-   share a page; (2) every DOM lookup is scoped to the mount root
-   instead of `document`; (3) FIXME-11 (see realBoxMisses below and
-   `.fp .bar` in engine.css).
+   floorplan/engine.js — the freehand room-capture editor, as a
+   framework-free ES module. A FACTORY: what would be module state is
+   per-instance closure state, and every DOM lookup is scoped to the
+   mount root, so two editors can share a page. The tool machine, the
+   view and the saved drawing are pure TypeScript beside this file
+   (tools.ts, view.ts, drawing.ts); what is left here is geometry,
+   rendering and pointers.
    ====================================================================== */
+
+import { DRAWING_TOOLS, applyToolEvent, restingTool, toolById, toolForKey } from './tools';
+import {
+  boxOf,
+  cmToPx,
+  edgePanStep,
+  fitView,
+  panByPx,
+  panToReveal,
+  pxToCm,
+  viewBoxOf,
+  zoomAround
+} from './view';
+import { hasSeen, markSeen } from './seen';
+import { BASE, ease, ms } from '$lib/ui/motion';
 
 /* ----------------------------------------------------------------------
    RO — every word this editor shows on screen. The app speaks Romanian
    (sentence case, addressing the user as "tu"), so the engine does too;
    geometry, ids, classes, data-testids and the model's own vocabulary
-   ('wall' / 'open' / 'window' / 'door') are untouched.
+   ('wall' / 'open' / 'window' / 'door') are untouched. A hint that
+   differs between a finger and a mouse is a function of `touch`.
    ---------------------------------------------------------------------- */
 const RO = {
   undo: 'Anulează',
   redo: 'Refă',
-  ceiling: 'Înălțimea tavanului',
-  gotIt: 'Am înțeles',
-  emptyHint: 'Trage oriunde ca să desenezi primul perete.',
-  letMeFix: 'Mai schimb eu',
-  kind: { wall: 'Perete', open: 'Latură deschisă', window: 'Fereastră', door: 'Ușă' },
-  addDoor: '+ Ușă',
-  addWindow: '+ Fereastră',
+  zoomIn: 'Mărește',
+  zoomOut: 'Micșorează',
+  fit: 'Încadrează',
+  width: 'Lățime',
+  sill: 'Înălțime pervaz',
+  rotate: 'Rotește',
   del: 'Șterge',
-  startsAt: 'Începe la',
-  cmFromStart: 'cm de la început',
-  sillHeight: 'Înălțimea parapetului',
+  gotIt: 'Am înțeles',
+  letMeFix: 'Mai schimb eu',
   /* the field names that appear inside the metres question, mid-sentence */
   fieldLength: 'lungime',
-  fieldOffset: 'distanța de la început',
-  fieldSill: 'înălțimea parapetului',
-  fieldCeiling: 'înălțimea tavanului',
-  hinge: function(side, swing){
-    return 'Balama ' + side + ' · se deschide ' + (swing === 'in' ? 'înăuntru' : 'în afară');
+  fieldWidth: 'lățime',
+  fieldSill: 'înălțimea pervazului',
+  hint: {
+    empty: function(touch){
+      return touch
+        ? 'Alege <b>Perete</b>, apoi trage cu degetul ca să faci primul perete.'
+        : 'Alege <b>Perete</b> (tasta P), apoi ține apăsat și trage ca să faci primul perete.';
+    },
+    drawing: function(touch){
+      return touch
+        ? 'Ridică degetul ca să termini peretele.'
+        : 'Dă drumul butonului ca să termini peretele. Esc renunță.';
+    },
+    wallMade: function(touch){
+      return touch
+        ? 'Atinge numărul ca să scrii lungimea. Pentru încă un perete, alege din nou Perete.'
+        : 'Dă clic pe număr ca să scrii lungimea. Pentru încă un perete, alege din nou Perete (P).';
+    },
+    wallOn: function(touch){
+      return touch
+        ? 'Trage cu degetul de la un capăt al peretelui la celălalt.'
+        : 'Ține apăsat și trage de la un capăt al peretelui la celălalt.';
+    },
+    openOn: function(){ return 'Trage pe unde camera se deschide spre altă cameră.'; },
+    openFocus: function(touch){
+      return touch
+        ? 'Atinge numărul ca să scrii lungimea. Trage linia ca s-o muți.'
+        : 'Dă clic pe număr ca să scrii lungimea. Trage linia ca s-o muți.';
+    },
+    windowOn: function(touch){
+      return touch ? 'Atinge peretele pe care e fereastra.' : 'Dă clic pe peretele pe care e fereastra.';
+    },
+    doorOn: function(touch){
+      return touch ? 'Atinge peretele pe care e ușa.' : 'Dă clic pe peretele pe care e ușa.';
+    },
+    noWall: function(){ return 'Desenează întâi un perete.'; },
+    windowFocus: function(touch){
+      return touch
+        ? 'Trage fereastra ca s-o muți pe perete. Atinge înălțimea pervazului ca s-o schimbi.'
+        : 'Trage fereastra ca s-o muți pe perete. Dă clic pe înălțimea pervazului ca s-o schimbi.';
+    },
+    doorFocus: function(touch){
+      return touch
+        ? 'Trage ușa ca s-o muți pe perete. Apasă Rotește până se deschide ca la tine.'
+        : 'Trage ușa ca s-o muți pe perete. Apasă Rotește (R) până se deschide ca la tine.';
+    },
+    wallFocus: function(touch){
+      return touch
+        ? 'Trage peretele ca să-l muți. Atinge numărul ca să schimbi lungimea.'
+        : 'Trage peretele ca să-l muți. Dă clic pe număr ca să schimbi lungimea.';
+    },
+    zoom: function(touch){
+      return touch
+        ? 'Apropie sau depărtează două degete ca să mărești. Cu două degete muți planul.'
+        : 'Rotița mărește în jurul cursorului. Trage de fundal ca să muți planul.';
+    },
+    saving: function(){ return 'Se salvează…'; }
   },
-  missingCount: function(n){ return n + (n === 1 ? ' lucru lipsește' : ' lucruri lipsesc'); },
   firstWall: 'Desenează primul perete ca să începi.',
   freeEnds: function(n){
     return n === 1
@@ -46,12 +109,6 @@ const RO = {
       : n + ' capete de perete nu sunt legate de nimic încă.';
   },
   notClosed: 'Pereții nu formează încă un contur închis.',
-  ceilingMissing: 'Înălțimea tavanului nu e completată.',
-  sillsMissing: function(n){
-    return n === 1
-      ? 'O fereastră mai are nevoie de înălțimea parapetului.'
-      : n + ' ferestre mai au nevoie de înălțimea parapetului.';
-  },
   squarePart: function(heading, before, after){
     return 'peretele ' + heading + ' măsura ' + before + ', așa că acum are ' + after + ' cm';
   },
@@ -74,52 +131,55 @@ const RO = {
   openingStayed: 'Nu e destul perete liber acolo pentru golul ăsta — a rămas pe peretele lui.'
 };
 
-/* The prototype's own <body> markup, ids intact — mount injects it into
-   the root, and every lookup below goes through root.querySelector, so
-   the ids are per-instance rather than per-document. */
+/* Tool glyphs and the two view glyphs: 20x20, 1.5px, round caps, no fill. */
+const GLYPH = {
+  select: '<path d="M5 3.5l10 5.8-4.4 1.1L8.4 15z"/>',
+  wall: '<path d="M3 16.5V3.5h13.5"/><path d="M7 16.5V7.5h9.5"/>',
+  open: '<path d="M3.5 10h13" stroke-dasharray="2 2.6"/><path d="M3 6.5v7M17 6.5v7"/>',
+  window: '<path d="M2.5 7.5h15M2.5 10h15M2.5 12.5h15M2.5 7.5v5M17.5 7.5v5"/>',
+  door: '<path d="M4 16.5h3.5M4 16.5V5.5"/><path d="M4 5.5a11 11 0 0111 11" stroke-dasharray="2 2"/>',
+  undo: '<path d="M7.5 4.5L4 8l3.5 3.5"/><path d="M4 8h8a4 4 0 010 8H9"/>',
+  redo: '<path d="M12.5 4.5L16 8l-3.5 3.5"/><path d="M16 8H8a4 4 0 000 8h3"/>',
+  zoomIn: '<path d="M10 4.5v11M4.5 10h11"/>',
+  zoomOut: '<path d="M4.5 10h11"/>',
+  fit: '<path d="M3.5 7.5v-4h4M12.5 3.5h4v4M16.5 12.5v4h-4M7.5 16.5h-4v-4"/>',
+  rotate: '<path d="M15.5 9a5.5 5.5 0 10-1.6 4.4"/><path d="M15.8 4.5V9h-4.5"/>',
+  del: '<path d="M4.5 6h11M8 6V4h4v2M6 6l.8 10h6.4L14 6"/>'
+};
+function glyph(name){
+  if(!GLYPH[name]) return '';
+  return '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">' + GLYPH[name] + '</svg>';
+}
+
+/* A browser in private mode throws on the very first read of localStorage. */
+function safeLocalStorage(){
+  try{ return window.localStorage; }catch(e){ return null; }
+}
+
+/* The editor's own markup, injected into the root; every lookup below
+   goes through root.querySelector, so the ids are per-instance. */
 export const TEMPLATE = `
 <div id="app">
   <main id="stage" data-testid="stage">
-    <svg id="roomSvg" data-testid="room-svg" preserveAspectRatio="xMidYMid meet" viewBox="-260 -260 520 520"></svg>
-    <div id="ctrlLayer" data-testid="ctrl-layer"></div>
-    <div class="empty-hint" id="emptyHint" data-testid="empty-hint">${RO.emptyHint}</div>
-    <div class="toast hidden" id="toastEl" data-testid="toast">
+    <svg id="roomSvg" data-testid="editor-svg" preserveAspectRatio="xMidYMid meet" viewBox="-200 -200 400 400"></svg>
+    <div id="ctrlLayer"></div>
+    <div class="fp-plate fp-tools" id="toolPlate"></div>
+    <div class="fp-hint" id="hintLine" data-testid="hint"></div>
+    <div class="fp-plate fp-hist" id="histPlate"></div>
+    <div class="fp-plate fp-view" id="viewPlate"></div>
+    <div class="fp-toast fp-off" id="toastEl" data-testid="toast">
       <span id="toastText"></span>
-      <button data-testid="toast-dismiss" id="toastDismiss">${RO.gotIt}</button>
-    </div>
-
-    <!-- One quiet line, above the bar: nothing at all once the room is
-         complete, a tappable count otherwise (see renderBar). -->
-    <div class="missing-line" id="missingList" data-testid="missing-list"></div>
-
-    <!-- The old #rail is gone, and so is #cluster's own docked
-         positioning: the stage is the entire window, and this floating
-         bottom-centre bar (src/draw's own Toolbar) is the only chrome
-         left. Plate one is always here; plate two (#cluster) only
-         renders content while something is selected. -->
-    <div class="bar" id="bar" data-testid="bar">
-      <div class="plate group">
-        <button class="txtbtn" data-testid="undo" id="undoBtn" disabled>${RO.undo}</button>
-        <button class="txtbtn" data-testid="redo" id="redoBtn" disabled>${RO.redo}</button>
-        <span class="divider"></span>
-        <label class="field">${RO.ceiling}
-          <input data-testid="ceiling-input" id="ceilingInput" type="text" inputmode="decimal" class="num-input v-empty" value="" placeholder="—">
-          <span class="unit">cm</span>
-        </label>
-        <span class="divider" id="missingDivider" hidden></span>
-        <button class="txtbtn" id="missingBtn" data-testid="missing-summary" hidden></button>
-      </div>
-      <div id="cluster" class="plate hidden" data-testid="cluster"></div>
+      <button type="button" data-testid="toast-dismiss" id="toastDismiss">${RO.gotIt}</button>
     </div>
   </main>
 </div>
 
-<div id="confirmDialog" class="hidden" data-testid="confirm-dialog">
-  <div class="confirm-card">
+<div id="confirmDialog" class="fp-off" data-testid="confirm-dialog">
+  <div class="fp-confirm">
     <p id="confirmDialogText"></p>
-    <div class="row">
-      <button class="primary" id="confirmYesBtn" data-testid="confirm-yes"></button>
-      <button id="confirmNoBtn" data-testid="confirm-no">${RO.letMeFix}</button>
+    <div class="fp-row">
+      <button type="button" class="fp-primary" id="confirmYesBtn" data-testid="confirm-yes"></button>
+      <button type="button" id="confirmNoBtn" data-testid="confirm-no">${RO.letMeFix}</button>
     </div>
   </div>
 </div>
@@ -146,16 +206,13 @@ var destroyed = false;
 root.classList.add('fp');
 root.innerHTML = TEMPLATE;
 
-/* Every `document.getElementById('x')` in the prototype became `$id('x')`,
-   and its two `document.querySelector*` calls became root-scoped: ids stay
-   exactly as the prototype wrote them, but they resolve inside this
-   instance's own subtree. */
+/* Every lookup is root-scoped, so the ids below resolve inside this
+   instance's own subtree rather than the document's. */
 function $id(id){ return root.querySelector('#' + id); }
 
-/* Listener bookkeeping, so destroy() leaves nothing behind. The three
-   capture-phase touch-retarget guards used to sit on `document`; on
-   `root` they still run before the mistargeted element's own listener,
-   because root is an ancestor of every element they guard. */
+/* Listener bookkeeping, so destroy() leaves nothing behind. The
+   capture-phase touch-retarget guards sit on `root`, an ancestor of every
+   element they guard, so they run before that element's own listener. */
 var winListeners = [], rootListeners = [];
 function onWin(type, fn, o){ win.addEventListener(type, fn, o); winListeners.push([type, fn, o]); }
 function onRoot(type, fn, o){ root.addEventListener(type, fn, o); rootListeners.push([type, fn, o]); }
@@ -191,15 +248,11 @@ function notifyChange(){
 var MIN_WALL = 1;
 var MIN_OPEN = 10;
 var DEFAULT_DOOR_W = 90;
-var DEFAULT_WINDOW_W = 100;
+var DEFAULT_WINDOW_W = 60;
 var DEFAULT_SILL = 90;
-var WALL_THICKNESS_CM = 20;     // plan-view wall thickness (a poché band, not a stroke) — real
-                                 // enough to read as masonry, well clear of the old 5cm hairline
-var WALL_HATCH_SPACING_CM = 8;  // hatch tile pitch, in the SAME cm space as the room itself
-                                 // (patternUnits=userSpaceOnUse below), so it scales with the
-                                 // drawing instead of shimmering at a fixed screen pitch on zoom
+var WALL_THICKNESS_CM = 20;     // plan-view wall thickness (a solid band, not a stroke), at the
+                                 // plan's own scale
 var SNAP_PX = 20;               // screen px — identical feel at every zoom, on every device
-var DRAW_MOVE_THRESHOLD = 4;    // cm, movement beyond this counts as a real drag, not a tap
 var TAP_PX = 6;                 // screen px, movement beyond this counts as a real drag, not a tap
 var FREE_END_DECIDE_PX = 16;    // screen px - how far a drag off a free end must travel before it is read as pull-to-resize rather than start-a-new-wall
 var WELD_EPS = 0.5;             // cm — two points this close are "the same point"
@@ -232,26 +285,36 @@ function uid(prefix){ return prefix + (_idCounter++); }
    array-order adjacency anywhere in this file: every neighbour lookup
    below is by shared POINT, via neighborAt().
    ====================================================================== */
-var model = { ceilingHeightCm: null, walls: [] };
+var model = { walls: [] };
 var undoStack = [], redoStack = [];
 var selection = null;     // null | { segId }
-// Tracks which segId render() last saw selected, so it can notice the
-// ONE moment that matters for merging (SPEC-lessons, round seven): the
-// piece that was selected a moment ago no longer is. Deliberately not
-// keyed to any specific gesture or button — deselecting, selecting a
-// different piece, and drawing something new all change `selection`
-// through different code paths, and every one of them has to settle
-// the piece it left behind the same way.
+// Which segId render() last saw in focus, so it can notice the one
+// moment that matters for merging: the piece that was in focus a moment
+// ago no longer is. Not keyed to any gesture, because every path that
+// moves the focus has to settle the piece it left behind the same way.
 var lastSettledSegId = null;
 var dragState = null;     // active pointer gesture, see GESTURES
 var toastState = null;
 var confirmState = null;
-// Whether the "N still missing" summary line is expanded to the actual
-// sentences. A UI state, not model state — not snapshotted, not undoable.
-var missingExpanded = false;
+
+/* Session state, not model state: never snapshotted, never undoable, kept
+   while the editor is mounted. */
+var tools = Array.isArray(opts.tools) && opts.tools.length ? opts.tools : DRAWING_TOOLS;
+var activeTool = restingTool(tools);
+var view = null;              // { cx, cy, scale }; fitted on the first render
+var justMade = null;          // the kind a tool made a moment ago, for the hint
+var refusedTool = false;      // a tool that cannot be used yet was picked
+var hintState = null;         // an override the host sets, e.g. while saving
+var keysEnabled = true;
+var zoomHintUntil = 0;
+/* The hint speaks in touch words or mouse words, starting from what the
+   device says it is and following whatever the client last used. */
+var touchWords = !!(win.matchMedia && win.matchMedia('(pointer: coarse)').matches);
+var seenStorage = opts.seenStorage !== undefined ? opts.seenStorage : safeLocalStorage();
+var carried = { windowWidth: DEFAULT_WINDOW_W, sill: DEFAULT_SILL };
 
 function snapshotModel(){
-  return { ceilingHeightCm: model.ceilingHeightCm, walls: JSON.parse(JSON.stringify(model.walls)) };
+  return { walls: JSON.parse(JSON.stringify(model.walls)) };
 }
 function pushHistory(){
   undoStack.push(snapshotModel());
@@ -259,7 +322,6 @@ function pushHistory(){
   redoStack.length = 0;
 }
 function restoreSnapshot(snap){
-  model.ceilingHeightCm = snap.ceilingHeightCm;
   model.walls = JSON.parse(JSON.stringify(snap.walls));
 }
 function undo(){
@@ -277,10 +339,12 @@ function redo(){
   render();
 }
 function resetAll(){
-  model = { ceilingHeightCm: null, walls: [] };
+  model = { walls: [] };
   undoStack = []; redoStack = [];
   selection = null; dragState = null;
   toastState = null; confirmState = null;
+  activeTool = restingTool(tools); justMade = null; refusedTool = false;
+  view = null;
   render();
 }
 
@@ -292,23 +356,22 @@ function makeSegment(kind, lengthCm, source){
     sill: null, hinge: null, hingeSource: null, swing: null, swingSource: null
   };
 }
-function makeWall(from, to, source){
-  // A wall's two ends must share exactly one coordinate — the room is
-  // drawn and squared on axis-aligned strokes only (SPEC-lessons, round
-  // five: a wall whose from/to differed on both axes silently reported
-  // its Euclidean distance as if it were the drawn number, with no
-  // signal anywhere that the room wasn't square). Every caller upstream
-  // is responsible for landing on-axis before it gets here — refuse
-  // outright rather than trust that and silently store a diagonal.
+function makeWall(from, to, source, kind){
+  // A wall's two ends must share exactly one coordinate: the room is drawn
+  // and squared on axis-aligned strokes only, and a wall that differed on
+  // both axes would report its Euclidean distance as the drawn number with
+  // nothing on screen saying the room is not square. Every caller lands
+  // on-axis before it gets here — refuse rather than store a diagonal.
   if(r(from.x) !== r(to.x) && r(from.y) !== r(to.y)){
     throw new Error('makeWall: refusing a diagonal wall from ('+from.x+','+from.y+') to ('+to.x+','+to.y+')');
   }
+  var segKind = kind === 'open' ? 'open' : 'wall';
   var w = {
     id: uid('wall'), from: { x:from.x, y:from.y }, to: { x:to.x, y:to.y },
-    lengthSource: source || 'computed', isOpen: false,
+    lengthSource: source || 'computed', isOpen: segKind === 'open',
     segments: []
   };
-  w.segments = [ makeSegment('wall', dist(w.from, w.to), source || 'computed') ];
+  w.segments = [ makeSegment(segKind, dist(w.from, w.to), source || 'computed') ];
   return w;
 }
 function minFor(kind){ return (kind === 'window' || kind === 'door') ? MIN_OPEN : MIN_WALL; }
@@ -676,7 +739,8 @@ function slideSegment(wallId, segId, newOffset, source){
 }
 function addOpening(wallId, kind, wantCenterOffset){
   var w = findWall(wallId); if(!w) return null;
-  var defaults = { door:DEFAULT_DOOR_W, window:DEFAULT_WINDOW_W };
+  // A window's width carries over from the last one the client typed.
+  var defaults = { door:DEFAULT_DOOR_W, window:carried.windowWidth };
   var width = defaults[kind] || DEFAULT_DOOR_W;
   var total = segTotal(w);
   wantCenterOffset = clamp(wantCenterOffset==null ? total/2 : wantCenterOffset, 0, total);
@@ -698,7 +762,7 @@ function addOpening(wallId, kind, wantCenterOffset){
   var newSegs = [];
   if(before>0) newSegs.push(makeSegment('wall', before, 'computed'));
   var opening = makeSegment(kind, width, 'computed');
-  if(kind==='window') opening.sill = { value:DEFAULT_SILL, source:'computed' };
+  if(kind==='window') opening.sill = { value:carried.sill, source:'computed' };
   if(kind==='door') defaultDoorSwing(opening);
   newSegs.push(opening);
   if(after>0) newSegs.push(makeSegment('wall', after, 'computed'));
@@ -717,38 +781,11 @@ function removeSegmentToWall(wallId, segId){
   mergeAdjacentPlain(w);
   return true;
 }
-// Deletes whatever piece is currently selected. A window/door already
-// had a way out via removeSegmentToWall; a plain `wall`/`open` piece
-// never did — worst for an accidental stray stroke (e.g. a 2cm wall
-// from a mis-click), which was otherwise permanent short of undo.
-// Three cases:
-//   window/door          -> the existing remove-opening path, unchanged.
-//   wall/open, NOT alone  -> drop just this segment and shrink the WALL
-//                            itself by exactly its length (not just
-//                            resize the remaining segments to fill the
-//                            gap — that would silently stretch a
-//                            neighbour that was never touched). reflow
-//                            recomputes every remaining segment's
-//                            offsetFromStart so nothing goes stale;
-//                            no other segment maths is hand-rolled.
-//                            The wall's own `to` end absorbs the shrink
-//                            — the same end growing a wall already
-//                            favours by default (resizeWallKeepingSegments
-//                            extends/eats the LAST segment first) — so
-//                            anything before the deleted piece keeps
-//                            its exact real-world position; only a
-//                            piece removed from the very front (idx 0,
-//                            touching `from`) eats from `from` instead,
-//                            since nothing before it to keep is even
-//                            possible.
-//   wall's ONLY segment   -> nothing left to shrink toward: remove the
-//                            whole wall from model.walls. Doing this
-//                            mid-chain legitimately leaves two free
-//                            ends where it used to connect its
-//                            neighbours — that's fine, not a bug to
-//                            route around: computeUnanswered already
-//                            reports an open perimeter the same way any
-//                            other unfinished edge does.
+// Deleting a piece of a wall shrinks the wall itself by that piece's
+// length rather than letting the rest stretch over the gap, so every
+// other piece keeps the real-world length the client gave it. The end
+// that absorbs the shrink is the far one from the piece, so nothing
+// between them moves. A wall's only piece takes the whole wall with it.
 function deleteSelection(){
   if(!selection) return;
   var f = findSegAnywhere(selection.segId); if(!f) return;
@@ -773,6 +810,7 @@ function deleteSelection(){
     if(wi !== -1) model.walls.splice(wi, 1);
   }
   selection = null;
+  justMade = null;
   cleanupOutline();
   syncSegmentsForAllWalls();
   render();
@@ -874,60 +912,6 @@ function cycleDoorSwing(wallId, segId){
   setSegHinge(wallId, segId, next.hinge);
   setSegSwing(wallId, segId, next.swing);
 }
-// Plain-words description of the door's current state for the button's
-// own label — the arc drawn on the plan is the real answer; this just
-// needs to say enough that the button isn't a mystery before it's
-// pressed. Hinge side is named the same compass-relative way the old
-// two-button labels already were (the wall's own heading, or its
-// opposite), so this reads as a continuation of that convention, not a
-// new one.
-function doorSwingLabel(w, seg){
-  // No null case to cover — every door has a hinge/swing from the
-  // moment it exists (defaultDoorSwing), so this always has something
-  // real to report; it's never the button's first-ever answer.
-  var opp = {N:'S',S:'N',E:'W',W:'E'}[headingOf(w)], hd = headingOf(w);
-  var side = seg.hinge==='start' ? opp : hd;
-  return RO.hinge(side, seg.swing);
-}
-
-/* ======================================================================
-   TYPE SWITCHER — Wall / Open edge / Window / Door, on the selected
-   piece. Converting to an opening bumps it up to the opening minimum,
-   absorbing from same-wall neighbours first (never silently clamped).
-   ====================================================================== */
-function changeKind(segId, newKind){
-  var f = findSegAnywhere(segId); if(!f) return;
-  var w = f.wall, idx = f.idx, seg = f.seg;
-  if(seg.kind === newKind) return;
-  var minL = minFor(newKind);
-  if(seg.length.value < minL){
-    var need = minL - seg.length.value;
-    var nextRun = flexRun(w, idx+1, 1), prevRun = flexRun(w, idx-1, -1);
-    var nextRoom = nextRun.reduce(function(a,s){return a+s.length.value;},0);
-    var prevRoom = prevRun.reduce(function(a,s){return a+s.length.value;},0);
-    var take = Math.min(need, nextRoom+prevRoom);
-    var fromNext = Math.min(take, nextRoom);
-    drain(nextRun, fromNext);
-    drain(prevRun, take-fromNext);
-    seg.length.value += take;
-    if(seg.length.value < minL) seg.length.value = minL;
-    seg.length.source = 'computed';
-  }
-  seg.kind = newKind;
-  seg.sill = null; seg.hinge = null; seg.hingeSource = null; seg.swing = null; seg.swingSource = null;
-  if(newKind === 'window') seg.sill = { value: DEFAULT_SILL, source: 'computed' };
-  if(newKind === 'door') defaultDoorSwing(seg);
-  if(w.segments.length === 1 && (newKind==='wall'||newKind==='open')) w.isOpen = (newKind==='open');
-  var midOffset = seg.offsetFromStart + seg.length.value/2;
-  dropZero(w);
-  var survivor = null;
-  for(var i=0;i<w.segments.length;i++){
-    var s = w.segments[i];
-    if(midOffset >= s.offsetFromStart - 0.5 && midOffset <= s.offsetFromStart + s.length.value + 0.5){ survivor = s; break; }
-  }
-  selection = { segId: (survivor || seg).id };
-}
-
 /* ======================================================================
    sliceSegments — cut the [from,to) window of a wall's segment run into
    its own segment list, re-basing offsets to start at 0. Shared by
@@ -954,9 +938,10 @@ function sliceSegments(segs, from, to){
   return out;
 }
 /* ======================================================================
-   "STILL MISSING" — a still-open outline says what is dangling, rather
-   than just "not closed" (SPEC: draw-anywhere means a free-floating
-   piece is a normal, valid, mid-capture state, not an error).
+   "STILL MISSING" — what the snapshot reports as not yet answered about
+   the plan itself. Nothing here stops a save: the editor has no checks.
+   The ceiling height is not part of the plan any more — it is answered on
+   its own screen and lives on the saved drawing.
    ====================================================================== */
 function computeUnanswered(){
   var list = [];
@@ -970,18 +955,6 @@ function computeUnanswered(){
     if(freeEnds > 0) list.push(RO.freeEnds(freeEnds));
     else list.push(RO.notClosed);
   }
-  if(model.ceilingHeightCm == null) list.push(RO.ceilingMissing);
-  // A door has no missing-hinge/swing case any more — defaultDoorSwing
-  // sets both the moment a door exists, so unlike a window's sill
-  // (still opt-in, still worth flagging) there's nothing here for a
-  // door to ever be caught missing.
-  var winMissing = 0;
-  model.walls.forEach(function(w){
-    w.segments.forEach(function(s){
-      if(s.kind === 'window' && s.sill == null) winMissing++;
-    });
-  });
-  if(winMissing) list.push(RO.sillsMissing(winMissing));
   return list;
 }
 /* ======================================================================
@@ -993,8 +966,7 @@ function computeUnanswered(){
    length so an edge lines up, without welding. The snap radius is in
    SCREEN PIXELS so it feels the same at every zoom and on both devices.
    If nothing is near enough, the stroke stands as a free-floating piece
-   — allowed, not an error; SPEC: "the missing list should say what is
-   dangling rather than refusing the stroke."
+   — allowed, not an error.
    ====================================================================== */
 function distPx(a, b, t){ return Math.hypot(a.x-b.x, a.y-b.y) * t.scale; }
 function projectOnSegment(pt, a, b){
@@ -1024,7 +996,7 @@ function collectVertices(){
 // Vertex-only (free ends and corners), NOT T-junctions: the snap radius
 // is always smaller than half the hit-rect width a wall's own body
 // already claims, so a press near enough to a wall's LINE to T-junction
-// there is always already inside that wall's own seg-hit — which must
+// there is always already inside that wall's own hit rect — which must
 // mean "push this wall" (SPEC's own table), never "branch off it."
 // T-junction only ever happens at the far end of an active drag (see
 // findEndpointSnap) — never at where the gesture itself started.
@@ -1250,25 +1222,18 @@ function squareWeldToVertex(vertexPoint, startPt, heading){
   });
   return { ok:true, point: corrected, changed: changed };
 }
-var pendingFocusSegId = null;
-// Commits a drawn stroke. Resolves any T-junction splits first (so the
-// new wall's own endpoints land exactly on the freshly-made joints),
-// then squares any vertex weld that's off the stroke's own axis before
-// the new wall is ever created — makeWall refuses a diagonal outright,
-// so this has to happen first, not as a later cleanup pass — then adds
-// the new wall and lets cleanupOutline merge it into a collinear
-// neighbour it welded onto, same as any other edit.
-function commitDrawStroke(startPt, startSnap, endPt, endSnap, heading, t){
-  // Below the absolute structural floor, OR — new — too small on
-  // SCREEN to have been a deliberate stroke rather than a mis-click
-  // (screen px, not cm, so it behaves identically at every zoom level;
-  // TAP_PX only ever decided tap-vs-drag back at press time). Refusing
-  // here means exactly what a tap on empty canvas already means
-  // (handleTap's 'draw' case): deselect, nothing committed — and no
-  // history entry pushed below for a stroke nothing came of.
+// Commits a drawn stroke, and says whether it made anything. Resolves
+// any T-junction splits first, so the new wall's own endpoints land
+// exactly on the freshly-made joints, then squares any vertex weld that
+// is off the stroke's own axis before the new wall is created — makeWall
+// refuses a diagonal outright — then adds the wall and lets
+// cleanupOutline merge it into a collinear neighbour it welded onto.
+function commitDrawStroke(startPt, startSnap, endPt, endSnap, heading, t, kind){
+  // Below the structural floor, or too small on screen to have been a
+  // deliberate stroke rather than a mis-click: nothing is made, and no
+  // history entry is pushed for a stroke nothing came of.
   if(dist(startPt, endPt) < MIN_WALL || (t && dist(startPt, endPt)*t.scale < MIN_STROKE_PX)){
-    selection = null;
-    return;
+    return false;
   }
   pushHistory();
   if(startSnap && startSnap.kind === 'tjunction') splitWallAtPoint(startSnap.wallId, startPt);
@@ -1283,40 +1248,34 @@ function commitDrawStroke(startPt, startSnap, endPt, endSnap, heading, t){
     if(onAxisAlready){
       finalEndPt = target;
     } else if(startIsFree){
-      // Priority (a) — SPEC-lessons, round six, rule 1: the fresh
-      // stroke is the rough one, so IT moves, never the wall someone
-      // already measured. Its other (start) end is free — nothing is
-      // welded there — so the whole stroke translates perpendicular to
-      // its own heading until its far end lands exactly on the target;
-      // length and heading stay exactly as drawn/typed. Nothing already
-      // on the canvas changes, so nothing needs disclosing.
+      // The fresh stroke is the rough one, so it moves, never the wall
+      // the client already measured. Its start end is free, so the whole
+      // stroke translates perpendicular to its own heading until its far
+      // end lands on the target; its length and heading stay as drawn.
       var rawLen = Math.max(Math.abs(endPt.x-startPt.x), Math.abs(endPt.y-startPt.y));
       finalEndPt = target;
       finalStartPt = { x: r(target.x - dvec.x*rawLen), y: r(target.y - dvec.y*rawLen) };
     } else {
-      // Priority (b): the new stroke's OTHER end is welded too, so it
-      // can't be translated without breaking that weld — fall back to
-      // round five's behaviour instead (move the target vertex, absorb
-      // the difference into the attached wall, disclose, downgrade).
+      // The new stroke's other end is welded too, so it cannot be
+      // translated without breaking that weld: move the target vertex
+      // instead, absorb the difference into the wall attached to it, and
+      // say so.
       var sq = squareWeldToVertex(endPt, startPt, heading);
       if(sq.ok){
         finalEndPt = sq.point;
         if(sq.changed.length) squareChanges = sq.changed;
       } else {
-        // Priority (c): cannot square either way — leave the ends
-        // unjoined rather than force a diagonal wall or shrink one past
-        // its own openings. The stroke still commits, on its own axis,
-        // at approximately the length actually drawn; it just doesn't
-        // touch the target vertex, so computeUnanswered already
-        // reports the resulting free end — no separate disclosure
-        // plumbing needed.
+        // Neither way squares: leave the ends unjoined rather than force
+        // a diagonal wall or shrink one past its own openings. The stroke
+        // still commits on its own axis, at the length drawn, and the
+        // free end it leaves is reported like any other.
         var fallbackLen = Math.max(Math.abs(endPt.x-startPt.x), Math.abs(endPt.y-startPt.y));
         finalEndPt = { x: r(startPt.x + dvec.x*fallbackLen), y: r(startPt.y + dvec.y*fallbackLen) };
       }
     }
   }
 
-  var w = makeWall(finalStartPt, finalEndPt, 'drawn');
+  var w = makeWall(finalStartPt, finalEndPt, 'drawn', kind);
   var newSegId = w.segments[0].id;
   model.walls.push(w);
   // Downgrade provenance on whatever squaring actually changed BEFORE
@@ -1329,16 +1288,13 @@ function commitDrawStroke(startPt, startSnap, endPt, endSnap, heading, t){
   cleanupOutline();
   syncSegmentsForAllWalls();
   selection = { segId: newSegId };
-  pendingFocusSegId = newSegId;
   if(squareChanges){
-    // Disclosed in plain cm, in C's voice — silence was the whole
-    // problem (rule 2).
     var msg = squareChanges.map(function(c){
       return RO.squarePart(headingOf(c.wall), c.before, c.after);
     }).join('; ');
     showToast(RO.squareToast(msg));
   }
-  render();
+  return true;
 }
 
 /* ======================================================================
@@ -1403,12 +1359,6 @@ function commitWallTotal(anySegIdOnWall, newTotalRaw, source){
   render();
   return { ok:true };
 }
-function setCeilingHeight(v){
-  pushHistory();
-  model.ceilingHeightCm = r(v);
-  render();
-}
-
 /* ======================================================================
    LENGTH PARSING — metres-shorthand trap (SPEC-shared-contract bug class 5).
    ====================================================================== */
@@ -1489,9 +1439,11 @@ function buildRoomSnapshot(){
     });
   });
   var unanswered = computeUnanswered();
+  // The ceiling height belongs to the saved drawing, not to the plan the
+  // editor holds; whoever saves fills it in.
   return {
     unit: 'cm',
-    ceilingHeightCm: model.ceilingHeightCm,
+    ceilingHeightCm: null,
     closed: closed,
     outline: outline,
     walls: walls,
@@ -1503,18 +1455,18 @@ function buildRoomSnapshot(){
 /* ======================================================================
    DOM REFS
    ====================================================================== */
-var svgEl, ctrlLayerEl, emptyHintEl, toastEl, toastTextEl, toastDismissEl,
-    clusterEl, ceilingInputEl, undoBtn, redoBtn, missingListEl, missingBtn, missingDividerEl,
+var svgEl, stageEl, ctrlLayerEl, toolPlateEl, hintEl, histPlateEl, viewPlateEl,
+    toastEl, toastTextEl, toastDismissEl,
     confirmDialogEl, confirmDialogTextEl, confirmYesBtn, confirmNoBtn;
 
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
 /* ======================================================================
    VIEW TRANSFORM — cm (model space) <-> screen px, derived from the
-   SVG's own viewBox and its current bounding rect. Chips/cluster/labels
-   live as ordinary positioned HTML elements in #ctrlLayer, never inside
-   the SVG, so nothing that carries text or a real input can inherit its
-   zoom (SPEC-lessons #17).
+   SVG's own viewBox and its current bounding rect. Chips, plates and
+   labels live as ordinary positioned HTML elements over the SVG, never
+   inside it, so nothing that carries text or a real input inherits the
+   zoom.
    ====================================================================== */
 function currentViewBox(){
   var parts = (svgEl.getAttribute('viewBox')||'-200 -200 400 400').split(/\s+/).map(Number);
@@ -1532,149 +1484,140 @@ function cmToClient(pt, t){ return { x: t.offX + (pt.x - t.vb.x)*t.scale, y: t.o
 function clientToCm(clientX, clientY, t){ return { x: t.vb.x + (clientX-t.offX)/t.scale, y: t.vb.y + (clientY-t.offY)/t.scale }; }
 function cmToStage(pt, t){
   var c = cmToClient(pt,t);
-  var sr = $id('stage').getBoundingClientRect();
+  var sr = stageEl.getBoundingClientRect();
   return { x:c.x-sr.left, y:c.y-sr.top };
 }
-// Bounds the viewBox to roughly 1.3x the room's own extent, whatever the
-// stage's pixel size — the margin is a fixed fraction of the room's OWN
-// extent, never a function of stage pixel size (SPEC-lessons #14).
-// A generous, fixed pixel estimate of the bottom bar's own worst-case
-// height — deliberately not measured from the live DOM here, so
-// reserving room for it can never become a circular solve against its
-// own last answer (that circularity is exactly lesson 14's bug), and
-// deliberately never a function of what is currently selected either
-// (that was round three's bug — see fitViewBox, and see below: this is
-// still unconditional). The bar used to be a docked panel whose content
-// varied a lot by selection (up to 320x200 for a door with a "Move to"
-// row) — now it is fixed screen chrome: plate two (#cluster) is a
-// single row for a plain wall/open edge, a second row for an opening's
-// own "Starts at", and a THIRD for a window's own "Sill height" on top
-// of that (plate one bottom-aligns against whichever is taller, it
-// never forces plate two to grow to match it) — and the whole bar only
-// wraps to two STACKED rows on a narrow phone. Add-opening, rotate and
-// delete used to share plate two's first row too (still true when this
-// constant was last set to 130); they now render on the piece action
-// bar instead (see PIECE ACTION BAR), which only made that first row
-// NARROWER, not shorter — the ordinary worst case is still a window's
-// three stacked rows, measured at 162px at a 1100px stage. 190 keeps a
-// real but no longer inflated margin over that (the narrow-phone
-// stacked case doesn't need its own budget here: a narrower stage
-// already leaves less room UNDER the room for the ordinary 1.3x fit to
-// begin with, which is what widens the deficit this reserves against,
-// below).
-var PANEL_RESERVE_PX = 190;
-// A touch tap aimed at a wall near the bar's edge can still land on the
-// bar even when their rectangles don't literally intersect: Chrome's
-// real touch-target adjustment (confirmed empirically — a 6px gap was
-// not enough) snaps an imprecise touch to the nearest interactive
-// element within a small radius. A plain non-intersection rule is
-// necessary but not sufficient; this is the real clearance kept between
-// the bar and the room's own bounding box, well past that radius.
-var PANEL_GAP_PX = 28;
-
-function fitViewBox(){
+/* ======================================================================
+   THE VIEW — the canvas never moves by itself. It is fitted when the
+   editor opens and when the client asks for it, and otherwise follows
+   only a finger, the wheel or a drag that has reached the canvas edge.
+   view.ts holds the arithmetic; this turns a view into the SVG's own
+   viewBox and measures the bands the floating plates cover.
+   ====================================================================== */
+function stageSize(){
+  var rect = svgEl.getBoundingClientRect();
+  return { width: Math.max(1, rect.width), height: Math.max(1, rect.height) };
+}
+function planPoints(){
   var pts = [];
   model.walls.forEach(function(w){ pts.push(w.from); pts.push(w.to); });
-  if(dragState){
-    if(dragState.kind==='draw' && dragState.committed){
-      if(dragState.startPt) pts.push(dragState.startPt);
-      if(dragState.endPoint) pts.push(dragState.endPoint);
-    }
-  }
-  if(pts.length === 0){ svgEl.setAttribute('viewBox','-200 -200 400 400'); return; }
-  var minX=pts[0].x,maxX=pts[0].x,minY=pts[0].y,maxY=pts[0].y;
-  pts.forEach(function(p){ minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); });
-  // A floor stops an absurd zoom on a genuinely tiny stub (a 20cm
-  // scrap), nothing more — rooms of 3-4m are the common case here, and
-  // a floor anywhere near that size would visibly shrink an ordinary
-  // room for no reason a user could see (SPEC-lessons, round nine).
-  var w=maxX-minX, h=maxY-minY, minSize=100;
-  if(w<minSize){ var a=(minSize-w)/2; minX-=a; maxX+=a; w=minSize; }
-  if(h<minSize){ var a2=(minSize-h)/2; minY-=a2; maxY+=a2; h=minSize; }
-  var padX = Math.max(45, w*0.15);
-  var padY = Math.max(45, h*0.15);
-  var padBottom = padY;
-
-  // The bottom bar may only ever cover canvas OUTSIDE the room's own
-  // bounding box, never any wall's hit rect (SPEC-lessons #15).
-  // Reserved PERMANENTLY — unconditionally, whether or not anything is
-  // selected, and regardless of which piece or kind it is — never
-  // "on demand" (round three's rescale-on-select defect: making room
-  // only when something was selected meant every draw stroke, which
-  // auto-selects what it just drew, rescaled and shifted the whole
-  // room out from under the next stroke). This constant is read from
-  // `model`/`dragState` alone, never `selection` — the bar's own two
-  // plates change what they show, never how much space fitViewBox
-  // sets aside for them.
-  //
-  // Round nine: the reservation used to be added as a flat CM amount
-  // derived from PANEL_RESERVE_PX / baseScale — but baseScale is
-  // itself roughly (stage width)/(room width) on a typical wide room
-  // and narrow phone, so that CM amount grew right along with the
-  // room's own width, and the height ratio it produced never actually
-  // stabilised the way the width ratio does — a bigger room reserved
-  // more absolute space for a bar whose own pixel size never changes.
-  // The fix: figure out how much space the ORDINARY (bar-blind)
-  // 1.3x-both-axes fit already leaves below the room for free — the
-  // fit is usually width-bound on a narrow phone, which centers a
-  // shorter-than-the-stage viewBox and leaves real, unused pixels
-  // above and below the room as a side effect — and only reserve the
-  // DEFICIT between that and what the bar actually needs, converted
-  // at THIS fit's own scale (never iterated against a previous
-  // viewBox, never a live measurement of the bar's actual on-screen
-  // content — both of those are exactly how lesson 14's feedback-loop
-  // bug and round three's rescale-on-select bug happened). When the
-  // room already leaves enough room below it for free — the common
-  // case for a wide room on a narrow phone — this reserves nothing at
-  // all, and the height ratio behaves exactly like the width one.
-  var stageEl = $id('stage');
-  var stageRect = stageEl ? stageEl.getBoundingClientRect() : null;
-  if(stageRect && stageRect.width > 0 && stageRect.height > 0){
-    var stdW = w+2*padX, stdH = h+2*padY;
-    var stdScale = Math.min(stageRect.width/stdW, stageRect.height/stdH);
-    var letterboxPx = Math.max(0, stageRect.height - stdH*stdScale) / 2;
-    var spaceBelowRoomPx = padY*stdScale + letterboxPx;
-    var neededPx = PANEL_RESERVE_PX + PANEL_GAP_PX;
-    var deficitPx = Math.max(0, neededPx - spaceBelowRoomPx);
-    if(deficitPx > 0) padBottom = padY + deficitPx/stdScale;
-  }
-  svgEl.setAttribute('viewBox', (minX-padX)+' '+(minY-padY)+' '+(w+2*padX)+' '+(h+padY+padBottom));
+  return pts;
 }
+function planBox(){ return boxOf(planPoints()); }
+// Measured, not guessed: the plates are laid out by CSS and their heights
+// change with the device and with what the focused piece needs.
+function plateBands(){
+  var sr = svgEl.getBoundingClientRect();
+  var bands = { top:0, right:0, bottom:0, left:0 };
+  if(sr.width <= 0 || sr.height <= 0) return bands;
+  var gap = 10;
+  [toolPlateEl, hintEl].forEach(function(el){
+    if(!el || el.classList.contains('fp-off')) return;
+    var r1 = el.getBoundingClientRect();
+    if(r1.height > 0) bands.top = Math.max(bands.top, r1.bottom - sr.top + gap);
+  });
+  [histPlateEl, viewPlateEl, focusPlateEl].forEach(function(el){
+    if(!el || el.classList.contains('fp-off') || !el.isConnected) return;
+    var r2 = el.getBoundingClientRect();
+    if(r2.height > 0) bands.bottom = Math.max(bands.bottom, sr.bottom - r2.top + gap);
+  });
+  bands.top = Math.max(0, Math.min(bands.top, sr.height/3));
+  bands.bottom = Math.max(0, Math.min(bands.bottom, sr.height/3));
+  return bands;
+}
+function isNarrow(){ return stageSize().width <= 860; }
+var fitFrame = null;
+function stopFitEase(){
+  if(fitFrame != null && typeof win.cancelAnimationFrame === 'function') win.cancelAnimationFrame(fitFrame);
+  fitFrame = null;
+}
+// The fit is eased, so the client can see where the plan went; the very
+// first fit has nothing to ease from, and the zoom is eased
+// geometrically because a scale is a ratio, not a distance.
+function fitNow(){
+  var target = fitView(planBox(), stageSize(), plateBands());
+  stopFitEase();
+  var from = view;
+  var dur = ms(BASE);
+  if(!from || dur <= 0 || typeof win.requestAnimationFrame !== 'function'){ view = target; return; }
+  var t0 = null;
+  var step = function(now){
+    fitFrame = null;
+    if(destroyed) return;
+    if(t0 == null) t0 = now;
+    var k = ease(Math.min(1, (now - t0)/dur));
+    view = {
+      cx: from.cx + (target.cx - from.cx)*k,
+      cy: from.cy + (target.cy - from.cy)*k,
+      scale: from.scale * Math.pow(target.scale/from.scale, k)
+    };
+    render();
+    if(k < 1) fitFrame = win.requestAnimationFrame(step);
+  };
+  fitFrame = win.requestAnimationFrame(step);
+}
+function applyView(){
+  if(!view) fitNow();
+  var vb = viewBoxOf(view, stageSize());
+  svgEl.setAttribute('viewBox', vb.x+' '+vb.y+' '+vb.w+' '+vb.h);
+}
+function zoomBy(factor, pointPx){
+  stopFitEase();
+  var size = stageSize();
+  var at = pointPx || { x: size.width/2, y: size.height/2 };
+  view = zoomAround(view || fitView(planBox(), size, plateBands()), factor, at, size, planBox());
+  noteZoomed();
+}
+// The view moves for reasons of its own too (the edge auto-pan, clearing
+// the docked plate), so noting the client's first zoom or pan belongs to
+// the paths a client drives, not here.
+function panView(dxPx, dyPx){
+  stopFitEase();
+  if(!view) fitNow();
+  view = panByPx(view, dxPx, dyPx);
+}
+// The zoom line shows for four seconds, the first time in this browser.
+function noteZoomed(){
+  if(hasSeen(seenStorage, 'zoomHint')) return;
+  markSeen(seenStorage, 'zoomHint');
+  zoomHintUntil = Date.now() + 4000;
+  if(zoomHintTimer) win.clearTimeout(zoomHintTimer);
+  zoomHintTimer = win.setTimeout(function(){ if(!destroyed) render(); }, 4100);
+}
+/** a client point in stage pixels */
+function stagePx(clientX, clientY){
+  var sr = svgEl.getBoundingClientRect();
+  return { x: clientX - sr.left, y: clientY - sr.top };
+}
+var zoomHintTimer = null;
+var focusPlateEl = null;
 
 /* ======================================================================
    TOP-LEVEL RENDER
    ====================================================================== */
 function render(){
   if(destroyed) return;
-  // The piece that was selected as of the LAST render, if it no longer
-  // is, just became eligible to merge into a collinear same-kind
-  // neighbour (segIsFresh no longer protects it) — re-check its own
-  // wall now, whichever of the many paths changed `selection` this
-  // time (SPEC-lessons, round seven). A `drawn` piece is unaffected
-  // either way: it stays protected regardless of selection until its
-  // length is actually typed.
+  // The piece that was in focus as of the last render, if it no longer
+  // is, has just become eligible to merge into a collinear same-kind
+  // neighbour: re-check its own wall now, whichever of the many paths
+  // moved the focus this time.
   var curSelSegId = selection ? selection.segId : null;
   if(lastSettledSegId !== null && lastSettledSegId !== curSelSegId){
     var settleF = findSegAnywhere(lastSettledSegId);
     if(settleF) mergeAdjacentPlain(settleF.wall);
   }
   lastSettledSegId = curSelSegId;
-  // Freeze the view for the whole gesture: re-fitting on every move is a
-  // feedback loop, not just wasted work (SPEC-lessons #13). Only refit
-  // once a committed gesture ends, using whatever viewBox was already on
-  // screen when it started.
-  if(!(dragState && dragState.committed)) fitViewBox();
+  // The plates first: the view is fitted into the canvas minus the bands
+  // they cover, so they have to be on screen and measurable before it.
+  renderToolPlate();
+  renderCornerPlates();
+  renderHint();
+  applyView();
   var t = viewTransform();
   renderSvg(t);
   renderCtrlLayer(t);
-  renderBar();
   renderToastDom();
   renderConfirmDialog();
-  if(pendingFocusSegId){
-    var id = pendingFocusSegId; pendingFocusSegId = null;
-    var input = root.querySelector('[data-testid="dim-'+id+'"]');
-    if(input){ input.focus(); input.select(); }
-  }
   if(exposeGlobals) win.__lastModel = model;
   notifyChange();
 }
@@ -1700,9 +1643,8 @@ function hitRectAttrs(p0, p1, hitCm){
 function segHitWidthCm(t){ return Math.max(14, 48/t.scale); }
 
 function doorSvg(w, s, p0, p1, selected){
-  // No unset case to draw — every door has a hinge/swing from the
-  // moment it exists (defaultDoorSwing), so there's always a real leaf
-  // and arc to show, never a dashed placeholder plus a "?" mark.
+  // Every door has a hinge and a swing from the moment it exists
+  // (defaultDoorSwing), so there is always a real leaf and arc to draw.
   var hingePt = s.hinge==='start' ? p0 : p1;
   var otherPt = s.hinge==='start' ? p1 : p0;
   var n2 = wallNormal(w);
@@ -1713,52 +1655,34 @@ function doorSvg(w, s, p0, p1, selected){
   var a2 = Math.atan2(otherPt.y-hingePt.y, otherPt.x-hingePt.x);
   var diff = ((a2-a1)+Math.PI*2) % (Math.PI*2);
   var sweep = diff <= Math.PI ? 1 : 0;
-  // Leaf and arc are untouched — they were never the problem. The
-  // opening itself is: painting it as a stroke the full thickness of
-  // the band turned a doorway into a solid slab of colour heavier than
-  // any wall on the drawing, which is backwards. A door is a HOLE. So
-  // the band is filled with paper here (the hatch simply stops, the way
-  // masonry stops at a doorway) and only the two jambs are drawn, one
-  // short line across the thickness at each end. That reads as a gap
-  // between two pieces of wall, which is what it is, and it leaves the
-  // leaf and arc as the only real ink in the opening — the two marks
-  // that actually say which way the door swings.
+  // A door is a hole: the band stops the way masonry stops at a doorway,
+  // and a jamb line is drawn across the thickness at each end. The leaf
+  // and the dashed quarter arc are the only ink in the opening.
   var bq = wallBandPoints(w, false, false, p0, p1);
   var band = [bq.a, bq.b, bq.c, bq.e].map(function(q){ return q.x+','+q.y; }).join(' ');
-  return '<polygon class="door-gap" points="'+band+'"></polygon>'
-    + '<line class="door-jamb'+(selected?' selected':'')+'" x1="'+bq.a.x+'" y1="'+bq.a.y+'" x2="'+bq.b.x+'" y2="'+bq.b.y+'"></line>'
-    + '<line class="door-jamb'+(selected?' selected':'')+'" x1="'+bq.e.x+'" y1="'+bq.e.y+'" x2="'+bq.c.x+'" y2="'+bq.c.y+'"></line>'
-    + '<line class="door-leaf" x1="'+hingePt.x+'" y1="'+hingePt.y+'" x2="'+tip.x+'" y2="'+tip.y+'"></line>'
-    + '<path class="door-arc" d="M '+tip.x+' '+tip.y+' A '+width+' '+width+' 0 0 '+sweep+' '+otherPt.x+' '+otherPt.y+'"></path>';
+  return '<polygon class="fp-gap" points="'+band+'"></polygon>'
+    + '<line class="fp-jamb'+(selected?' on':'')+'" x1="'+bq.a.x+'" y1="'+bq.a.y+'" x2="'+bq.b.x+'" y2="'+bq.b.y+'"></line>'
+    + '<line class="fp-jamb'+(selected?' on':'')+'" x1="'+bq.e.x+'" y1="'+bq.e.y+'" x2="'+bq.c.x+'" y2="'+bq.c.y+'"></line>'
+    + '<line class="fp-leaf" x1="'+hingePt.x+'" y1="'+hingePt.y+'" x2="'+tip.x+'" y2="'+tip.y+'"></line>'
+    + '<path class="fp-arc" d="M '+tip.x+' '+tip.y+' A '+width+' '+width+' 0 0 '+sweep+' '+otherPt.x+' '+otherPt.y+'"></path>';
 }
 function windowSvg(w, p0, p1, selected){
-  // Glazing-in-plan: three lines run the LENGTH of the opening — the
-  // outer two on the wall band's two faces, one on its centreline —
-  // instead of one wide stroke plus cross-ticks, so the symbol reads as
-  // glass sitting IN the wall's thickness rather than replacing it.
+  // Glazing in plan: three thin lines run the length of the opening — one
+  // on each face of the band and one on its centreline — with a jamb
+  // across the thickness at each end, so the glass sits IN the wall.
   var n = wallNormal(w), half = WALL_THICKNESS_CM/2;
-  var cls = 'win-line'+(selected?' selected':'');
+  var cls = 'fp-glass'+(selected?' on':'');
+  var bq = wallBandPoints(w, false, false, p0, p1);
+  var band = [bq.a, bq.b, bq.c, bq.e].map(function(q){ return q.x+','+q.y; }).join(' ');
   function face(off){
     return '<line class="'+cls+'" x1="'+(p0.x+n.x*off)+'" y1="'+(p0.y+n.y*off)+'" x2="'+(p1.x+n.x*off)+'" y2="'+(p1.y+n.y*off)+'"></line>';
   }
-  return face(-half) + face(0) + face(half);
+  return '<polygon class="fp-gap" points="'+band+'"></polygon>'
+    + face(-half) + face(0) + face(half)
+    + '<line class="fp-jamb'+(selected?' on':'')+'" x1="'+bq.a.x+'" y1="'+bq.a.y+'" x2="'+bq.b.x+'" y2="'+bq.b.y+'"></line>'
+    + '<line class="fp-jamb'+(selected?' on':'')+'" x1="'+bq.e.x+'" y1="'+bq.e.y+'" x2="'+bq.c.x+'" y2="'+bq.c.y+'"></line>';
 }
-// The hatch fill for a 'wall' segment's poché band, defined ONCE (both
-// a normal and an accent/selected variant, since fill is how a band's
-// selection shows — see .wall-band.selected) and pushed at the top of
-// every renderSvg string, never per segment: patternUnits=userSpaceOnUse
-// plus a spacing in the SAME cm space as the room means the tile is
-// fixed in the drawing, not the screen, so it doesn't shimmer on zoom.
-var WALL_HATCH_DEFS =
-  '<defs>' +
-    '<pattern id="wallHatch" patternUnits="userSpaceOnUse" width="'+WALL_HATCH_SPACING_CM+'" height="'+WALL_HATCH_SPACING_CM+'" patternTransform="rotate(45)">' +
-      '<line class="wall-hatch-line" x1="0" y1="0" x2="0" y2="'+WALL_HATCH_SPACING_CM+'"></line>' +
-    '</pattern>' +
-    '<pattern id="wallHatchSelected" patternUnits="userSpaceOnUse" width="'+WALL_HATCH_SPACING_CM+'" height="'+WALL_HATCH_SPACING_CM+'" patternTransform="rotate(45)">' +
-      '<line class="wall-hatch-line selected" x1="0" y1="0" x2="0" y2="'+WALL_HATCH_SPACING_CM+'"></line>' +
-    '</pattern>' +
-  '</defs>';
-// The four corners of a 'wall' segment's poché band, centred on the
+// The four corners of a 'wall' segment's band, centred on the
 // segment's own centreline (p0-p1) at WALL_THICKNESS_CM wide.
 //
 // Butt-jointed bands leave a notch at every corner, so an end gets
@@ -1790,12 +1714,28 @@ function wallBandPoints(w, isFirst, isLast, p0, p1){
   };
 }
 function snapMarkerMarkup(pt, t){
-  var r1 = Math.max(9, 16/t.scale);
-  return '<circle class="snap-ring" cx="'+pt.x+'" cy="'+pt.y+'" r="'+r1+'" stroke-width="'+Math.max(2,2.4/t.scale)+'"></circle>'
-    + '<circle class="snap-dot" cx="'+pt.x+'" cy="'+pt.y+'" r="'+(r1*0.28)+'"></circle>';
+  var r1 = Math.max(9, 14/t.scale);
+  return '<circle class="fp-snap" cx="'+pt.x+'" cy="'+pt.y+'" r="'+r1+'" stroke-width="'+Math.max(1,1.4/t.scale)+'"></circle>';
 }
 function alignGuideMarkup(a, b, t){
-  return '<line class="align-guide" x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke-width="'+Math.max(1.4,1.8/t.scale)+'"></line>';
+  return '<line class="fp-guide" x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke-width="'+Math.max(1,1.2/t.scale)+'"></line>';
+}
+/** the small white square that marks an end or a jamb of the piece in focus */
+function handleMarkup(pt, t){
+  var half = Math.max(4, 7/t.scale);
+  return '<rect class="fp-handle" x="'+(pt.x-half)+'" y="'+(pt.y-half)+'" width="'+(half*2)+'" height="'+(half*2)+'" stroke-width="'+Math.max(1,1.5/t.scale)+'"></rect>';
+}
+/** the wash band behind whatever is in focus */
+function washMarkup(w, p0, p1){
+  var d = wallDir(w), n = wallNormal(w);
+  var out = WALL_THICKNESS_CM*1.7, along = WALL_THICKNESS_CM*0.6;
+  var a = { x:p0.x - d.x*along, y:p0.y - d.y*along };
+  var b = { x:p1.x + d.x*along, y:p1.y + d.y*along };
+  var pts = [
+    { x:a.x+n.x*out, y:a.y+n.y*out }, { x:b.x+n.x*out, y:b.y+n.y*out },
+    { x:b.x-n.x*out, y:b.y-n.y*out }, { x:a.x-n.x*out, y:a.y-n.y*out }
+  ];
+  return '<polygon class="fp-wash" points="'+pts.map(function(q){ return q.x+','+q.y; }).join(' ')+'"></polygon>';
 }
 
 /* ======================================================================
@@ -1817,10 +1757,10 @@ function alignGuideMarkup(a, b, t){
    (dims.ts's own words: "one source for both halves").
    ====================================================================== */
 // Lane geometry for the dimension chain along the OUTSIDE of a wall's
-// own hatched band (WALL_THICKNESS_CM) — not the old hit-rectangle
-// guess, which predates the band and could shrink thinner than it at a
-// high zoom. Every segment's LINE sits in lane 0, always: a plain chain
-// of dimensions the whole length of the wall, same as a real drawing.
+// own ink band (WALL_THICKNESS_CM), so a number never sits over the
+// wall it measures at any zoom. Every segment's LINE sits in lane 0,
+// always: a plain chain of dimensions the whole length of the wall,
+// same as a real drawing.
 // Only a CHIP can be bumped further out, and only when it would
 // otherwise collide with a neighbour's (see assignChipLane below) — the
 // line under it never moves, so a leader is drawn back to it.
@@ -1831,25 +1771,21 @@ var DIM_CHIP_HALF_H_PX = 19; // screen px, half a chip's own height -- must clea
 var DIM_LANE_STEP_PX = 84;   // screen px between lanes -- must clear a
                               // chip's full footprint on EITHER axis, since a
                               // wall can run either way (see DIM_CHIP_FOOTPRINT_PX);
-                              // kept tight (not the fatter round number a chip's own
-                              // width alone would suggest) because it competes with
-                              // fitViewBox's own fixed, selection-independent margin
-                              // for room to land in without hitting placeInStage's
-                              // edge clamp on anything but a very generous room
+                              // kept tight so an outer lane still lands inside the
+                              // stage instead of hitting placeInStage's edge clamp
 // A conservative, FIXED estimate of a chip's own on-screen footprint —
 // not a real getBoundingClientRect, because the lane a chip lands in
 // has to already be decided when renderSvg draws its line, before any
-// chip exists in the DOM to measure (render() calls renderSvg, then
-// renderCtrlLayer). The chip's input has a fixed CSS width regardless
-// of the digits inside it (see .chip input), so this is stable across
-// every value a chip could ever show, and thus across renders.
+// chip exists in the DOM to measure. The chip's input has a fixed width
+// whatever the digits inside it, so this is stable across renders.
 var DIM_CHIP_FOOTPRINT_PX = 84;
-// The exact commit this segment's own chip already used, whether it's
-// playing the "selected piece" role or the "gap beside an opening"
-// role below — one set of rules, not two, regardless of which chip is
-// asking. Mirrors the existing branch verbatim (SPEC-lessons #5/#6).
+// One commit for a segment's number, whether it is read on the drawing
+// or in the focus plate: the two are the same value.
 function segDimCommit(w, s){
   return function(cm){
+    // A typed window width carries over to the next window, wherever it
+    // was typed; a door keeps its own default.
+    if(s.kind === 'window') carried.windowWidth = r(cm);
     if(s.kind==='wall' || s.kind==='open' || !isClosedLoop()){
       commitWallPieceLength(s.id, cm, 'typed');
     } else {
@@ -1859,7 +1795,7 @@ function segDimCommit(w, s){
     }
   };
 }
-function segDimLabel(s){ return s.kind==='window' ? 'window width' : s.kind==='door' ? 'door width' : 'wall length'; }
+function segDimLabel(s){ return (s.kind==='window' || s.kind==='door') ? RO.fieldWidth : RO.fieldLength; }
 function segDim(w, s, tone, outCm){
   var pts = segPoints(w, s);
   var n = wallNormal(w);
@@ -1920,13 +1856,10 @@ function allDims(t){
     });
   });
 
-  // A wall's own total is the one number that must stay selection-
-  // gated (spec item 4): showing it beside its own parts, always, is
-  // exactly the duplication that made the old always-on version
-  // unreadable. It appears only while a piece on THAT wall is
-  // selected, and — line and chip together, a real second dimension
-  // level, not a bumped chip — sits one lane past whichever chip lane
-  // this render actually used on that wall, so it never lands on one.
+  // A wall's own total appears only while a piece on that wall is in
+  // focus — showing it beside its own parts at all times duplicates what
+  // is already on screen — and sits one lane past whichever chip lane
+  // this render used on that wall, so it never lands on one.
   if(selection){
     var f = findSegAnywhere(selection.segId);
     if(f && f.wall.segments.length > 1){
@@ -1937,7 +1870,7 @@ function allDims(t){
       out.push({
         testid:'wall-total-'+w.id, tone:'side', a:w.from, b:w.to, normal:{x:-wn.x,y:-wn.y},
         outCm:totalLaneCm, chipOutCm:totalLaneCm, isTotal:true,
-        value:r(wallLen(w)), source:w.lengthSource, label:'wall length',
+        value:r(wallLen(w)), source:w.lengthSource, label:RO.fieldLength,
         commit:function(cm){
           var anySeg = w.segments[0].id;
           var res = commitWallTotal(anySeg, cm, 'typed');
@@ -2009,23 +1942,29 @@ function renderSvg(t){
   var parts = [];
   var plainSegHitParts = [], openingSegHitParts = [], cornerHitParts = [], freeEndHitParts = [], openingEdgeHitParts = [];
 
-  // Hatch fill defs first, exactly once per render, so every 'wall'
-  // band below can reference them by id (see WALL_HATCH_DEFS).
-  parts.push(WALL_HATCH_DEFS);
-  parts.push('<g class="walls-layer">');
+  // The wash band of whatever is in focus goes down first, so the piece
+  // itself is drawn over it.
+  var selFocus = selection ? findSegAnywhere(selection.segId) : null;
+  if(selFocus){
+    var fp = segPoints(selFocus.wall, selFocus.seg);
+    parts.push(washMarkup(selFocus.wall, fp.p0, fp.p1));
+  }
+
+  parts.push('<g class="fp-plan">');
   model.walls.forEach(function(w){
     w.segments.forEach(function(s, idx){
       var pts = segPoints(w, s);
       var sel = !!(selection && selection.segId===s.id);
-      parts.push('<g class="segment" data-testid="seg-'+s.id+'">');
+      parts.push('<g data-testid="seg-'+s.id+'">');
       if(s.kind==='wall'){
         var bp = wallBandPoints(w, idx===0, idx===w.segments.length-1, pts.p0, pts.p1);
-        var bandCls = 'wall-band'+(sel?' selected':''), edgeCls = 'wall-band-edge'+(sel?' selected':'');
-        parts.push('<polygon class="'+bandCls+'" points="'+bp.a.x+','+bp.a.y+' '+bp.b.x+','+bp.b.y+' '+bp.c.x+','+bp.c.y+' '+bp.e.x+','+bp.e.y+'"></polygon>');
-        parts.push('<line class="'+edgeCls+'" x1="'+bp.a.x+'" y1="'+bp.a.y+'" x2="'+bp.e.x+'" y2="'+bp.e.y+'"></line>');
-        parts.push('<line class="'+edgeCls+'" x1="'+bp.b.x+'" y1="'+bp.b.y+'" x2="'+bp.c.x+'" y2="'+bp.c.y+'"></line>');
+        parts.push('<polygon class="fp-band'+(sel?' on':'')+'" points="'+bp.a.x+','+bp.a.y+' '+bp.b.x+','+bp.b.y+' '+bp.c.x+','+bp.c.y+' '+bp.e.x+','+bp.e.y+'"></polygon>');
       } else if(s.kind==='open'){
-        parts.push('<line class="wall-line is-open'+(sel?' selected':'')+'" x1="'+pts.p0.x+'" y1="'+pts.p0.y+'" x2="'+pts.p1.x+'" y2="'+pts.p1.y+'"></line>');
+        var on = wallNormal(w), tickCm = WALL_THICKNESS_CM/2;
+        parts.push('<line class="fp-open'+(sel?' on':'')+'" x1="'+pts.p0.x+'" y1="'+pts.p0.y+'" x2="'+pts.p1.x+'" y2="'+pts.p1.y+'" stroke-width="'+Math.max(1.6, 2.4/t.scale)+'"></line>');
+        [pts.p0, pts.p1].forEach(function(p){
+          parts.push('<line class="fp-open-tick" x1="'+(p.x-on.x*tickCm)+'" y1="'+(p.y-on.y*tickCm)+'" x2="'+(p.x+on.x*tickCm)+'" y2="'+(p.y+on.y*tickCm)+'" stroke-width="'+Math.max(1, 1.5/t.scale)+'"></line>');
+        });
       } else if(s.kind==='window'){
         parts.push(windowSvg(w, pts.p0, pts.p1, sel));
       } else if(s.kind==='door'){
@@ -2034,65 +1973,53 @@ function renderSvg(t){
       parts.push('</g>');
       var hr = hitRectAttrs(pts.p0, pts.p1, hitCm);
       var isOpeningKind = (s.kind==='window' || s.kind==='door');
-      (isOpeningKind ? openingSegHitParts : plainSegHitParts).push('<rect class="seg-hit'+(sel?' selected':'')+'" data-testid="seg-'+s.id+'-hit" data-wall-id="'+w.id+'" data-seg-id="'+s.id+'" data-kind="'+s.kind+'"'
+      (isOpeningKind ? openingSegHitParts : plainSegHitParts).push('<rect class="fp-hit'+(sel?' on':'')+'" data-testid="seg-'+s.id+'-hit" data-wall-id="'+w.id+'" data-seg-id="'+s.id+'" data-kind="'+s.kind+'"'
         + ' x="'+hr.x+'" y="'+hr.y+'" width="'+hr.w+'" height="'+hr.h+'"></rect>');
     });
   });
   parts.push('</g>');
 
-  // visual dots at every wall endpoint — free ends and corners alike —
-  // plus an extra hollow ring on a free end (isFreeEnd), marking it as
-  // a pull-to-resize handle now, not just a plain joint dot.
-  model.walls.forEach(function(w){
-    parts.push('<circle class="vertex-dot" cx="'+w.from.x+'" cy="'+w.from.y+'" r="'+(cornerRCm*0.32)+'"></circle>');
-    parts.push('<circle class="vertex-dot" cx="'+w.to.x+'" cy="'+w.to.y+'" r="'+(cornerRCm*0.32)+'"></circle>');
-    // A flat 1.6 stroke-width used to read as a heavy filled donut next
-    // to everything else's hairline weight -- thinner, and compensated
-    // by t.scale (exactly like a live weld's own snapMarkerMarkup, just
-    // lighter than it) so a free end still reads as its own thing next
-    // to a welded corner's plain vertex-dot without shouting.
-    var feRingW = Math.max(1, 1.3/t.scale);
-    if(isFreeEnd(w,'from')) parts.push('<circle class="free-end-ring" cx="'+w.from.x+'" cy="'+w.from.y+'" r="'+(cornerRCm*0.55)+'" stroke-width="'+feRingW+'"></circle>');
-    if(isFreeEnd(w,'to'))   parts.push('<circle class="free-end-ring" cx="'+w.to.x+'" cy="'+w.to.y+'" r="'+(cornerRCm*0.55)+'" stroke-width="'+feRingW+'"></circle>');
-  });
+  // A free end shows as a small white circle only while a tool that draws
+  // is on: that is the moment it matters, because a stroke started or
+  // ended near it joins it.
+  var toolNow = toolById(tools, activeTool);
+  if(toolNow && toolNow.gesture === 'stroke'){
+    var endRCm = Math.max(5, 8/t.scale);
+    collectVertices().forEach(function(v){
+      if(v.refs.length !== 1) return;
+      parts.push('<circle class="fp-free-end" cx="'+v.point.x+'" cy="'+v.point.y+'" r="'+endRCm+'" stroke-width="'+Math.max(1, 1.4/t.scale)+'"></circle>');
+    });
+  }
 
-  // corner HIT targets — only real joints (two or more walls meeting).
-  // A free end used to have no handle of its own here (starting a new
-  // draw near it was the only way to grow it) — it now gets its own
-  // dedicated circle just below, sized the same as a corner's.
-  collectVertices().forEach(function(v){
-    if(v.refs.length < 2) return;
-    cornerHitParts.push('<circle class="corner-hit" data-testid="corner-'+pointKey(v.point)+'" data-vx="'+v.point.x+'" data-vy="'+v.point.y+'" cx="'+v.point.x+'" cy="'+v.point.y+'" r="'+cornerRCm+'"></circle>');
-  });
+  // The handles of the piece in focus: a white square at each end, or at
+  // each jamb of an opening.
+  if(selFocus){
+    var hp = segPoints(selFocus.wall, selFocus.seg);
+    parts.push(handleMarkup(hp.p0, t));
+    parts.push(handleMarkup(hp.p1, t));
+  }
 
-  // free-end HIT targets — a press exactly on this small circle is the
-  // undecided gesture the 'freeEnd' drag kind resolves by direction (see
-  // GESTURE ROUTER / onSvgPointerDown); a press further out but still
-  // within ordinary snap range falls through to findStartSnap instead
-  // and is unambiguously a new stroke welding onto this point, same as
-  // always — the two gestures live on the same point without either
-  // being lost, exactly the way an opening's own edge handle below
-  // resolves tap vs. drag on itself.
-  collectVertices().forEach(function(v){
-    if(v.refs.length !== 1) return;
-    var ref = v.refs[0];
-    freeEndHitParts.push('<circle class="free-end-hit" data-testid="free-end-'+pointKey(v.point)+'" data-wall-id="'+ref.wall.id+'" data-end="'+ref.end+'" cx="'+v.point.x+'" cy="'+v.point.y+'" r="'+cornerRCm+'"></circle>');
-  });
+  // Corner and free-end hit targets exist only while Selectează is on:
+  // with a making tool on, the canvas is for making, and a press near a
+  // free end is a stroke that welds onto it.
+  var selecting = !toolNow || toolNow.gesture === 'none';
+  if(selecting){
+    collectVertices().forEach(function(v){
+      if(v.refs.length < 2) return;
+      cornerHitParts.push('<circle class="fp-grab" data-testid="corner-'+pointKey(v.point)+'" data-vx="'+v.point.x+'" data-vy="'+v.point.y+'" cx="'+v.point.x+'" cy="'+v.point.y+'" r="'+cornerRCm+'"></circle>');
+    });
+    collectVertices().forEach(function(v){
+      if(v.refs.length !== 1) return;
+      var ref = v.refs[0];
+      freeEndHitParts.push('<circle class="fp-grab fp-free-hit" data-testid="free-end-'+pointKey(v.point)+'" data-wall-id="'+ref.wall.id+'" data-end="'+ref.end+'" cx="'+v.point.x+'" cy="'+v.point.y+'" r="'+cornerRCm+'"></circle>');
+    });
 
-  // opening edge handles — only on the SELECTED window/door, one at
-  // each of its two edges, sitting ON the wall line (unlike the free-
-  // end ring, which marks a wall's own open END, these sit wherever the
-  // opening's edges currently are, which is usually mid-wall). Dragging
-  // one moves THAT edge only; see the 'openingEdge' drag kind below.
-  if(selection){
-    var selO = findSegAnywhere(selection.segId);
-    if(selO && (selO.seg.kind==='window' || selO.seg.kind==='door')){
-      var ow = selO.wall, oseg = selO.seg;
-      var oPts = segPoints(ow, oseg), oN = wallNormal(ow);
-      var edgeTickCm = Math.max(10, 20/t.scale);
+    // An opening's own jamb handles: dragging one moves that jamb only.
+    if(selFocus && (selFocus.seg.kind==='window' || selFocus.seg.kind==='door')){
+      var ow = selFocus.wall, oseg = selFocus.seg;
+      var oPts = segPoints(ow, oseg);
       [{edge:'start', pt:oPts.p0}, {edge:'end', pt:oPts.p1}].forEach(function(e){
-        parts.push('<line class="opening-edge-mark" x1="'+(e.pt.x-oN.x*edgeTickCm)+'" y1="'+(e.pt.y-oN.y*edgeTickCm)+'" x2="'+(e.pt.x+oN.x*edgeTickCm)+'" y2="'+(e.pt.y+oN.y*edgeTickCm)+'"></line>');
-        openingEdgeHitParts.push('<circle class="opening-edge-hit" data-testid="opening-edge-'+e.edge+'-'+oseg.id+'" data-wall-id="'+ow.id+'" data-seg-id="'+oseg.id+'" data-edge="'+e.edge+'" cx="'+e.pt.x+'" cy="'+e.pt.y+'" r="'+cornerRCm+'"></circle>');
+        openingEdgeHitParts.push('<circle class="fp-grab" data-testid="opening-edge-'+e.edge+'-'+oseg.id+'" data-wall-id="'+ow.id+'" data-seg-id="'+oseg.id+'" data-edge="'+e.edge+'" cx="'+e.pt.x+'" cy="'+e.pt.y+'" r="'+cornerRCm+'"></circle>');
       });
     }
   }
@@ -2111,7 +2038,12 @@ function renderSvg(t){
   // alignment guide when the endpoint only lines up on one axis.
   if(dragState && dragState.kind==='draw' && dragState.committed && dragState.endPoint){
     var welded = dragState.endSnap && dragState.endSnap.weld;
-    parts.push('<line class="preview-line'+(welded?' welded':'')+'" x1="'+dragState.startPt.x+'" y1="'+dragState.startPt.y+'" x2="'+dragState.endPoint.x+'" y2="'+dragState.endPoint.y+'"></line>');
+    // The stroke as it will be: a translucent band of the wall's own
+    // thickness, with a dashed centre line down it.
+    if(dragState.tool !== 'open'){
+      parts.push('<line class="fp-preview-band" x1="'+dragState.startPt.x+'" y1="'+dragState.startPt.y+'" x2="'+dragState.endPoint.x+'" y2="'+dragState.endPoint.y+'" stroke-width="'+WALL_THICKNESS_CM+'"></line>');
+    }
+    parts.push('<line class="fp-preview'+(welded?' on':'')+(dragState.tool==='open'?' fp-preview-open':'')+'" x1="'+dragState.startPt.x+'" y1="'+dragState.startPt.y+'" x2="'+dragState.endPoint.x+'" y2="'+dragState.endPoint.y+'" stroke-width="'+Math.max(1.4, 2/t.scale)+'"></line>');
     if(dragState.startSnap && dragState.startSnap.weld) parts.push(snapMarkerMarkup(dragState.startSnap.point, t));
     if(dragState.endSnap){
       if(dragState.endSnap.weld) parts.push(snapMarkerMarkup(dragState.endSnap.point, t));
@@ -2140,179 +2072,200 @@ function renderSvg(t){
   if(liveNow) dimsNow = dimsNow.concat([liveNow]);
   if(dimsNow.length){
     var dimHairW = Math.max(1, 1/t.scale);
-    parts.push('<g class="dims-layer">');
+    parts.push('<g class="fp-dims">');
     dimsNow.forEach(function(d){
       var g = dimLineParts(d, t);
-      var cls = d.tone==='side' ? 'side' : 'primary';
-      parts.push('<path class="dim-ext '+cls+'" d="'+g.ext+'" stroke-width="'+dimHairW+'"></path>');
-      parts.push('<path class="dim-run '+cls+'" d="'+g.line+'" stroke-width="'+dimHairW+'"></path>');
-      parts.push('<path class="dim-tick '+cls+'" d="'+g.ticks+'" stroke-width="'+dimHairW+'"></path>');
+      parts.push('<path class="fp-dim-ext" d="'+g.ext+'" stroke-width="'+dimHairW+'"></path>');
+      parts.push('<path class="fp-dim-run" d="'+g.line+'" stroke-width="'+dimHairW+'"></path>');
+      parts.push('<path class="fp-dim-tick" d="'+g.ticks+'" stroke-width="'+dimHairW+'"></path>');
       // The crowding rule (assignChipLane) only ever moves the CHIP, never
       // this line — when it moved the chip out, this short leader is the
-      // only thing tying the two back together visually.
+      // only thing tying the two back together.
       if(d.chipOutCm != null && Math.abs(d.chipOutCm - d.outCm) > 0.01){
         var innerA = dimAnchor(d), outerA = chipAnchor(d);
-        parts.push('<line class="dim-leader '+cls+'" x1="'+innerA.x+'" y1="'+innerA.y+'" x2="'+outerA.x+'" y2="'+outerA.y+'" stroke-width="'+dimHairW+'"></line>');
+        parts.push('<line class="fp-dim-ext" x1="'+innerA.x+'" y1="'+innerA.y+'" x2="'+outerA.x+'" y2="'+outerA.y+'" stroke-width="'+dimHairW+'"></line>');
       }
     });
     parts.push('</g>');
   }
 
-  // Paint order = hit-test priority, later wins ties: plain wall/open
-  // hit-rects lowest (a corner sits exactly at two of their own
-  // endpoints, and dragging that corner has to be reachable), corner
-  // handles above them, then a free end's own dedicated circle (it sits
-  // exactly on the wall's own line, on top of that wall's seg-hit, but
-  // must not out-rank an opening sitting right next to it), then an
-  // opening's own hit-rect — an opening slid flush against a corner
-  // still has to win over the corner circle it's sitting inside
-  // (SPEC-lessons #16-18) — and highest of all, an opening's own edge
-  // handles: they sit exactly on top of that same seg-hit, and a press
-  // meant to resize one edge has to win over "slide the whole opening"
-  // or it would be unreachable.
-  parts.push('<g class="hits-layer">' + plainSegHitParts.join('') + cornerHitParts.join('') + freeEndHitParts.join('') + openingSegHitParts.join('') + openingEdgeHitParts.join('') + '</g>');
+  // Paint order is hit-test priority, later winning ties: a wall's own
+  // hit rect lowest, because a corner sits at two of them and has to stay
+  // reachable; then the corner handles; then a free end's circle; then an
+  // opening's hit rect, so an opening slid flush against a corner still
+  // wins over the corner it sits inside; and highest an opening's jamb
+  // handles, so resizing one jamb wins over sliding the whole opening.
+  parts.push('<g class="fp-hits">' + plainSegHitParts.join('') + cornerHitParts.join('') + freeEndHitParts.join('') + openingSegHitParts.join('') + openingEdgeHitParts.join('') + '</g>');
   svgEl.innerHTML = parts.join('');
 }
 
-// The bottom bar's own two always-JS-driven bits: plate one's undo/redo/
-// ceiling state, and the missing-line above it. (Plate two, #cluster, is
-// selection-driven and rendered separately by renderCluster.)
-function renderBar(){
-  ceilingInputEl.value = model.ceilingHeightCm == null ? '' : String(model.ceilingHeightCm);
-  ceilingInputEl.className = 'num-input ' + (model.ceilingHeightCm == null ? 'v-empty' : '');
-  undoBtn.disabled = undoStack.length === 0;
-  redoBtn.disabled = redoStack.length === 0;
-  emptyHintEl.classList.toggle('hidden', model.walls.length > 0);
-  renderMissingLine();
+/* ======================================================================
+   THE PLATES — the tools at the top of the canvas, undo and redo, the
+   view controls and the hint line. White, a hairline, 44px rows; the
+   active tool is filled ink. On a wide screen undo and redo sit in the
+   tool plate after a divider, on a phone in their own plate bottom left.
+   ====================================================================== */
+function plateButton(testid, label, glyphName, opts){
+  var o = opts || {};
+  var btn = doc.createElement('button');
+  btn.type = 'button';
+  btn.className = 'fp-tool' + (o.on ? ' on' : '') + (o.iconOnly ? ' fp-ico' : '') + (o.breath ? ' fp-breath' : '');
+  btn.setAttribute('data-testid', testid);
+  if(o.pressed != null) btn.setAttribute('aria-pressed', o.pressed ? 'true' : 'false');
+  if(o.disabled) btn.disabled = true;
+  // The accessible name is the word on the button, so voice control and the
+  // eye agree; the key goes in the tooltip, which only a mouse ever opens.
+  btn.setAttribute('aria-label', label);
+  btn.title = (o.key && !touchWords) ? label + ' (' + o.key.toUpperCase() + ')' : label;
+  if(glyphName) btn.innerHTML = glyph(glyphName);
+  if(!o.iconOnly){
+    var span = doc.createElement('span');
+    span.textContent = label;
+    btn.appendChild(span);
+  }
+  if(o.onClick) btn.addEventListener('click', o.onClick);
+  return btn;
 }
-// A scrolling list of prose sentences was the least minimal thing on
-// screen for a state that's usually empty. computeUnanswered's sentences
-// are still the real signal, so they're kept verbatim — just behind one
-// quiet line above the bar: a tappable count while anything's
-// outstanding, nothing at all once the room is complete.
-function renderMissingLine(){
-  // Nothing has been asked for yet on a blank canvas — computeUnanswered's
-  // own first line ('Draw the first wall to begin.') is for the exported
-  // snapshot, not this line; showing it here would claim something's
-  // already missing before the room has anything to be missing FROM, and
-  // it would sit right on top of the empty-hint (see .missing-line CSS).
-  var items = model.walls.length === 0 ? [] : computeUnanswered();
-  missingListEl.innerHTML = '';
-  // The count itself lives IN the bar, not floating over the canvas.
-  // Anything that claims a pointer has to sit inside the one reserved
-  // strip of chrome, because "draw anywhere" is the rule this direction
-  // is not allowed to trade against anything else — and a tappable line
-  // hovering 100px above the bar swallowed exactly the presses that were
-  // aimed at bare canvas below the room (measured: a stroke started on
-  // the summary's own box never became a wall at all). The bar is
-  // already the one region the fit reserves and the one selector
-  // realBoxMisses guards; putting this there means there is no second
-  // place on screen where a press can quietly go nowhere.
-  missingBtn.hidden = items.length === 0;
-  missingDividerEl.hidden = items.length === 0;
-  missingBtn.setAttribute('aria-expanded', missingExpanded ? 'true' : 'false');
-  if(items.length === 0){
-    missingExpanded = false;
-    missingListEl.classList.add('hidden');
-    // Kept empty and hidden purely so missing-item-none's shape survives.
-    var none = doc.createElement('span');
-    none.setAttribute('data-testid','missing-item-none');
-    none.hidden = true;
-    missingListEl.appendChild(none);
-    return;
+function divider(){
+  var d = doc.createElement('span');
+  d.className = 'fp-sep';
+  return d;
+}
+function undoButtons(into){
+  into.appendChild(plateButton('undo', RO.undo, 'undo', {
+    iconOnly: true, disabled: undoStack.length === 0, onClick: undo
+  }));
+  into.appendChild(plateButton('redo', RO.redo, 'redo', {
+    iconOnly: true, disabled: redoStack.length === 0, onClick: redo
+  }));
+}
+function renderToolPlate(){
+  toolPlateEl.innerHTML = '';
+  var empty = model.walls.length === 0;
+  tools.forEach(function(tool){
+    toolPlateEl.appendChild(plateButton('tool-' + tool.id, tool.label, tool.id, {
+      on: activeTool === tool.id,
+      pressed: activeTool === tool.id,
+      key: tool.key,
+      // The drawn outline breathes round Perete until it has been used.
+      breath: empty && tool.makes === 'wall',
+      onClick: function(){ pickTool(tool.id); }
+    }));
+  });
+  if(!isNarrow()){
+    toolPlateEl.appendChild(divider());
+    undoButtons(toolPlateEl);
   }
-  missingBtn.textContent = RO.missingCount(items.length);
-  missingListEl.classList.toggle('hidden', !missingExpanded);
-  if(missingExpanded){
-    var wrap = doc.createElement('div'); wrap.className = 'missing-items';
-    items.forEach(function(txt, i){
-      var row = doc.createElement('div');
-      row.textContent = txt;
-      row.setAttribute('data-testid','missing-item-'+i);
-      wrap.appendChild(row);
-    });
-    missingListEl.appendChild(wrap);
+}
+function renderCornerPlates(){
+  histPlateEl.innerHTML = '';
+  viewPlateEl.innerHTML = '';
+  var narrow = isNarrow();
+  histPlateEl.classList.toggle('fp-off', !narrow);
+  if(narrow) undoButtons(histPlateEl);
+  if(!narrow){
+    viewPlateEl.appendChild(plateButton('view-zoom-in', RO.zoomIn, 'zoomIn', {
+      iconOnly: true, onClick: function(){ zoomBy(1.25, null); render(); }
+    }));
+    viewPlateEl.appendChild(plateButton('view-zoom-out', RO.zoomOut, 'zoomOut', {
+      iconOnly: true, onClick: function(){ zoomBy(1/1.25, null); render(); }
+    }));
   }
+  viewPlateEl.appendChild(plateButton('view-fit', RO.fit, 'fit', {
+    iconOnly: true, onClick: function(){ fitNow(); render(); }
+  }));
+}
+
+/* ======================================================================
+   THE HINT — one grey line under the tool plate saying the one next
+   thing, in the words of whatever the client last touched the screen
+   with. `data-state` names the state it is in.
+   ====================================================================== */
+function hintFor(){
+  // A state the host names but the engine has no line for shows nothing:
+  // a wrong line reads as the truth.
+  if(hintState){
+    var override = RO.hint[hintState];
+    return { state: hintState, text: override ? override(touchWords) : '' };
+  }
+  if(refusedTool) return { state: 'no-wall', text: RO.hint.noWall(touchWords) };
+  if(dragState && dragState.committed && dragState.kind === 'draw'){
+    return { state: 'drawing', text: RO.hint.drawing(touchWords) };
+  }
+  // The zoom line, the first time in this browser, for four seconds.
+  if(Date.now() < zoomHintUntil) return { state: 'zoom', text: RO.hint.zoom(touchWords) };
+  var tool = toolById(tools, activeTool);
+  if(tool && tool.gesture !== 'none'){
+    var byTool = { wall: 'wallOn', open: 'openOn', window: 'windowOn', door: 'doorOn' };
+    var key = byTool[tool.makes];
+    if(key) return { state: tool.id + '-on', text: RO.hint[key](touchWords) };
+  }
+  var f = selection ? findSegAnywhere(selection.segId) : null;
+  if(f){
+    if(f.seg.kind === 'window') return { state: 'window-focus', text: RO.hint.windowFocus(touchWords) };
+    if(f.seg.kind === 'door') return { state: 'door-focus', text: RO.hint.doorFocus(touchWords) };
+    if(f.seg.kind === 'open') return { state: 'open-focus', text: RO.hint.openFocus(touchWords) };
+    if(justMade === 'wall') return { state: 'wall-made', text: RO.hint.wallMade(touchWords) };
+    return { state: 'wall-focus', text: RO.hint.wallFocus(touchWords) };
+  }
+  if(model.walls.length === 0) return { state: 'empty', text: RO.hint.empty(touchWords) };
+  return { state: 'idle', text: '' };
+}
+function renderHint(){
+  var h = hintFor();
+  hintEl.setAttribute('data-state', h.state);
+  hintEl.innerHTML = h.text;
+  hintEl.classList.toggle('fp-off', !h.text);
 }
 function renderToastDom(){
-  if(!toastState){ toastEl.classList.add('hidden'); return; }
-  toastEl.classList.remove('hidden');
+  if(!toastState){ toastEl.classList.add('fp-off'); return; }
+  toastEl.classList.remove('fp-off');
   toastTextEl.textContent = toastState.text;
 }
 function renderConfirmDialog(){
-  if(!confirmState){ confirmDialogEl.classList.add('hidden'); return; }
-  confirmDialogEl.classList.remove('hidden');
+  if(!confirmState){ confirmDialogEl.classList.add('fp-off'); return; }
+  confirmDialogEl.classList.remove('fp-off');
   confirmDialogTextEl.textContent = confirmState.message;
   confirmYesBtn.textContent = confirmState.yesLabel;
 }
 /* ======================================================================
-   HTML CONTROL LAYER — everything readable or typeable. A piece that is
-   NOT selected shows a plain read-only LABEL (provenance-coloured text,
-   no input, no button — pure information, never "waiting for you").
-   Selecting a piece swaps its label for a real editable chip, anchored
-   on the piece, and reveals plate two of the bottom bar (type switcher /
-   add-opening / rotate / delete) — fixed screen chrome, never anchored
-   at the piece's own coordinates, so it can never cover a chip or a
-   free end waiting for the next draw (SPEC-lessons #18).
+   THE HTML LAYER — everything readable or typeable sits over the SVG as
+   ordinary positioned elements, so nothing carrying text or a real input
+   inherits the zoom: the numbers on the drawing, the live length, and
+   the plate of the thing in focus.
    ====================================================================== */
-function provClass(source){ return source==='typed' ? 'typed' : (source==='drawn' ? 'drawn' : 'computed'); }
 function stopChipPointer(node){
   ['pointerdown','mousedown','click'].forEach(function(evt){ node.addEventListener(evt, function(e){ e.stopPropagation(); }); });
 }
-// Shared obstacle list (stage-relative px) for anything placed in the
-// HTML overlay via placeInStage — a chip or a label. The bottom bar is
-// fixed screen chrome now, but PANEL_RESERVE_PX only reserves room for
-// it in the drawing's own coordinate space — it says nothing about
-// where a chip's stage-pixel placement actually lands, so the bar's
-// own rendered plates go back in this list (real getBoundingClientRect
-// boxes, not a guessed height) or a chip can still sit on top of it.
-// Covers every FREE END (SPEC-lessons, round ten): a free end is the
-// single most valuable spot on the canvas, since it's exactly where the
-// next stroke starts (and, on touch, exactly where the browser's own
-// tap disambiguation can retarget a just-finished draw onto whatever
-// control happens to render nearby — round ten, defect class). One
-// list, reused everywhere something could land on top of one, rather
-// than each caller re-deriving its own notion of "too close".
+// Where a chip or a plate may not land, in stage pixels: over one of the
+// floating plates, or over a free end — the spot the next stroke starts
+// from, and where a browser's own tap disambiguation is most likely to
+// retarget a press onto whatever control renders nearby.
 function freeEndObstacles(stageRect, t, radius){
   radius = radius || SNAP_PX;
   var obstacles = [];
-  var barClearPx = 6;
-  root.querySelectorAll('#bar .plate:not(.hidden)').forEach(function(pl){
+  var clearPx = 6;
+  root.querySelectorAll('#toolPlate, #histPlate, #viewPlate, #hintLine').forEach(function(pl){
+    if(pl.classList.contains('fp-off')) return;
     var pr = pl.getBoundingClientRect();
-    obstacles.push({ l:pr.left-stageRect.left-barClearPx, t:pr.top-stageRect.top-barClearPx, r:pr.right-stageRect.left+barClearPx, b:pr.bottom-stageRect.top+barClearPx });
+    if(pr.width <= 0) return;
+    obstacles.push({ l:pr.left-stageRect.left-clearPx, t:pr.top-stageRect.top-clearPx, r:pr.right-stageRect.left+clearPx, b:pr.bottom-stageRect.top+clearPx });
   });
   collectVertices().forEach(function(v){
-    if(v.refs.length !== 1) return; // free ends only -- a corner already has its own dedicated handle, not a place a stroke starts fresh from
+    if(v.refs.length !== 1) return; // free ends only
     var p = cmToStage(v.point, t);
     obstacles.push({ l:p.x-radius, t:p.y-radius, r:p.x+radius, b:p.y+radius });
   });
   return obstacles;
 }
-function obstaclesHitAny(obstacles, l, r, tp, bt){
-  return obstacles.some(function(o){ return l < o.r && r > o.l && tp < o.b && bt > o.t; });
-}
-// A SECOND, narrower obstacle source — only for a wall's own total (see
-// allDims / avoidChips below), never for a per-segment chip. A per-
-// segment chip's own lane (assignChipLane) is what keeps it clear of
-// its neighbours, deterministically; that must stay untouched, or a
-// number could get shoved off its own segment's midpoint the exact way
-// the old collision resolver did. The total has no single segment of
-// its own to stay anchored to, and it is the one number placed a
-// further, un-clamped-in-cm lane out from whatever the per-segment
-// chips actually used this render — on a tight room, placeInStage's own
-// edge clamp (below) can still pull it back onto one of them, and this
-// is the fallback for exactly that: the same push-in-4-directions
-// escape already trusted for a free end or a bar plate, just given one
-// more obstacle type to dodge.
-// '#pieceActions' rides along in this query (not just '.chip') so that
-// whatever already opts into avoiding chips (today, just the wall
-// total) also avoids the per-piece action bar — one shared list, same
-// reasoning as freeEndObstacles reading '#bar .plate' straight off the
-// DOM, rather than a second obstacle category invented just for it.
+// A second, narrower obstacle source, for the wall total and the focus
+// plate: every chip already on screen. A per-segment chip stays out of
+// this on purpose — its own lane keeps it clear of its neighbours, and
+// pushing it would move a number off the stretch it measures.
 function chipObstacles(stageRect, skipEl){
   var obstacles = [];
   var gap = 4;
-  ctrlLayerEl.querySelectorAll('.chip, #pieceActions').forEach(function(c){
+  ctrlLayerEl.querySelectorAll('.fp-chip, #focusPlate').forEach(function(c){
     if(c === skipEl) return;
     var r = c.getBoundingClientRect();
     obstacles.push({ l:r.left-stageRect.left-gap, t:r.top-stageRect.top-gap, r:r.right-stageRect.left+gap, b:r.bottom-stageRect.top+gap });
@@ -2324,22 +2277,17 @@ function chipObstacles(stageRect, skipEl){
 // partway off-screen with nothing to tap. Place it, then measure and
 // pull its centre back in just enough that the whole element stays
 // within the stage — the anchor is only a starting point, not a promise.
-// `avoidChips` opts into chipObstacles above; every other caller (every
-// per-segment chip, every label) leaves it off and is unaffected.
-// `extraObstacles`, if given, is concatenated straight onto the same
-// list this already builds — the piece action bar's own escape from
-// the piece's hit rect and its opening-edge handles (see
-// pieceOwnObstacles) uses this, rather than a second push-to-escape
-// loop of its own.
+// `avoidChips` opts into chipObstacles above; a per-segment chip and a
+// label leave it off. `extraObstacles` is concatenated onto the same
+// list — the focus plate's own escape from the piece it acts on.
 function placeInStage(el, anchor, t, avoidChips, extraObstacles){
   var pos = cmToStage(anchor, t);
   el.style.left = pos.x+'px'; el.style.top = pos.y+'px';
   ctrlLayerEl.appendChild(el);
-  var stageRect = $id('stage').getBoundingClientRect();
+  var stageRect = stageEl.getBoundingClientRect();
   var w = el.offsetWidth;
   // A chip's own VISIBLE box is a fixed 30px tall, but its input's real
-  // hit box overflows that invisibly out to 44px (lesson 17, without
-  // the chip itself growing to show it) — collide against the real
+  // hit box overflows that invisibly out to 44px — collide against the real
   // interactive footprint, not the shorter visible one, or an obstacle
   // check here would pass while the actual touch target still overlaps.
   var h = Math.max(el.offsetHeight, 44);
@@ -2348,14 +2296,12 @@ function placeInStage(el, anchor, t, avoidChips, extraObstacles){
   var cx = Math.min(Math.max(pos.x, minX), maxX);
   var cy = Math.min(Math.max(pos.y, minY), maxY);
 
-  // Nothing placed here may cover any FREE END (SPEC-lessons, round
-  // ten) — a free end is the single most valuable spot on the canvas,
-  // since every stroke's own free end is exactly where the next stroke
-  // starts, so nothing — chip included — may sit on top of one.
+  // Nothing placed here may cover a free end: that is where the next
+  // stroke starts from, so a chip on top of one costs the client the
+  // stroke.
   var obstacles = freeEndObstacles(stageRect, t);
   if(avoidChips) obstacles = obstacles.concat(chipObstacles(stageRect, el));
   if(extraObstacles && extraObstacles.length) obstacles = obstacles.concat(extraObstacles);
-  function hitsAny(l, r, tp, bt){ return obstaclesHitAny(obstacles, l, r, tp, bt); }
   function collidingWith(cx2, cy2){
     return obstacles.filter(function(o){ return (cx2-w/2)<o.r && (cx2+w/2)>o.l && (cy2-h/2)<o.b && (cy2+h/2)>o.t; });
   }
@@ -2408,23 +2354,15 @@ function placeInStage(el, anchor, t, avoidChips, extraObstacles){
   }
   if(cx !== pos.x) el.style.left = cx+'px';
   if(cy !== pos.y) el.style.top = cy+'px';
-  // Every existing caller (a chip, a label) ignores this — it exists
-  // for renderPieceActions, which is big enough to sometimes have NO
-  // fully clear spot on one side of its piece and needs to know
-  // whether to try the other side instead of just trusting whichever
-  // it tried first.
+  // A chip ignores this; the focus plate is big enough to sometimes have
+  // no fully clear spot on one side of its piece, and needs to know
+  // whether to try the other side.
   return { remaining: collidingWith(cx, cy).length };
 }
-// A THIRD obstacle source, only for the piece action bar: unlike a
-// chip (which only ever has to dodge other chips and free ends), the
-// action bar sits right next to the very thing it acts on, so it also
-// has to dodge that piece's own hit rect and — for a window/door — its
-// two edge-resize handles, or it would cover the exact geometry someone
-// just tapped to select it. Read straight off the real SVG elements
-// renderSvg already drew this render (same "measure, don't guess" rule
-// freeEndObstacles/chipObstacles already follow for everything else
-// placeInStage avoids), never recomputed from cornerRCm/hitCm here —
-// two formulas for one box is how they drift apart.
+// A third obstacle source, only for the focus plate: it sits right next
+// to the very thing it acts on, so it also has to dodge that piece's own
+// hit rect and, for an opening, its two jamb handles. Read off the real
+// SVG elements this render already drew, never recomputed here.
 function pieceOwnObstacles(stageRect, seg){
   var gap = 6;
   var obstacles = [];
@@ -2440,40 +2378,36 @@ function pieceOwnObstacles(stageRect, seg){
   });
   return obstacles;
 }
-// Read-only — used only for the live in-progress dimension, which has
-// no model piece yet to attach a real chip to.
-function addLabel(text, source, anchor, t, testid){
+// Read-only — used only for the live length riding the pointer, which
+// has no model piece yet to attach a real chip to.
+function addLabel(text, anchor, t, testid){
   var div = doc.createElement('div');
-  div.className = 'label ' + provClass(source);
+  div.className = 'fp-live';
   if(testid) div.setAttribute('data-testid', testid);
   div.textContent = text;
   placeInStage(div, anchor, t);
 }
-// `tone` ('primary' for the selected piece, 'side' for a neighbouring
-// gap or a wall's own outer total) is what says which number is the
-// one you picked, same idea as src/draw's DimChip (primary/side),
-// layered UNDER the existing provenance signal (typed=ink, drawn/
-// computed=graphite italic on the input itself) rather than replacing
-// it.
-function buildChip(testid, value, source, anchor, t, onCommit, label, tone, avoidChips){
+// A number on the drawing: a white chip with a hairline. Typed is ink,
+// drawn or prefilled is grey italic; the one belonging to the piece in
+// focus is framed in ink. Tapping it edits it in place — the chip is
+// the field, so the keyboard never opens on its own.
+function buildChip(testid, value, source, anchor, t, onCommit, label, focused, avoidChips){
   var input = doc.createElement('input');
   input.type = 'text'; input.inputMode = 'decimal';
   input.setAttribute('data-testid', testid);
   input.value = String(value);
-  input.className = source==='drawn' ? 'v-drawn' : (source==='computed' ? 'v-computed' : '');
+  input.className = source==='typed' ? '' : 'fp-derived';
   var chip = doc.createElement('div');
-  chip.className = 'chip ' + (tone==='side' ? 'side' : 'primary');
+  chip.className = 'fp-chip' + (focused ? ' on' : '');
   chip.appendChild(input);
-  var unit = doc.createElement('span'); unit.className='unit'; unit.textContent='cm';
+  var unit = doc.createElement('span'); unit.className='fp-unit'; unit.textContent='cm';
   chip.appendChild(unit);
   bindLengthField(input, onCommit, label || RO.fieldLength);
   stopChipPointer(chip);
   // A press usually lands on the chip's padding or its invisible halo,
-  // not on the digits themselves — left to the browser, that resolves
-  // to "nothing focusable here" and takes focus away again on release
-  // (src/draw's DimChip: the reported symptom was a field that opens
-  // while held and closes the instant you let go). So the press is
-  // taken on the whole chip and focus put on the input explicitly.
+  // not on the digits themselves — left to the browser that resolves to
+  // "nothing focusable here" and takes focus away again on release. So
+  // the press is taken on the whole chip and focus put on the input.
   chip.addEventListener('pointerdown', function(e){
     if(doc.activeElement === input) return; // already editing: let the browser place the caret where tapped
     e.preventDefault();
@@ -2532,399 +2466,295 @@ function offerClamp(res, apply){
   showConfirm(msg, RO.clampYes(res.max), function(){ apply(res.max); }, function(){});
 }
 
-// One source, two consumers: allDims/liveDim (defined above, next to
-// renderSvg's own use of them for the dimension LINE) drive every chip
-// here too, so a number can never end up sitting on a different chip
-// than the line drawn under it — chipAnchor rather than dimAnchor here
-// is the one deliberate difference, since a chip (unlike its line) can
-// have been bumped out a lane by assignChipLane.
+// One source, two consumers: allDims and liveDim drive the dimension
+// LINES over in renderSvg and every chip here, so a number can never end
+// up sitting on a different stretch of wall than the line under it.
 function renderCtrlLayer(t){
   ctrlLayerEl.innerHTML = '';
-
-  // renderCluster FIRST, before a single chip is placed: placeInStage's
-  // obstacle list (freeEndObstacles) reads the bar's plates straight off
-  // the live DOM, and #cluster is that plate two — sized and shown or
-  // hidden by selection. With every segment now carrying an always-on
-  // chip (not just the one selected piece, back when this was ordered
-  // the other way and got away with it), the odds that one of them sits
-  // exactly where a just-opened cluster appears are real; building the
-  // cluster first means every chip this render sees its true, current
-  // footprint rather than last render's stale one.
-  renderCluster(t);
+  focusPlateEl = null;
 
   allDims(t).forEach(function(d){
-    buildChip(d.testid, d.value, d.source, chipAnchor(d), t, d.commit, d.label, d.tone, d.isTotal);
+    buildChip(d.testid, d.value, d.source, chipAnchor(d), t, d.commit, d.label, d.tone === 'primary', d.isTotal);
   });
 
-  // Live dimension, riding the pointer, for whichever gesture is
-  // actively lengthening a wall right now (spec's own words for a draw:
-  // "orthogonally snapped, live length riding the pointer"). Read-only,
-  // since mid-gesture there is nothing yet to commit to.
+  // The live length riding the pointer while a stroke or a resize is
+  // lengthening a wall. Read-only: mid-gesture there is nothing to commit.
   var live = liveDim(t);
-  if(live) addLabel(live.value + ' cm', 'drawn', dimAnchor(live), t, 'live-dim');
+  if(live) addLabel(live.value + ' cm', dimAnchor(live), t, 'live-dim');
 
-  // LAST: the piece action bar opts into avoiding every chip just
-  // placed above (avoidChips) exactly the way the wall-total chip
-  // does — that only sees what already exists in the DOM, so this has
-  // to render after every chip this pass will ever place, not before.
-  renderPieceActions(t);
+  // Last, so it can avoid every chip this pass has already placed.
+  renderFocusPlate(t);
 }
 
 /* ======================================================================
-   PIECE ACTION BAR — the selected piece's own verbs, floating right
-   beside it on the canvas rather than living in the bottom bar: a
-   wall/open edge gets "+ Door"/"+ Window"/Delete, a door gets
-   Rotate/Delete, a window gets Delete. Everything else about a
-   selection (the kind switcher, the two real measurements) is a mode
-   switch or a number, not an action ON the piece, and stays put in
-   #cluster (see SELECTION CLUSTER, below) — the user's own split.
-
-   This is the SECOND time this file has tried a control that lives
-   next to the piece it acts on. The first was a panel
-   that docked itself dynamically below the room's own bounding box
-   with bespoke collision-avoidance of its own, and kept re-opening the
-   exact "control blocks the canvas" bug every round it tried to close.
-   This one invents no new notion of "too close" at all: it is placed
-   by the same placeInStage every chip already trusts, avoiding the
-   same free ends and the same bottom bar (freeEndObstacles, always)
-   and, opting in exactly like the wall-total chip does, every other
-   chip too (chipObstacles/avoidChips — which now also protects THIS
-   bar in return, see chipObstacles' own comment) — plus one further
-   obstacle list of its own (pieceOwnObstacles) for the one thing a
-   chip never has to dodge: the piece's own hit rect and, for an
-   opening, its own edge-resize handles, since this is the one control
-   that renders right next to them rather than out along a dimension
-   lane.
-
-   Icons are licensed here even though the rest of this file avoids an
-   icon set (see .piece-actions in the stylesheet) — plan-like marks
-   that echo what the drawing itself already draws for that piece (a
-   door's own leaf+arc, a window's own three lines), always paired with
-   the word, since the whole point of this bar is being clearer, not
-   more cryptic.
+   THE FOCUS PLATE — the plate of the thing in focus, holding only what
+   that thing needs: a wall or a Fără perete side, "Șterge"; a window,
+   Lățime, Înălțime pervaz and "Șterge"; a door, Lățime, "Rotește" and
+   "Șterge". Lengths of walls are never here — they are on the drawing.
+   Beside the piece on a wide screen, docked bottom centre on a phone,
+   above the undo and view plates.
    ====================================================================== */
-var ICON_ADD_DOOR = '<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
-  + '<path d="M3 13.5V2.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>'
-  + '<path d="M3 2.5A11 11 0 0 1 13.5 13.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2"/>'
-  + '</svg>';
-var ICON_ADD_WINDOW = '<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
-  + '<line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" stroke-width="1.3"/>'
-  + '<line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="1.3"/>'
-  + '<line x1="2" y1="12" x2="14" y2="12" stroke="currentColor" stroke-width="1.3"/>'
-  + '</svg>';
-var ICON_ROTATE = '<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
-  + '<path d="M13 8A5 5 0 1 1 10.6 4.1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>'
-  + '<path d="M11.1 1.7 10.6 4.1 13.1 4.7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>'
-  + '</svg>';
-var ICON_DELETE = '<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
-  + '<path d="M3 4.5h10M6.3 4.5V3a1 1 0 0 1 1-1h1.4a1 1 0 0 1 1 1v1.5M4.4 4.5 5 13a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.6-8.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>'
-  + '<line x1="6.5" y1="7" x2="6.8" y2="11.3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>'
-  + '<line x1="9.5" y1="7" x2="9.2" y2="11.3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>'
-  + '</svg>';
-// `side` picks which face of the wall to start from: +1 is OPPOSITE
-// the dimension chips (segDim uses {-n.x,-n.y}; this is +n), the
-// better first guess since the two then rarely compete for the same
-// spot before placeInStage's own obstacle-avoidance even has to step
-// in; -1 is the chips' own side, tried by renderPieceActions as a
-// fallback when +1's side turns out to have no fully clear spot at
-// all (a small room on a narrow phone, chips crowding both interior
-// and exterior). Either way, it's placeInStage's avoidance — not
-// which side this starts from — that actually guarantees no
-// collision in the end.
-function pieceActionAnchor(w, seg, t, side){
+function plateField(row, label, value, source, testid, onCommit, fieldName){
+  var lbl = doc.createElement('span');
+  lbl.className = 'fp-fl';
+  lbl.textContent = label;
+  var input = doc.createElement('input');
+  input.type = 'text'; input.inputMode = 'decimal';
+  input.setAttribute('data-testid', testid);
+  input.setAttribute('aria-label', label);
+  input.className = 'fp-num' + (source === 'typed' ? '' : ' fp-derived');
+  input.value = String(value);
+  bindLengthField(input, onCommit, fieldName);
+  var unit = doc.createElement('span');
+  unit.className = 'fp-unit';
+  unit.textContent = 'cm';
+  row.appendChild(lbl); row.appendChild(input); row.appendChild(unit);
+  return input;
+}
+function plateAction(row, testid, label, glyphName, onClick){
+  var btn = doc.createElement('button');
+  btn.type = 'button';
+  btn.className = 'fp-tool';
+  btn.setAttribute('data-testid', testid);
+  btn.innerHTML = glyph(glyphName);
+  var span = doc.createElement('span');
+  span.textContent = label;
+  btn.appendChild(span);
+  btn.addEventListener('click', onClick);
+  row.appendChild(btn);
+}
+function focusPlateAnchor(w, seg, t, side){
   var pts = segPoints(w, seg);
   var mid = { x:(pts.p0.x+pts.p1.x)/2, y:(pts.p0.y+pts.p1.y)/2 };
   var n = wallNormal(w);
-  var outCm = (segHitWidthCm(t)/2 + 40/t.scale) * side;
+  var outCm = (segHitWidthCm(t)/2 + 44/t.scale) * side;
   return { x: mid.x + n.x*outCm, y: mid.y + n.y*outCm };
 }
-function renderPieceActions(t){
-  // Hidden for the duration of any committed drag, same reasoning as
-  // #cluster's identical guard: it would otherwise ride along with the
-  // piece being pushed/slid/resized and end up sitting on top of
-  // wherever the gesture is about to land.
+function renderFocusPlate(t){
+  // Hidden while a drag is running: it would ride along with the piece
+  // and end up on top of wherever the gesture is about to land.
   if(dragState && dragState.committed) return;
   if(!selection) return;
   var f = findSegAnywhere(selection.segId);
   if(!f) return;
   var w = f.wall, seg = f.seg;
 
-  var bar = doc.createElement('div');
-  bar.className = 'plate group piece-actions';
-  // The id is load-bearing, not decoration: two guards address this bar
-  // by '#pieceActions' — chipObstacles, so the wall-total chip keeps off
-  // it, and realBoxMisses, so a press that lands near it but outside its
-  // real box still reaches the canvas underneath. A selector that
-  // matches nothing fails silently in both, and the second failure is
-  // the one that matters: without it this bar quietly eats strokes aimed
-  // at the room, which is the single worst thing a control can do here.
-  bar.id = 'pieceActions';
-  bar.setAttribute('data-testid', 'piece-actions');
+  var plate = doc.createElement('div');
+  plate.className = 'fp-plate fp-focus';
+  plate.id = 'focusPlate';
+  plate.setAttribute('data-testid', 'focus-plate');
 
-  function addBtn(testid, label, icon, warn, onClick){
-    var btn = doc.createElement('button');
-    btn.type = 'button';
-    btn.className = warn ? 'txtbtn warn' : 'txtbtn';
-    btn.setAttribute('data-testid', testid);
-    btn.innerHTML = icon;
-    var span = doc.createElement('span');
-    span.textContent = label;
-    btn.appendChild(span);
-    btn.addEventListener('click', onClick);
-    bar.appendChild(btn);
+  var row = doc.createElement('div');
+  row.className = 'fp-row';
+  plate.appendChild(row);
+
+  if(seg.kind === 'window' || seg.kind === 'door'){
+    // The width is the same value as the piece's own number on the
+    // drawing: editing either edits both.
+    plateField(row, RO.width, seg.length.value, seg.length.source, 'plate-width',
+      segDimCommit(w, seg), RO.fieldWidth);
   }
-
-  if(seg.kind==='wall' || seg.kind==='open'){
-    addBtn('piece-add-door', RO.addDoor, ICON_ADD_DOOR, false, function(){
-      pushHistory();
-      var mid = seg.offsetFromStart + seg.length.value/2;
-      var id = addOpening(w.id, 'door', mid);
-      if(id){ selection={segId:id}; pendingFocusSegId=id; }
-      render();
-    });
-    addBtn('piece-add-window', RO.addWindow, ICON_ADD_WINDOW, false, function(){
-      pushHistory();
-      var mid = seg.offsetFromStart + seg.length.value/2;
-      var id = addOpening(w.id, 'window', mid);
-      if(id){ selection={segId:id}; pendingFocusSegId=id; }
-      render();
+  if(seg.kind === 'door'){
+    row.appendChild(divider());
+    plateAction(row, 'plate-rotate', RO.rotate, 'rotate', function(){
+      pushHistory(); cycleDoorSwing(w.id, seg.id); render();
     });
   }
-  if(seg.kind==='door'){
-    // Same one-button cycle as always (SPEC-lessons, round six, rule
-    // 3) — doorSwingLabel is untouched, so the label still says what
-    // the door currently IS; the icon just says "press this to turn
-    // it", and the arc drawn on the plan is still the real answer.
-    addBtn('door-swing-cycle', doorSwingLabel(w, seg), ICON_ROTATE, false, function(){ pushHistory(); cycleDoorSwing(w.id, seg.id); render(); });
+  if(seg.kind === 'window'){
+    // Two rows on a phone: the sill goes under the width.
+    var second = row;
+    if(isNarrow()){
+      second = doc.createElement('div');
+      second.className = 'fp-row';
+      plate.appendChild(second);
+      plate.classList.add('fp-two');
+    } else {
+      row.appendChild(divider());
+    }
+    var sv = seg.sill || { value: carried.sill, source: 'computed' };
+    plateField(second, RO.sill, sv.value, sv.source, 'plate-sill', function(cm){
+      pushHistory();
+      carried.sill = r(cm);
+      setSegSill(w.id, seg.id, cm, 'typed');
+      render();
+    }, RO.fieldSill);
   }
-  // Any kind can be deleted (a plain wall/open piece — e.g. a stray
-  // mis-click stroke — used to be permanent short of undo). Routed
-  // through the one deleteSelection() so the keyboard shortcut and
-  // this button can never drift apart on what "delete" actually does
-  // for each kind.
-  addBtn('piece-delete', RO.del, ICON_DELETE, true, function(){ deleteSelection(); });
+  if(row.childNodes.length) row.appendChild(divider());
+  plateAction(row, 'plate-delete', RO.del, 'del', function(){ deleteSelection(); });
 
-  stopChipPointer(bar);
-  var stageRect = $id('stage').getBoundingClientRect();
+  stopChipPointer(plate);
+  focusPlateEl = plate;
+
+  if(isNarrow()){
+    // Docked bottom centre, above the undo and view plates: a plate wide
+    // enough for two fields next to a piece on a 360px screen would
+    // always land on the drawing or run off the edge.
+    plate.classList.add('fp-docked');
+    ctrlLayerEl.appendChild(plate);
+    return;
+  }
+  var stageRect = svgEl.getBoundingClientRect();
   var extraObs = pieceOwnObstacles(stageRect, seg);
-  // Try the side opposite the dimension chips first (pieceActionAnchor's
-  // own better guess); if that side has nowhere fully clear to land —
-  // a small room on a narrow phone, chips and the bottom bar crowding
-  // it from every direction — retry starting from the chips' own side
-  // instead, same machinery, just a different place to start pushing
-  // from. Keep whichever attempt actually ends up clear of everything;
-  // if neither does, keep whichever got closer, the same "best effort"
-  // every chip already settles for in an equally tight spot.
-  var placement = placeInStage(bar, pieceActionAnchor(w, seg, t, 1), t, true, extraObs);
+  var placement = placeInStage(plate, focusPlateAnchor(w, seg, t, 1), t, true, extraObs);
   if(placement.remaining > 0){
-    var left1 = bar.style.left, top1 = bar.style.top, remaining1 = placement.remaining;
-    var placement2 = placeInStage(bar, pieceActionAnchor(w, seg, t, -1), t, true, extraObs);
-    if(placement2.remaining > remaining1){ bar.style.left = left1; bar.style.top = top1; }
+    var left1 = plate.style.left, top1 = plate.style.top, remaining1 = placement.remaining;
+    var placement2 = placeInStage(plate, focusPlateAnchor(w, seg, t, -1), t, true, extraObs);
+    if(placement2.remaining > remaining1){ plate.style.left = left1; plate.style.top = top1; }
   }
 }
 
-/* ======================================================================
-   SELECTION CLUSTER — plate two of the bottom bar: the kind switcher
-   (Wall/Open/Window/Door) plus the real measurements an opening needs
-   here ("Starts at", "Sill height"). Only rendered for the selected
-   piece; there is no "Done" button — tapping empty canvas already
-   deselects, and there is no "Move to" either — dragging an opening
-   onto another wall already does that (see moveOpeningToWall / the
-   cross-wall drag path in the gesture router), and it is the gesture a
-   user finds by trying, which is the whole point.
-   Add-opening, rotate and delete used to live here too, in the same
-   wrapping row as the kind switcher — but a mode switch and a real
-   measurement are not the same category of thing as an action ON the
-   selected piece, and the user asked for exactly that split: this
-   plate keeps only the former, the latter now floats right beside the
-   piece itself (see PIECE ACTION BAR, below renderCtrlLayer).
-   ====================================================================== */
-// A kind switcher button borrows the drawing's own colour for its kind
-// in the swatch, same reasoning as src/draw's Toolbar: the bar should
-// say the same thing about a wall/window/door that the drawing does,
-// rather than inventing a second vocabulary of UI colours for it.
-var KIND_SWATCH = { wall:'var(--fp-wall)', open:'var(--fp-open)', window:'var(--fp-window)', door:'var(--fp-door)' };
-function renderCluster(t){
-  clusterEl.innerHTML = '';
-  // Hidden for the duration of any committed drag — it would otherwise
-  // follow the selected piece live (sliding an opening, pushing a wall)
-  // and can end up sitting on top of wherever the gesture is about to
-  // land, exactly the "control blocks the canvas" defect this file
-  // exists to avoid, just reached mid-gesture instead of at rest.
-  if(dragState && dragState.committed){ clusterEl.classList.add('hidden'); return; }
-  if(!selection){ clusterEl.classList.add('hidden'); return; }
-  var f = findSegAnywhere(selection.segId);
-  if(!f){ selection = null; clusterEl.classList.add('hidden'); return; }
-  var w = f.wall, seg = f.seg;
-  clusterEl.classList.remove('hidden');
-
-  // Type switcher only now — a legend, not a row of filled toggles
-  // (never more than one solid button in a view, and this app has none
-  // at all). It used to share this row with +Door/+Window (or Rotate/
-  // Delete); those are actions ON the piece, not a mode switch, and now
-  // live on the floating piece action bar next to the piece itself.
-  var rowA = doc.createElement('div'); rowA.className = 'crow';
-  [['wall',RO.kind.wall],['open',RO.kind.open],['window',RO.kind.window],['door',RO.kind.door]].forEach(function(pair){
-    var btn = doc.createElement('button');
-    btn.type = 'button';
-    btn.textContent = pair[1];
-    btn.className = 'legend';
-    btn.style.setProperty('--swatch', KIND_SWATCH[pair[0]]);
-    btn.setAttribute('aria-pressed', seg.kind===pair[0] ? 'true' : 'false');
-    btn.setAttribute('data-testid','piece-type-'+pair[0]);
-    btn.addEventListener('click', function(){ pushHistory(); changeKind(seg.id, pair[0]); render(); });
-    rowA.appendChild(btn);
-  });
-  clusterEl.appendChild(rowA);
-
-  if(seg.kind==='window' || seg.kind==='door'){
-    // "Starts at" — the offset from this wall's own start point. Chained
-    // measuring types the piece's own length (the dimension chip);
-    // cumulative measuring reads a running total off the tape instead —
-    // this is that second way in, so neither has to do arithmetic the
-    // tape didn't do for them. This is a real measurement input, not
-    // chrome, so it stays even though "Move to" (below) doesn't.
-    var offRow = doc.createElement('div'); offRow.className='sill-row';
-    var offLbl = doc.createElement('label'); offLbl.textContent = RO.startsAt;
-    var offInput = doc.createElement('input');
-    offInput.type = 'text'; offInput.inputMode = 'decimal';
-    offInput.setAttribute('data-testid','offset-'+seg.id);
-    offInput.value = String(seg.offsetFromStart);
-    offRow.appendChild(offLbl); offRow.appendChild(offInput);
-    var offUnit = doc.createElement('span'); offUnit.className='unit'; offUnit.textContent=RO.cmFromStart;
-    offRow.appendChild(offUnit);
-    bindLengthField(offInput, function(cm){ pushHistory(); slideSegment(w.id, seg.id, cm, 'typed'); render(); }, RO.fieldOffset);
-    clusterEl.appendChild(offRow);
-  }
-
-  if(seg.kind==='window'){
-    // Sill height used to float as its own chip on the canvas, but it
-    // has no dimension line to sit on — it's a height, not a length
-    // along the wall, so there's no stretch of wall it could ever be
-    // drawn beside. It belongs beside the other real measurement this
-    // plate already carries ("Starts at"), not hovering over open
-    // canvas with nothing under it saying what it's about.
-    var sillRow = doc.createElement('div'); sillRow.className='sill-row';
-    var sillLbl = doc.createElement('label'); sillLbl.textContent = RO.sillHeight;
-    var sillInput = doc.createElement('input');
-    sillInput.type = 'text'; sillInput.inputMode = 'decimal';
-    sillInput.setAttribute('data-testid','sill-'+seg.id);
-    // Same DEFAULT_SILL fallback the floating chip used to show: a
-    // window always has a sill worth displaying and editing, whether
-    // or not it has ever been typed.
-    var sv = seg.sill || { value: DEFAULT_SILL, source:'computed' };
-    sillInput.value = String(sv.value);
-    sillInput.className = sv.source==='drawn' ? 'v-drawn' : (sv.source==='computed' ? 'v-computed' : '');
-    sillRow.appendChild(sillLbl); sillRow.appendChild(sillInput);
-    var sillUnit = doc.createElement('span'); sillUnit.className='unit'; sillUnit.textContent='cm';
-    sillRow.appendChild(sillUnit);
-    bindLengthField(sillInput, function(cm){ pushHistory(); setSegSill(w.id, seg.id, cm, 'typed'); render(); }, RO.fieldSill);
-    clusterEl.appendChild(sillRow);
-  }
-
-  // Add-opening, Rotate and Delete used to join this row too — they now
-  // render on the piece action bar instead (renderPieceActions, below
-  // renderCtrlLayer), which is why rowA ends here rather than growing
-  // more children the way it used to.
-  stopChipPointer(clusterEl);
-}
 /* ============================================================
-   GESTURE ROUTER — the whole direction. Intent comes from where a
-   drag STARTS, decided once at pointerdown, before any movement:
-     a wall/opening   -> push it (wall/open) or slide it (window/door)
-     a corner         -> move that corner, both walls following
-     an opening edge  -> resize that opening, the far edge pinned
-                          (selected window/door only)
-     empty canvas     -> ALWAYS draws — there is no current point, and
-                          nothing is off-limits to start from. Snapping
-                          (checked at press and again at release) does
-                          the joining; see findStartSnap/findEndpointSnap.
-   Every drag starts inside a small screen-space dead-zone (TAP_PX) — a
-   plain tap never moves anything, it only selects/deselects. Crossing
-   it commits to exactly one gesture; each restores from a snapshot
-   taken at commit and reapplies fresh on every move, so nothing drifts.
+   TOOLS — picking one, using it, and turning it off. tools.ts owns the
+   rules; this is what the engine does about them.
    ============================================================ */
+function hasAnyWall(){
+  for(var i=0;i<model.walls.length;i++){
+    if(!model.walls[i].isOpen) return true;
+  }
+  return false;
+}
+function pickTool(id){
+  var res = applyToolEvent(tools, activeTool, { type:'pick', id:id }, { hasWall: hasAnyWall() });
+  if(!res.handled) return;
+  activeTool = res.active;
+  refusedTool = res.refused;
+  justMade = null;
+  // Picking a tool ends the focus: the canvas is for making now.
+  if(!res.refused && res.active !== restingTool(tools)) selection = null;
+  render();
+}
+/** One use of the active tool is over: it either made something or it did not. */
+function toolUsed(made, kindMade){
+  var res = applyToolEvent(tools, activeTool, { type:'use', made: !!made }, { hasWall: hasAnyWall() });
+  activeTool = res.active;
+  refusedTool = false;
+  justMade = made ? kindMade : null;
+}
+function activeToolDef(){ return toolById(tools, activeTool); }
+function toolMakes(){ var td = activeToolDef(); return td ? td.makes : null; }
+function isMakingStroke(){ var td = activeToolDef(); return !!td && td.gesture === 'stroke'; }
+function isPlacingTap(){ var td = activeToolDef(); return !!td && td.gesture === 'tap'; }
+
+/* ============================================================
+   GESTURE ROUTER — intent comes from the tool that is on and from where
+   a drag starts, decided once at pointerdown, before any movement:
+     Perete / Fără perete -> one drag draws one piece, snapping at press
+                              and again at release
+     Fereastră / Ușă      -> one tap on a wall places one opening
+     Selectează, on a piece    -> push a wall, slide an opening
+     Selectează, on a corner   -> move that corner, both walls following
+     Selectează, on a jamb     -> resize that opening, the far jamb pinned
+     Selectează, on empty canvas -> move the view
+   Two fingers pinch and pan whatever the tool, and a second finger
+   landing during a stroke cancels it. Every drag starts inside a small
+   screen-space dead-zone (TAP_PX): a plain tap never moves anything.
+   ============================================================ */
+var pointers = new Map();
+var pinch = null;
+var spaceDown = false;
+
+function pinchDistance(){
+  var pts = Array.from(pointers.values());
+  return Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+}
+function pinchCentre(){
+  var pts = Array.from(pointers.values());
+  var sr = svgEl.getBoundingClientRect();
+  return { x: (pts[0].x + pts[1].x)/2 - sr.left, y: (pts[0].y + pts[1].y)/2 - sr.top };
+}
+function cancelStroke(){
+  if(dragState && dragState.committed && dragState.base){
+    restoreSnapshot(dragState.base);
+    // The drag took its undo step the moment it committed; abandoned, it
+    // would leave a step that undoes to the very same drawing.
+    undoStack.pop();
+  }
+  dragState = null;
+  stopEdgePan();
+}
+
 function onSvgPointerDown(e){
-  // Commit whatever chip is currently focused on EVERY pointerdown, not
-  // just button presses (SPEC-shared-contract bug class 1).
+  // Commit whatever chip is focused on every pointerdown, not just on a
+  // button press: a field commits on blur, and blur re-renders.
   commitActiveField();
+  refusedTool = false;
+  pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  if(pointers.size === 2){
+    // A second finger takes over: whatever the first was doing stops.
+    cancelStroke();
+    pinch = { dist: pinchDistance(), centre: pinchCentre() };
+    render();
+    return;
+  }
+  if(pointers.size > 2) return;
+
   var t = viewTransform();
   var startCm = clientToCm(e.clientX, e.clientY, t);
   var base = { startClientX:e.clientX, startClientY:e.clientY, startCm:startCm, committed:false };
 
-  // A real corner, an opening's own edge handle, or a free end's own
-  // dedicated circle are small, precise targets — they always win
-  // outright, before anything else is even considered.
-  var dedicated = e.target.closest ? e.target.closest('.corner-hit,.opening-edge-hit,.free-end-hit') : null;
+  // Space or the middle button pans with any tool.
+  if(spaceDown || e.button === 1){
+    dragState = Object.assign(base, { kind:'pan', lastClientX:e.clientX, lastClientY:e.clientY });
+    capture(e);
+    return;
+  }
+
+  if(isMakingStroke()){
+    var startSnap = findStartSnap(startCm, t);
+    dragState = Object.assign(base, {
+      kind:'draw', tool: toolMakes(), startPt: startSnap.point, startSnap: startSnap
+    });
+    capture(e);
+    return;
+  }
+
+  if(isPlacingTap()){
+    // Resolved at release: an opening goes where the tap landed, on a
+    // plain stretch of wall.
+    dragState = Object.assign(base, { kind:'place' });
+    capture(e);
+    return;
+  }
+
+  var dedicated = e.target.closest ? e.target.closest('.fp-grab') : null;
   if(dedicated){
-    if(dedicated.classList.contains('corner-hit')){
+    if(dedicated.hasAttribute('data-vx')){
       var vx = parseFloat(dedicated.getAttribute('data-vx')), vy = parseFloat(dedicated.getAttribute('data-vy'));
       dragState = Object.assign(base, { kind:'corner', vertexPt: {x:vx,y:vy} });
-    } else if(dedicated.classList.contains('opening-edge-hit')){
-      // Unlike a free end, this target has exactly one meaning — no
-      // ambiguity to resolve by direction: any drag here resizes that
-      // one edge, along the wall's own axis; the far edge is pinned by
-      // applyDragMove (see the 'openingEdge' kind below).
+    } else if(dedicated.hasAttribute('data-edge')){
       dragState = Object.assign(base, {
         kind:'openingEdge', wallId: dedicated.getAttribute('data-wall-id'),
         segId: dedicated.getAttribute('data-seg-id'), edge: dedicated.getAttribute('data-edge')
       });
     } else {
-      // Unlike an opening's own edge handle above, a free end IS
-      // ambiguous (see the comment above handleTap): a plain tap here
-      // must select the piece at that end, a drag along the wall's own axis
-      // must resize it, and a drag off-axis must still start an
-      // ordinary new stroke — three outcomes on one point, none of them
-      // knowable yet. 'freeEnd' is the undecided holding kind; movement
-      // past TAP_PX resolves it BY DIRECTION in onSvgPointerMove
-      // (resolveFreeEndDirection), into either 'resize' or the
-      // unchanged 'draw' — everything a fallback to 'draw' needs is
-      // captured now, up front, exactly as findStartSnap would.
+      // A free end resizes its wall along the wall's own axis; anything
+      // more sideways is a pan, since Selectează never draws.
       var feWallId = dedicated.getAttribute('data-wall-id'), feEnd = dedicated.getAttribute('data-end');
       var feWall = findWall(feWallId);
       var fePt = feWall ? { x:feWall[feEnd].x, y:feWall[feEnd].y } : startCm;
-      dragState = Object.assign(base, {
-        kind:'freeEnd', wallId: feWallId, movingEnd: feEnd, startPt: fePt,
-        startSnap: { kind:'end', point: fePt, weld:true }
-      });
+      dragState = Object.assign(base, { kind:'freeEnd', wallId: feWallId, movingEnd: feEnd, startPt: fePt });
     }
-    try{ svgEl.setPointerCapture(e.pointerId); }catch(err){}
-    e.preventDefault();
+    capture(e);
     return;
   }
 
-  // A press near, but not exactly on, a free end's own circle above
-  // still has to weld a brand-new stroke onto it (SPEC: "I want to
-  // continue from the end of the open border") — so a vertex within the
-  // wider snap range is still checked here too, before the wall's own
-  // hit-rect. Only an exact press on the dedicated circle above ever
-  // becomes 'freeEnd'/'resize'; everything else keeps behaving exactly
-  // as it always has.
-  var startSnap = findStartSnap(startCm, t);
-  if(startSnap.kind !== 'none'){
-    dragState = Object.assign(base, { kind:'draw', startPt: startSnap.point, startSnap: startSnap });
-    try{ svgEl.setPointerCapture(e.pointerId); }catch(err){}
-    e.preventDefault();
-    return;
-  }
-
-  var segHitEl = e.target.closest ? e.target.closest('.seg-hit') : null;
+  var segHitEl = e.target.closest ? e.target.closest('.fp-hit') : null;
   if(segHitEl){
     var k = segHitEl.getAttribute('data-kind');
     dragState = Object.assign(base, {
       kind: (k==='wall'||k==='open') ? 'push' : 'opening',
       wallId: segHitEl.getAttribute('data-wall-id'), segId: segHitEl.getAttribute('data-seg-id')
     });
-    try{ svgEl.setPointerCapture(e.pointerId); }catch(err){}
-    e.preventDefault();
+    capture(e);
     return;
   }
 
-  // Truly empty canvas: always begins a draw. A plain tap here (no
-  // movement) just closes whatever is selected, same as any other tap
-  // that lands on nothing (see handleTap) — no special case is needed
-  // up front, because a tap never commits.
-  dragState = Object.assign(base, { kind:'draw', startPt: startSnap.point, startSnap: startSnap });
+  // Empty canvas with Selectează on: one finger moves the view, and a
+  // tap that never moves ends the focus.
+  dragState = Object.assign(base, { kind:'pan', lastClientX:e.clientX, lastClientY:e.clientY });
+  capture(e);
+}
+function capture(e){
   try{ svgEl.setPointerCapture(e.pointerId); }catch(err){}
   e.preventDefault();
 }
@@ -2950,14 +2780,10 @@ function beginCommittedDrag(ds){
     // compute the pinned edge's offset fresh on every move below.
     if(ds.kind==='openingEdge') ds.segLengthStart = f ? f.seg.length.value : 0;
   }
-  // 'draw' needs no snapshot at all — it only ever adds a brand-new
-  // piece at pointerup. 'resize' takes the same base-snapshot
-  // discipline as push/corner above (its ds.fixedEnd/ds.heading were
-  // already set by resolveFreeEndDirection, before this ever runs)
-  // because, like a push, it mutates the live model on every move and
-  // has to reapply fresh from an untouched snapshot each time rather
-  // than compound. 'freeEnd' itself never reaches here uncommitted — it
-  // always resolves into 'resize' or 'draw' first (see onSvgPointerMove).
+  // 'draw' needs no snapshot: it only adds a piece at pointerup. 'resize'
+  // takes the same base-snapshot discipline as push and corner, because
+  // it mutates the live model on every move and has to reapply fresh
+  // rather than compound.
 }
 
 function applyDragMove(ds, curCm, t){
@@ -3044,100 +2870,157 @@ function applyDragMove(ds, curCm, t){
   }
 }
 
-// Resolves a 'freeEnd' press's ambiguity the moment it actually becomes
-// a drag (crosses TAP_PX) — by the DIRECTION travelled so far, measured
-// against the wall's OWN axis, not screen axes, since that axis is the
-// only one a resize is ever allowed to move along. Within ~45 degrees
-// of it either way is "pull this end," matching how a hand actually
-// grabs and stretches an end; anything more sideways is indistinguishable
-// from "start a new stroke here," which is exactly what this same point
-// has always supported and must go on supporting unchanged.
+// Resolves a free end's press the moment it becomes a drag, by the
+// direction travelled against the wall's own axis — the only axis a
+// resize may move along. Anything more sideways than a deliberate pull
+// moves the view instead, since Selectează never draws.
 function resolveFreeEndDirection(ds, curCm){
   var w = findWall(ds.wallId);
-  if(!w){ ds.kind = 'draw'; return; }
-  var axis = wallDir(w); // the wall's own from->to direction, fixed regardless of which end is being dragged
+  if(!w){ ds.kind = 'pan'; return; }
+  var axis = wallDir(w);
   var mvx = curCm.x-ds.startCm.x, mvy = curCm.y-ds.startCm.y;
   var mvLen = Math.hypot(mvx,mvy) || 1;
-  var alongFrac = Math.abs(mvx*axis.x + mvy*axis.y) / mvLen; // |cos| of the angle between the drag and the wall's own line
-  // The cone that means "pull this end" is deliberately NARROW (about
-  // 25 degrees either way), not the even 45-degree split this started
-  // as, and the two outcomes are not equally cheap to get wrong. Drawing
-  // is what this point has always done and by far the commoner intent —
-  // continuing an outline from its own open end — and the natural drag
-  // for it aims diagonally at where the next corner goes, not squarely
-  // perpendicular. Under an even split that diagonal reads as "along the
-  // wall" the moment its along-component wins by a hair, so the stroke
-  // meant to close a room silently became a stretch of the wall it
-  // started from and the room stayed open, with nothing on screen having
-  // claimed otherwise. A wrong draw costs one undo and leaves the
-  // geometry intact; a wrong resize destroys a measurement and swallows
-  // the stroke. So anything but a deliberate straight pull along the
-  // wall's own line falls to draw.
+  var alongFrac = Math.abs(mvx*axis.x + mvy*axis.y) / mvLen;
+  // About 25 degrees either way: a wrong pan costs nothing, a wrong
+  // resize destroys a measurement.
   if(alongFrac >= 0.9){
     ds.kind = 'resize';
     ds.fixedEnd = ds.movingEnd === 'from' ? 'to' : 'from';
-    // Heading away from the FIXED end, toward wherever the moving end
-    // currently sits — locked in now so it can never flip mid-drag,
-    // even pulled all the way down to the MIN_WALL/openings floor.
+    // Heading away from the fixed end, locked in now so it cannot flip
+    // mid-drag even when the wall is pulled down to its own floor.
     ds.heading = headingOf({ from: w[ds.fixedEnd], to: w[ds.movingEnd] });
   } else {
-    ds.kind = 'draw'; // unchanged: an ordinary new stroke starting from this free end
+    ds.kind = 'pan';
+    ds.lastClientX = ds.startClientX; ds.lastClientY = ds.startClientY;
   }
 }
 
+/* While a stroke or a drag comes within 32px of a canvas edge, the view
+   pans toward it at a steady pace. */
+var edgePanFrame = null, edgePanAt = null;
+function startEdgePan(){
+  if(edgePanFrame != null || typeof win.requestAnimationFrame !== 'function') return;
+  var step = function(){
+    edgePanFrame = null;
+    if(destroyed || !dragState || !edgePanAt) return;
+    var d = edgePanStep(edgePanAt.stage, stageSize());
+    if(d.dx || d.dy){
+      panView(d.dx, d.dy);
+      applyView();
+      var t = viewTransform();
+      applyDragMove(dragState, clientToCm(edgePanAt.clientX, edgePanAt.clientY, t), t);
+      render();
+    }
+    edgePanFrame = win.requestAnimationFrame(step);
+  };
+  edgePanFrame = win.requestAnimationFrame(step);
+}
+function stopEdgePan(){
+  if(edgePanFrame != null && typeof win.cancelAnimationFrame === 'function') win.cancelAnimationFrame(edgePanFrame);
+  edgePanFrame = null; edgePanAt = null;
+}
+
 function onSvgPointerMove(e){
+  if(pointers.has(e.pointerId)) pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  if(pinch && pointers.size >= 2){
+    var dist2 = pinchDistance(), centre = pinchCentre();
+    if(pinch.dist > 0){
+      zoomBy(dist2/pinch.dist, centre);
+      panView(centre.x - pinch.centre.x, centre.y - pinch.centre.y);
+      noteZoomed();
+    }
+    pinch = { dist: dist2, centre: centre };
+    render();
+    return;
+  }
   if(!dragState) return;
   var t = viewTransform();
   var curCm = clientToCm(e.clientX, e.clientY, t);
   if(!dragState.committed){
     var screenDist = Math.hypot(e.clientX-dragState.startClientX, e.clientY-dragState.startClientY);
     if(screenDist < TAP_PX) return;
+    if(dragState.kind === 'place') return;  // a tap places; a drag with the tool on places nothing
     if(dragState.kind === 'freeEnd'){
-      // Six pixels is enough to know a gesture is a drag and not a tap,
-      // but nowhere near enough to know WHICH drag it is: over that
-      // distance the direction is mostly the jitter of the first frame
-      // after the finger starts moving. Reading the cone off that sample
-      // locked the whole gesture to the wrong one of two very different
-      // outcomes before the hand had actually said anything. So a free
-      // end alone waits longer than every other gesture before it
-      // commits — the extra distance is only ever spent deciding, never
-      // discarded, because the direction is measured from the press
-      // point either way.
+      // Six pixels say a gesture is a drag, not which drag: over that
+      // distance the direction is mostly the jitter of the first frame.
       if(screenDist < FREE_END_DECIDE_PX) return;
       resolveFreeEndDirection(dragState, curCm);
     }
     dragState.committed = true;
     beginCommittedDrag(dragState);
   }
+  if(dragState.kind === 'pan'){
+    panView(e.clientX - dragState.lastClientX, e.clientY - dragState.lastClientY);
+    noteZoomed();
+    dragState.lastClientX = e.clientX; dragState.lastClientY = e.clientY;
+    render();
+    return;
+  }
   applyDragMove(dragState, curCm, t);
+  edgePanAt = { stage: stagePx(e.clientX, e.clientY), clientX: e.clientX, clientY: e.clientY };
+  startEdgePan();
   render();
 }
 
 function handleTap(ds){
-  // A tap on an opening's own edge handle (no movement, so it never
-  // grew into an 'openingEdge' resize) just keeps that opening selected
-  // — the handle only exists because it's already the selection, so a
-  // tap here has nothing new to do, but must not fall through to the
-  // corner/draw case below and deselect it.
   if(ds.kind==='push' || ds.kind==='opening' || ds.kind==='openingEdge'){
     selection = { segId: ds.segId };
+    justMade = null;
   } else if(ds.kind==='freeEnd'){
-    // A free end's own dedicated circle is a genuinely ambiguous target
-    // (unlike the opening-edge handle above): a tap here (no movement,
-    // so it never resolved into 'resize' or 'draw' at all — see
-    // resolveFreeEndDirection) selects the piece AT that end, rather
-    // than the "deselect everything" a draw-tap on empty canvas
-    // gives. Poking the end of a wall selecting that wall is what a
-    // user expects. Segments run from->to, so the piece at 'from' is
-    // always index 0, and at 'to' always the last one.
+    // Poking the end of a wall selects that wall. Segments run from->to,
+    // so the piece at 'from' is index 0 and at 'to' the last one.
     var fw = findWall(ds.wallId);
     selection = fw ? { segId: fw.segments[ds.movingEnd==='from' ? 0 : fw.segments.length-1].id } : null;
+    justMade = null;
   } else {
-    // corner / draw: a tap with no movement just closes whatever is
-    // selected (SPEC: "Tap empty canvas to deselect, and the canvas
-    // goes quiet again") — it never starts anything new.
+    // Empty canvas, or a corner: the focus ends.
     selection = null;
+    justMade = null;
   }
+}
+
+/** One tap with Fereastră or Ușă on: a 60 cm window or a 90 cm door on the wall touched. */
+function placeOpening(ds, clientX, clientY){
+  var kind = toolMakes();
+  var under = doc.elementFromPoint(clientX, clientY);
+  var hit = under && under.closest ? under.closest('.fp-hit') : null;
+  // Never on a Fără perete side, and never on top of another opening.
+  if(!hit || hit.getAttribute('data-kind') !== 'wall'){
+    toolUsed(false, null);
+    return;
+  }
+  var wallId = hit.getAttribute('data-wall-id');
+  var w = findWall(wallId);
+  if(!w){ toolUsed(false, null); return; }
+  var t = viewTransform();
+  var atCm = clientToCm(clientX, clientY, t);
+  var d = wallDir(w);
+  var along = (atCm.x - w.from.x)*d.x + (atCm.y - w.from.y)*d.y;
+  pushHistory();
+  var id = addOpening(wallId, kind, along);
+  if(!id){
+    undoStack.pop();
+    toolUsed(false, null);
+    return;
+  }
+  selection = { segId: id };
+  toolUsed(true, kind);
+}
+
+/** When the piece in focus would sit under a plate, pan just enough to show it. */
+function revealFocused(){
+  if(!selection || !view) return;
+  var f = findSegAnywhere(selection.segId);
+  if(!f) return;
+  var pts = segPoints(f.wall, f.seg);
+  var box = {
+    minX: Math.min(pts.p0.x, pts.p1.x) - WALL_THICKNESS_CM,
+    minY: Math.min(pts.p0.y, pts.p1.y) - WALL_THICKNESS_CM,
+    maxX: Math.max(pts.p0.x, pts.p1.x) + WALL_THICKNESS_CM,
+    maxY: Math.max(pts.p0.y, pts.p1.y) + WALL_THICKNESS_CM
+  };
+  stopFitEase();
+  view = panToReveal(view, box, stageSize(), plateBands());
 }
 
 // Mid-drag, every wall endpoint a push/corner touches sits at whatever
@@ -3170,18 +3053,36 @@ function finalizeDragWeld(ds){
 }
 
 function onSvgPointerUp(e){
+  pointers.delete(e.pointerId);
+  if(pinch){
+    // The pinch ends with the last of the two fingers; whatever is left
+    // does not become a stroke halfway through.
+    if(pointers.size < 2) pinch = null;
+    try{ svgEl.releasePointerCapture && svgEl.releasePointerCapture(e.pointerId); }catch(err){}
+    render();
+    return;
+  }
   if(!dragState) return;
   var ds = dragState;
-  if(!ds.committed){
-    handleTap(ds);
+  var focusBefore = selection ? selection.segId : null;
+  stopEdgePan();
+  if(!ds.committed && ds.kind === 'place'){
+    placeOpening(ds, e.clientX, e.clientY);
+  } else if(!ds.committed){
+    if(ds.kind === 'draw'){
+      // A tool use that drew nothing keeps the tool on, and the hint
+      // repeats what to do.
+      toolUsed(false, null);
+    } else {
+      handleTap(ds);
+    }
+  } else if(ds.kind==='pan'){
+    /* the view has already followed the finger */
   } else if(ds.kind==='openingEdge'){
-    // Already fully applied to the live model by the last applyDragMove
-    // — like 'push'/'opening', there's no separate release-time commit
-    // step, just keeping the piece selected.
     selection = { segId: ds.segId };
   } else if(ds.kind==='opening'){
     var under = doc.elementFromPoint(e.clientX, e.clientY);
-    var hitEl2 = under && under.closest ? under.closest('.seg-hit') : null;
+    var hitEl2 = under && under.closest ? under.closest('.fp-hit') : null;
     var targetWallId = hitEl2 ? hitEl2.getAttribute('data-wall-id') : null;
     if(targetWallId && targetWallId !== ds.wallId){
       var t2 = viewTransform();
@@ -3204,30 +3105,18 @@ function onSvgPointerUp(e){
   } else if(ds.kind==='corner'){
     finalizeDragWeld(ds);
   } else if(ds.kind==='resize'){
-    // Re-check fresh at release, same "on press and again on release"
-    // discipline as 'draw' just below, using the actual release
-    // coordinates rather than whatever the last move event computed.
+    // Re-checked fresh at release, on the actual release coordinates
+    // rather than whatever the last move event computed.
     var t4 = viewTransform();
     var releaseCm4 = clientToCm(e.clientX, e.clientY, t4);
     var wRel = findWall(ds.wallId);
     if(wRel){
       var endSnap4 = resizeEndpointSnap(wRel, ds, releaseCm4, t4);
-      // Weld exactly onto the target's own coordinates (findEndpointSnap
-      // already returns whole-cm points on every branch — a weld's own
-      // vertex, an align's on-axis point, or a rounded free 'none') —
-      // r() here is just the same defensive whole-cm guarantee every
-      // other release-time weld already makes.
       wRel[ds.movingEnd].x = r(endSnap4.point.x); wRel[ds.movingEnd].y = r(endSnap4.point.y);
       wRel.lengthSource = 'drawn';
-      // Sync FIRST, so a piece grown past an opening (resizeWallKeeping-
-      // Segments appends a fresh wall stretch beyond it rather than
-      // stretching the opening itself) resolves to whichever segment
-      // truly sits at the end now — then capture that id BEFORE
-      // cleanupOutline can merge this wall into a collinear neighbour
-      // (commitDrawStroke's own newSegId does the same, for the same
-      // reason: a merge concatenates rather than regenerating ids, so
-      // the piece identified here stays selectable afterward even if
-      // it's no longer alone in its wall).
+      // Sync first, so a piece grown past an opening resolves to whichever
+      // segment truly sits at the end now, and capture that id before
+      // cleanupOutline can merge this wall into a collinear neighbour.
       syncSegmentsForAllWalls();
       var resizedSegId = wRel.segments[ds.movingEnd==='from' ? 0 : wRel.segments.length-1].id;
       cleanupOutline();
@@ -3235,17 +3124,18 @@ function onSvgPointerUp(e){
       selection = { segId: resizedSegId };
     }
   } else if(ds.kind==='draw'){
-    // Re-check the END snap fresh at release — "on press and again on
-    // release" — using the actual release coordinates, not just
-    // whatever the last move event happened to compute.
     var t3 = viewTransform();
     var releaseCm = clientToCm(e.clientX, e.clientY, t3);
     var ddx2 = releaseCm.x-ds.startPt.x, ddy2 = releaseCm.y-ds.startPt.y;
     var heading2 = snapHeading(ddx2,ddy2);
     var rawLen2 = Math.max(Math.abs(ddx2), Math.abs(ddy2));
     var endSnap2 = findEndpointSnap(ds.startPt, heading2, rawLen2, t3);
-    commitDrawStroke(ds.startPt, ds.startSnap, endSnap2.point, endSnap2, heading2, t3);
+    var made = commitDrawStroke(ds.startPt, ds.startSnap, endSnap2.point, endSnap2, heading2, t3, ds.tool);
+    toolUsed(made, ds.tool);
   }
+  // Whatever moved the focus this time, a piece that would land under a
+  // plate is brought out from under it once, here.
+  if((selection ? selection.segId : null) !== focusBefore) revealFocused();
   try{ svgEl.releasePointerCapture && svgEl.releasePointerCapture(e.pointerId); }catch(err){}
   dragState = null;
   render();
@@ -3256,19 +3146,15 @@ function onSvgPointerUp(e){
    ============================================================ */
 function init(){
   svgEl = $id('roomSvg');
+  stageEl = $id('stage');
   ctrlLayerEl = $id('ctrlLayer');
-  emptyHintEl = $id('emptyHint');
+  toolPlateEl = $id('toolPlate');
+  hintEl = $id('hintLine');
+  histPlateEl = $id('histPlate');
+  viewPlateEl = $id('viewPlate');
   toastEl = $id('toastEl');
   toastTextEl = $id('toastText');
   toastDismissEl = $id('toastDismiss');
-  clusterEl = $id('cluster');
-  ceilingInputEl = $id('ceilingInput');
-  undoBtn = $id('undoBtn');
-  redoBtn = $id('redoBtn');
-  missingListEl = $id('missingList');
-  missingBtn = $id('missingBtn');
-  missingDividerEl = $id('missingDivider');
-  missingBtn.addEventListener('click', function(){ missingExpanded = !missingExpanded; render(); });
   confirmDialogEl = $id('confirmDialog');
   confirmDialogTextEl = $id('confirmDialogText');
   confirmYesBtn = $id('confirmYesBtn');
@@ -3277,72 +3163,59 @@ function init(){
   svgEl.addEventListener('pointerdown', onSvgPointerDown);
   svgEl.addEventListener('pointermove', onSvgPointerMove);
   svgEl.addEventListener('pointerup', onSvgPointerUp);
-  svgEl.addEventListener('pointercancel', function(){ dragState = null; render(); });
+  svgEl.addEventListener('pointercancel', function(e){
+    pointers.delete(e.pointerId);
+    if(pointers.size < 2) pinch = null;
+    cancelStroke();
+    render();
+  });
 
-  // Real touch input snaps an imprecise press to the nearest interactive
-  // element within a small radius (round ten: PANEL_GAP_PX exists
-  // because of it) — but that snapping retargets the EVENT, not the
-  // coordinates: e.clientX/clientY are still exactly where the finger
-  // landed, only e.target is wrong. Round eleven: this meant a press on
-  // bare canvas, up to ~20px below the bar, silently hit the bar
-  // instead and went nowhere — elementsFromPoint at that exact point
-  // still reported the SVG underneath the whole time. PANEL_GAP_PX is a
-  // LAYOUT gap (round ten's own fix keeps chips/labels/the bar off of
-  // a free end); it was never meant to be a hit-testing boundary too,
-  // and must not become one here either — only a chip's or the bar's
-  // own actual rendered box may claim a pointer. Caught in the capture
-  // phase, before the mistargeted element's own listener sees it: if the
-  // real coordinates fall outside that element's real box, this was
-  // never a press on it — hand it to the SVG at its real coordinates,
-  // exactly as if the browser's own hit-test (which already agrees,
-  // underneath) had been trusted in the first place.
-  //
-  // #bar covers both plates (undo/redo/ceiling always, the selection
-  // plate #cluster only when something is selected) — plate one used to
-  // live in the docked #rail, which never needed this fix because it
-  // wasn't floating over the drawing surface; now that it does, it
-  // needs the same touch-retargeting guard #cluster always did.
-  // #pieceActions joins the list for the exact same reason a chip is
-  // in it: it floats over the drawing surface too, so a near-miss
-  // aimed at it must reach the canvas underneath rather than silently
-  // eating the stroke.
+  // The wheel zooms around the pointer; a trackpad pinch arrives as a
+  // wheel event with ctrlKey set.
+  svgEl.addEventListener('wheel', function(e){
+    e.preventDefault();
+    var at = stagePx(e.clientX, e.clientY);
+    var factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015));
+    zoomBy(factor, at);
+    render();
+  }, { passive:false });
+
+  // A touch snaps an imprecise press to the nearest interactive element
+  // within a small radius, retargeting the event but not its
+  // coordinates. Caught in the capture phase: when the real coordinates
+  // fall outside that element's real box, this was never a press on it,
+  // so it goes to the canvas underneath at its real coordinates.
   function realBoxMisses(e){
-    var el = e.target && e.target.closest ? e.target.closest('#bar .plate, .chip, #pieceActions') : null;
+    var el = e.target && e.target.closest ? e.target.closest('.fp-plate, .fp-chip, .fp-hint') : null;
     if(!el) return null;
     // A native TouchEvent carries no clientX/clientY of its own — those
-    // live on its touches/changedTouches list, unlike a PointerEvent
-    // (used for pointerdown/click above) which has them directly. Read
-    // whichever this event actually is, or the box check below silently
-    // compares against `undefined` and misfires on every touch alike.
+    // live on its touches list, unlike a PointerEvent.
     var pt = e;
     if(e.clientX === undefined){
       var list = (e.touches && e.touches.length) ? e.touches : e.changedTouches;
       pt = (list && list[0]) || { clientX:NaN, clientY:NaN };
     }
-    // A rect's own bottom/right are the first row/column BEYOND it, not
-    // part of it (same convention getBoundingClientRect itself uses) —
-    // a press exactly at that edge is already past the box, not on it.
-    var r = el.getBoundingClientRect();
-    // A chip's real box, for this check, has to include its own
-    // invisible halo (.chip::before, inset -7px) — a press that lands
-    // there is a genuine, correctly-hit-tested press on the chip's own
-    // rendered content, not the browser mis-snap this guard exists for,
-    // and must not be forwarded to the canvas underneath (src/draw's
-    // DimChip: that's exactly how a miss steals the selection).
-    var pad = el.classList.contains('chip') ? 7 : 0;
-    var inside = pt.clientX >= r.left-pad && pt.clientX < r.right+pad && pt.clientY >= r.top-pad && pt.clientY < r.bottom+pad;
+    // A rect's own bottom and right are the first row and column beyond
+    // it, so a press exactly at that edge is already past the box.
+    var rb = el.getBoundingClientRect();
+    // A chip's real box includes its own invisible halo: a press there is
+    // a genuine press on the chip, not the mis-snap this guard is for.
+    var pad = el.classList.contains('fp-chip') ? 7 : 0;
+    var inside = pt.clientX >= rb.left-pad && pt.clientX < rb.right+pad && pt.clientY >= rb.top-pad && pt.clientY < rb.bottom+pad;
     return inside ? null : el;
   }
+  // The words a hint uses follow the pointer last used.
+  onRoot('pointerdown', function(e){
+    if(!e.pointerType) return;
+    var nowTouch = e.pointerType !== 'mouse';
+    if(nowTouch !== touchWords){ touchWords = nowTouch; renderHint(); }
+  }, true);
+
   onRoot('touchstart', function(e){
     if(!realBoxMisses(e)) return;
-    // Touch-action eligibility (is this movement a pan/scroll?) is
-    // decided from the ORIGINAL hit-tested element's own CSS, before any
-    // of this runs — a plain button has no touch-action:none, so
-    // preventDefault on pointerdown alone (below) does not reliably
-    // stop the browser treating the ensuing drag as a scroll and
-    // cancelling it partway through. Only preventDefault on the actual
-    // touchstart does that (SPEC: the touch event, not its pointer
-    // counterpart, is what native scroll/pan eligibility hangs off of).
+    // Whether a movement may become a native scroll is decided from the
+    // originally hit-tested element's own CSS, before any of this runs,
+    // so only preventDefault on the touch event itself stops it.
     e.preventDefault();
   }, { capture:true, passive:false });
   onRoot('pointerdown', function(e){
@@ -3352,29 +3225,21 @@ function init(){
     onSvgPointerDown(e);
   }, true);
   onRoot('click', function(e){
-    // A retargeted press that never moves (a tap, not a draw) still
-    // reaches handleTap via the redirect above and needs no click at
-    // all — but stop this one regardless of how it got here, so a
-    // mistargeted press can never fire whatever button it landed on.
     if(!realBoxMisses(e)) return;
     e.stopImmediatePropagation();
     e.preventDefault();
   }, true);
 
-  bindLengthField(ceilingInputEl, function(cm){ pushHistory(); model.ceilingHeightCm = cm; render(); }, RO.fieldCeiling);
-
-  undoBtn.addEventListener('click', undo);
-  redoBtn.addEventListener('click', redo);
   toastDismissEl.addEventListener('click', function(){ hideToast(); render(); });
 
   confirmYesBtn.addEventListener('click', function(){ var cs=confirmState; hideConfirm(); if(cs && cs.onYes) cs.onYes(); render(); });
   confirmNoBtn.addEventListener('click', function(){ var cs=confirmState; hideConfirm(); if(cs && cs.onNo) cs.onNo(); render(); });
   confirmDialogEl.addEventListener('mousedown', function(e){ if(e.target.closest('button')) e.preventDefault(); });
 
-  // Commit-seam fix (SPEC-shared-contract bug class 1): a field commits
-  // on blur, which re-renders and can destroy the button mid-press.
-  // Suppress the focus-shift on mousedown, then read the field's live
-  // value in a capture-phase click before any button's own handler runs.
+  // A field commits on blur, and blur re-renders, which can destroy the
+  // button mid-press: suppress the focus shift on mousedown, then read
+  // the field's live value in a capture-phase click before any button's
+  // own handler runs.
   var appEl = $id('app');
   appEl.addEventListener('mousedown', function(e){ if(e.target.closest('button')) e.preventDefault(); });
   appEl.addEventListener('click', function(e){
@@ -3383,23 +3248,65 @@ function init(){
     if(!commitActiveField()) e.stopImmediatePropagation();
   }, true);
 
+  // A resize keeps the view where it is; only its pixel size changed.
   onWin('resize', render);
   onWin('orientationchange', function(){ setTimeout(function(){ if(!destroyed) render(); }, 60); });
-  onWin('keydown', function(e){
-    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z' && !e.shiftKey){ e.preventDefault(); undo(); }
-    if((e.ctrlKey||e.metaKey) && (e.key.toLowerCase()==='y' || (e.key.toLowerCase()==='z' && e.shiftKey))){ e.preventDefault(); redo(); }
-    if((e.key==='Delete' || e.key==='Backspace') && selection){
-      // Guard against a length chip's own text input still focused —
-      // Backspace there has to keep editing the number, never delete
-      // the whole piece out from under it.
-      var tag = e.target && e.target.tagName;
-      if(tag === 'INPUT' || tag === 'TEXTAREA') return;
-      e.preventDefault();
-      deleteSelection();
-    }
-  });
+  onWin('keyup', function(e){ if(e.code === 'Space') spaceDown = false; });
+  // A tab switch swallows the keyup, and the pan would stay armed.
+  onWin('blur', function(){ spaceDown = false; });
+  onWin('keydown', onKeyDown);
 
   render();
+}
+
+function typingInField(e){
+  var tag = e.target && e.target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA';
+}
+function pressingControl(e){
+  var tag = e.target && e.target.tagName;
+  return tag === 'BUTTON' || tag === 'A' || tag === 'SELECT';
+}
+function onKeyDown(e){
+  if(!keysEnabled) return;
+  if(e.code === 'Space'){
+    // Space on a focused control is that control's own press, and
+    // anywhere else it would scroll the page rather than arm the pan.
+    if(typingInField(e) || pressingControl(e)) return;
+    e.preventDefault();
+    spaceDown = true;
+    return;
+  }
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z' && !e.shiftKey){ e.preventDefault(); undo(); return; }
+  if((e.ctrlKey||e.metaKey) && (e.key.toLowerCase()==='y' || (e.key.toLowerCase()==='z' && e.shiftKey))){ e.preventDefault(); redo(); return; }
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  if(e.key === 'Escape'){
+    if(dragState){ cancelStroke(); }
+    var esc = applyToolEvent(tools, activeTool, { type:'escape' }, { hasWall: hasAnyWall() });
+    activeTool = esc.active;
+    refusedTool = false;
+    render();
+    return;
+  }
+  if(typingInField(e)) return;
+  if((e.key==='Delete' || e.key==='Backspace') && selection){
+    e.preventDefault();
+    deleteSelection();
+    return;
+  }
+  if(e.key === '+' || e.key === '='){ e.preventDefault(); zoomBy(1.25, null); render(); return; }
+  if(e.key === '-' || e.key === '_'){ e.preventDefault(); zoomBy(1/1.25, null); render(); return; }
+  if(e.key === '0'){ e.preventDefault(); fitNow(); render(); return; }
+  if(e.key.toLowerCase() === 'r' && selection){
+    var f = findSegAnywhere(selection.segId);
+    if(f && f.seg.kind === 'door'){
+      e.preventDefault();
+      pushHistory(); cycleDoorSwing(f.wall.id, f.seg.id); render();
+      return;
+    }
+  }
+  var picked = toolForKey(tools, e.key);
+  if(picked){ e.preventDefault(); pickTool(picked.id); }
 }
 
 /* ======================================================================
@@ -3418,12 +3325,18 @@ function bumpIdCounter(){
   if(_idCounter <= max) _idCounter = max + 1;
 }
 
+/* A model saved by an earlier editor still carries the ceiling height;
+   it is accepted and ignored, because the height now lives on the saved
+   drawing's own snapshot. */
 function setModel(m){
-  if(!m || typeof m !== 'object' || !Array.isArray(m.walls)) throw new Error('setModel: expected { ceilingHeightCm, walls }');
-  restoreSnapshot({ ceilingHeightCm: (m.ceilingHeightCm == null ? null : m.ceilingHeightCm), walls: m.walls });
+  if(!m || typeof m !== 'object' || !Array.isArray(m.walls)) throw new Error('setModel: expected { walls }');
+  restoreSnapshot({ walls: m.walls });
   undoStack = []; redoStack = [];
   selection = null; dragState = null; toastState = null; confirmState = null;
-  lastSettledSegId = null; missingExpanded = false;
+  lastSettledSegId = null;
+  activeTool = restingTool(tools); justMade = null; refusedTool = false;
+  stopFitEase();
+  view = null;
   bumpIdCounter();
   render();
 }
@@ -3431,6 +3344,9 @@ function setModel(m){
 function destroy(){
   if(destroyed) return;
   destroyed = true;
+  stopEdgePan();
+  stopFitEase();
+  if(zoomHintTimer) win.clearTimeout(zoomHintTimer);
   winListeners.forEach(function(l){ win.removeEventListener(l[0], l[1], l[2]); });
   rootListeners.forEach(function(l){ root.removeEventListener(l[0], l[1], l[2]); });
   winListeners.length = 0; rootListeners.length = 0;
@@ -3457,6 +3373,11 @@ return {
   getModel: function(){ return snapshotModel(); },   // already a deep clone
   setModel: setModel,
   reset: function(){ resetAll(); },
+  isEmpty: function(){ return model.walls.length === 0; },
+  /** an override for the hint line, e.g. while the host is saving */
+  setHintState: function(state){ hintState = state || null; render(); },
+  /** the engine's keys stand down while the host has a note open */
+  setKeysEnabled: function(on){ keysEnabled = !!on; },
   destroy: destroy
 };
 }

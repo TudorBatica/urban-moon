@@ -62,7 +62,15 @@
 
 	function deleteDrawing(): void {
 		if (!confirm('Ștergi planul desenat?')) return;
-		setDrawing(null);
+		/* A refused write leaves the drawing where it was; this screen says so where it
+		   says that a file did not go through. */
+		try {
+			setDrawing(null);
+		} catch {
+			rejected = [
+				{ name: 'Planul desenat', reason: 'Nu s-a putut șterge. Încearcă din nou.' }
+			];
+		}
 	}
 </script>
 

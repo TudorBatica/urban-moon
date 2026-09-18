@@ -57,10 +57,14 @@ function load(): PlansState {
 	return { files: [], drawing: null };
 }
 
-function persist(): void {
+function write(): void {
 	if (!browser) return;
+	localStorage.setItem(KEY, JSON.stringify({ files: plans.files, drawing: plans.drawing }));
+}
+
+function persist(): void {
 	try {
-		localStorage.setItem(KEY, JSON.stringify({ files: plans.files, drawing: plans.drawing }));
+		write();
 	} catch {
 		/* quota or private mode — metadata stays in memory */
 	}
@@ -130,9 +134,16 @@ export async function getFileBlob(id: string): Promise<Blob | undefined> {
 	return await get<Blob>(blobKey(id));
 }
 
+/** Throws when the browser refuses the write: the drawing screens have a note for that. */
 export function setDrawing(d: Drawing | null): void {
+	const before = plans.drawing;
 	plans.drawing = d;
-	persist();
+	try {
+		write();
+	} catch (err) {
+		plans.drawing = before;
+		throw err;
+	}
 }
 
 export async function resetPlans(): Promise<void> {

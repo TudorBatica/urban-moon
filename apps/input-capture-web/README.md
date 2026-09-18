@@ -45,15 +45,19 @@ src/lib/state/photos.svelte.ts    photos: "um.photos" + IndexedDB, up to 10 per 
 src/lib/state/cursor.svelte.ts    the resume cursor, "um.cursor"
 src/lib/flow/                 engine.ts (navigation, completeness, chrome) + the screen renderers
 src/lib/questions/            readback.ts (the "Ce am înțeles" lines) · icons.ts (unused clay set)
-src/lib/ui/                   Frame (photo + side shell) · GoBar · Keyed · Seg · CountRow · Reveal · Field · Roll
+src/lib/ui/                   Frame (photo + side shell) · GoBar · Note · Keyed · Seg · CountRow · Reveal · Field · Roll
                               motion.ts (durations, curves, transitions) · images.ts (Unsplash ids, art per screen)
                               lineIcons.ts (appliance + coffee drawings) · lineMap.ts
 src/lib/plans/                Dropzone · FileTile · DrawingCard · PhotoField · Thumb · Rejections
-src/lib/floorplan/            engine.js (the editor) · engine.css · export.ts (svg/png) · FloorplanEditor.svelte
+src/lib/floorplan/            engine.js (the editor: geometry, rendering, pointers) · engine.css
+                              tools.ts (which tool is on) · view.ts (fit, zoom, pan, the limits)
+                              drawing.ts (builds and saves the Drawing) · seen.ts ("um.draw.seen")
+                              export.ts (svg/png) · FloorplanEditor.svelte
 src/lib/submit/               submit.ts (uploads + commit) · resumable.ts (chunked PUTs) · SubmitPanel.svelte
 src/lib/server/               config.ts (env) · uploads.ts (session start) · commit.ts (checks + manifest)
                               objects.ts (object names) · log.ts · bucket.ts (re-exports @urban-moon/bucket)
-src/routes/                   / · /cuprins · /planuri · /deseneaza · /rezumat · /programare · /multumim
+src/routes/                   / · /cuprins · /planuri · /deseneaza · /deseneaza/tavan · /rezumat
+                              /programare · /multumim
                               /api/health · /api/uploads/start · /api/submissions/[id]/commit
 src/routes/+layout.ts         ssr = false — every screen is driven by browser state
 tools/icons/                  clay.mjs · build.mjs — the old icon set; nothing renders it since the redesign
@@ -73,10 +77,22 @@ limits live in `../../packages/domain-data`.
   and take photos of the objects, tagged with that screen's room.
 - **"Începe din nou"** clears the answers, the plans, the photos, the IndexedDB blobs and the
   session keys of an in-flight send.
-- **The floorplan editor** is plain JS (`engine.js`), framework-free, wrapped in a Svelte component.
-  `../floorplan-engine/` is its staging copy with a standalone `harness.html` and a `verify.mjs`
-  parity suite (`python3 -m http.server 8732`, then `node verify.mjs`). Changes are made in
-  `src/lib/floorplan/` and copied there.
+- **The floorplan editor** is plain JS (`engine.js`), framework-free, wrapped in a Svelte
+  component. It draws only while a making tool is on (Perete, Fără perete, Fereastră, Ușă); the
+  resting tool selects, moves and pans. What is decidable without a browser lives in TypeScript
+  beside it and is unit-tested: `tools.ts` (one use, then back to Selectează), `view.ts` (the fit
+  into the canvas minus the plate bands, zoom around a point, both limits, the edge auto-pan) and
+  `drawing.ts` (the only writer of `um.plans.drawing`). The editor's classes are all scoped under
+  `.fp` and share no name with a global rule of `app.css`.
+- **The ceiling height** is asked on `/deseneaza/tavan` and lives on the saved drawing's own
+  snapshot (`drawing.room.ceilingHeightCm`), not in the engine's model; a model saved by an
+  earlier editor still carries it, and `setModel` accepts and ignores it.
+- **Saving the plan has no checks**: an open outline, drawn lengths and an unchanged sill are
+  saved as they are. `setDrawing` throws when the browser refuses the write, which is what the
+  save-failed note is for; deleting the drawing on `/planuri` reports a refused write in that
+  screen's own rejection line.
+- **Seen once per browser**: `um.draw.seen`, one JSON object, read and written through `seen.ts`
+  with storage injected. Starting the questionnaire again does not clear it.
 - **Sending is pure and injectable** (`submit.ts`): fetch, blob lookup, storage, ids and sleeps all
   arrive as options, so the tests drive a whole send without a browser or a bucket.
 - **The server only handles small JSON.** File bytes go from the browser straight to the bucket.

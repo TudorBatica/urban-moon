@@ -11,6 +11,8 @@
 		disabled?: boolean;
 		/** no forward button at all */
 		nextHidden?: boolean;
+		/** held down while something the client asked for is under way */
+		pressed?: boolean;
 		/** the arrow bounces once, a second after the screen arrives (chapter openers) */
 		bounce?: boolean;
 		/** changes when the screen changes, so the bounce plays again on the next opener */
@@ -25,6 +27,7 @@
 		label = 'Continuă',
 		disabled = false,
 		nextHidden = false,
+		pressed = false,
 		bounce = false,
 		bounceKey = '',
 		onnext
@@ -45,7 +48,13 @@
 	});
 </script>
 
-<button type="button" class="lnk" class:hidden={backHidden} onclick={() => onback?.()}>
+<button
+	type="button"
+	class="lnk"
+	class:hidden={backHidden}
+	data-testid="btn-back"
+	onclick={() => onback?.()}
+>
 	{backLabel}
 </button>
 {#if !nextHidden}
@@ -57,6 +66,7 @@
 				type="button"
 				class="go"
 				class:pop
+				class:press={pressed}
 				{disabled}
 				aria-label={label}
 				title={label}

@@ -1,27 +1,22 @@
-/* ======================================================================
-   floorplan/export.ts — a RoomSnapshot (window.__room() / engine.room(),
-   shape in ../CONTRACTS.md) rendered as a printable plan.
-
-   Ported from the staging engine's export.js; behaviour unchanged, types
-   added. Pure string building: roomToSvg has no DOM dependency at all, so
-   it is unit-testable in node. Only svgToPngDataUrl needs a browser.
-   ====================================================================== */
+/* A room snapshot rendered as a printable plan, in the same look the
+   editor's own canvas draws: a solid ink band for a wall, a cut-out for a
+   window or a door, a dashed grey line for a side with nothing built.
+   Pure string building — roomToSvg has no DOM dependency at all, so it is
+   unit-testable in node. Only svgToPngDataUrl needs a browser. */
 
 import type { RoomSegment, RoomSnapshot, RoomWall } from '$lib/types';
 
 type Pt = [number, number];
 
-const WALL_T = 20; // cm — the same poché band thickness the editor draws
-const HATCH_SPACING = 8; // cm — same pitch as the editor's own hatch
+const WALL_T = 20; // cm — the same solid band thickness the editor draws
 const WELD_EPS = 0.6; // cm — two endpoints this close are the same point
 
-const INK = '#1B1B1B';
-const STONE = '#C4C0BA';
-const BRASS_DEEP = '#8A835F';
-const SMOKE = '#666664';
+/* The same tokens the editor's own canvas draws in. */
+const INK = '#141414';
+const HAIR = '#E0DFD9';
+const GREY = '#7A7975';
 const PAPER = '#FFFFFF';
-const SANS =
-	"'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+const SANS = "Figtree, 'Helvetica Neue', Arial, sans-serif";
 
 function esc(s: string | number): string {
 	return String(s)
@@ -144,18 +139,28 @@ export function roomToSvg(room: RoomSnapshot, opts?: { widthPx?: number }): stri
 		str: string,
 		size: number,
 		fill: string,
-		anchor?: string
+		anchor?: string,
+		italic?: boolean
 	): string {
 		return (
 			`<text x="${n(x)}" y="${n(y)}" font-family="${esc(SANS)}" font-size="${n(size)}"` +
 			` fill="${fill}" text-anchor="${anchor || 'middle'}"` +
+			(italic ? ' font-style="italic"' : '') +
 			` dominant-baseline="middle">${esc(str)}</text>`
 		);
 	}
 	/* One dimension: extension lines off the wall, a run between them, a 45°
 	   tick at each end, and the number on a small paper patch so it stays
 	   readable wherever it lands. */
-	function dimension(p0: Pt, p1: Pt, nrm: Pt, outCm: number, label: string, colour: string): void {
+	function dimension(
+		p0: Pt,
+		p1: Pt,
+		nrm: Pt,
+		outCm: number,
+		label: string,
+		typed: boolean
+	): void {
+		const colour = typed ? INK : GREY;
 		const o = mul(nrm, outCm);
 		const a = add(p0, o);
 		const b = add(p1, o);
@@ -190,9 +195,9 @@ export function roomToSvg(room: RoomSnapshot, opts?: { widthPx?: number }): stri
 		const w = label.length * fs * 0.62 + px(8);
 		const h = fs * 1.5;
 		g.push(
-			`<rect x="${n(mid[0] - w / 2)}" y="${n(mid[1] - h / 2)}" width="${n(w)}" height="${n(h)}" fill="${PAPER}" stroke="${STONE}" stroke-width="${n(px(0.8))}"/>`
+			`<rect x="${n(mid[0] - w / 2)}" y="${n(mid[1] - h / 2)}" width="${n(w)}" height="${n(h)}" rx="${n(px(3))}" fill="${PAPER}" stroke="${HAIR}" stroke-width="${n(px(1))}"/>`
 		);
-		g.push(textEl(mid[0], mid[1], label, fs, colour));
+		g.push(textEl(mid[0], mid[1], label, fs, colour, undefined, !typed));
 		dims.push(`<g data-dim="${esc(label)}">${g.join('')}</g>`);
 	}
 
@@ -223,9 +228,7 @@ export function roomToSvg(room: RoomSnapshot, opts?: { widthPx?: number }): stri
 				// free end stays flush and square exactly at its own point.
 				if (run.start <= 0.01 && startWelded) p0 = add(p0, mul(d, -WALL_T / 2));
 				if (Math.abs(run.end - total) < 0.5 && endWelded) p1 = add(p1, mul(d, WALL_T / 2));
-				body.push(
-					`<polygon points="${bandPoly(p0, p1, nrm, WALL_T)}" fill="url(#fpHatch)" stroke="${INK}" stroke-width="${n(px(1.4))}" stroke-linejoin="miter"/>`
-				);
+				body.push(`<polygon points="${bandPoly(p0, p1, nrm, WALL_T)}" fill="${INK}"/>`);
 				return;
 			}
 			const s = run.seg;
@@ -233,15 +236,21 @@ export function roomToSvg(room: RoomSnapshot, opts?: { widthPx?: number }): stri
 			// The opening is a hole in the band: paper first, then its own symbol.
 			body.push(`<polygon points="${bandPoly(p0, p1, nrm, WALL_T)}" fill="${PAPER}" stroke="none"/>`);
 			if (s.kind === 'open') {
+				// A side with nothing built: a dashed grey line, a tick at each end.
 				body.push(
-					`<line x1="${n(p0[0])}" y1="${n(p0[1])}" x2="${n(p1[0])}" y2="${n(p1[1])}" stroke="${SMOKE}" stroke-width="${n(px(2))}" stroke-dasharray="${n(px(6))} ${n(px(7))}"/>`
+					`<line x1="${n(p0[0])}" y1="${n(p0[1])}" x2="${n(p1[0])}" y2="${n(p1[1])}" stroke="${GREY}" stroke-width="${n(px(2))}" stroke-dasharray="${n(px(8))} ${n(px(6))}"/>`
 				);
+				[p0, p1].forEach((p) => {
+					body.push(
+						`<line x1="${n(p[0] + half[0])}" y1="${n(p[1] + half[1])}" x2="${n(p[0] - half[0])}" y2="${n(p[1] - half[1])}" stroke="${GREY}" stroke-width="${n(px(1.4))}"/>`
+					);
+				});
 			} else if (s.kind === 'window') {
 				// Glazing in plan: three thin lines the LENGTH of the opening — the
 				// two band faces plus its centreline.
 				[half, [0, 0] as Pt, mul(half, -1)].forEach((o) => {
 					body.push(
-						`<line x1="${n(p0[0] + o[0])}" y1="${n(p0[1] + o[1])}" x2="${n(p1[0] + o[0])}" y2="${n(p1[1] + o[1])}" stroke="${SMOKE}" stroke-width="${n(px(1.6))}"/>`
+						`<line x1="${n(p0[0] + o[0])}" y1="${n(p0[1] + o[1])}" x2="${n(p1[0] + o[0])}" y2="${n(p1[1] + o[1])}" stroke="${INK}" stroke-width="${n(px(1.4))}"/>`
 					);
 				});
 				[p0, p1].forEach((p) => {
@@ -263,20 +272,20 @@ export function roomToSvg(room: RoomSnapshot, opts?: { widthPx?: number }): stri
 				const tip = add(hingePt, mul(swingDir, len));
 				const far = add(hingePt, mul(leafDir, len));
 				body.push(
-					`<line x1="${n(hingePt[0])}" y1="${n(hingePt[1])}" x2="${n(tip[0])}" y2="${n(tip[1])}" stroke="${BRASS_DEEP}" stroke-width="${n(px(2.2))}"/>`
+					`<line x1="${n(hingePt[0])}" y1="${n(hingePt[1])}" x2="${n(tip[0])}" y2="${n(tip[1])}" stroke="${INK}" stroke-width="${n(px(1.8))}"/>`
 				);
 				const sweep = leafDir[0] * swingDir[1] - leafDir[1] * swingDir[0] > 0 ? 1 : 0;
 				body.push(
-					`<path d="M ${n(far[0])} ${n(far[1])} A ${n(len)} ${n(len)} 0 0 ${sweep} ${n(tip[0])} ${n(tip[1])}" fill="none" stroke="${BRASS_DEEP}" stroke-width="${n(px(1.4))}" stroke-dasharray="${n(px(4))} ${n(px(4))}"/>`
+					`<path d="M ${n(far[0])} ${n(far[1])} A ${n(len)} ${n(len)} 0 0 ${sweep} ${n(tip[0])} ${n(tip[1])}" fill="none" stroke="${INK}" stroke-width="${n(px(1))}" stroke-dasharray="${n(px(4))} ${n(px(4))}"/>`
 				);
 			}
 			// One dimension per opening, on the inner side of the wall.
 			const w = s.lengthCm ? s.lengthCm.value : Math.round(len);
-			dimension(pp[0], pp[1], inn, WALL_T / 2 + px(24), `${w} cm`, BRASS_DEEP);
+			dimension(pp[0], pp[1], inn, WALL_T / 2 + px(24), `${w} cm`, s.lengthCm?.source === 'typed');
 		});
 
 		// One dimension per wall, outside the plan.
-		dimension(wall.from, wall.to, out, WALL_T / 2 + px(38), `${total} cm`, INK);
+		dimension(wall.from, wall.to, out, WALL_T / 2 + px(38), `${total} cm`, wall.lengthCm?.source === 'typed');
 	});
 
 	/* ---- footer ------------------------------------------------------- */
@@ -284,22 +293,14 @@ export function roomToSvg(room: RoomSnapshot, opts?: { widthPx?: number }): stri
 	let note = 'All dimensions in cm';
 	if (room && room.ceilingHeightCm != null) note += `   ·   Ceiling ${room.ceilingHeightCm} cm`;
 	if (room && room.closed === false) note += '   ·   outline not closed';
-	const footer = textEl(vbX + px(18), footY, note, px(16), SMOKE, 'start');
+	const footer = textEl(vbX + px(18), footY, note, px(16), GREY, 'start');
 
-	const hatch =
-		`<pattern id="fpHatch" patternUnits="userSpaceOnUse" width="${HATCH_SPACING}" height="${HATCH_SPACING}" patternTransform="rotate(45)">` +
-		`<rect width="${HATCH_SPACING}" height="${HATCH_SPACING}" fill="${PAPER}"/>` +
-		`<line x1="0" y1="0" x2="0" y2="${HATCH_SPACING}" stroke="${INK}" stroke-width="${n(px(1.1))}"/>` +
-		`</pattern>`;
-
-	/* No `<?xml …?>` prolog (the staging export.js had one): the string is
-	   embedded inline as often as it is saved as a file, and a prolog inside
-	   an HTML document parses as a bogus comment. Everything else is byte-for-
-	   byte the staging output. */
+	/* No `<?xml …?>` prolog: the string is embedded inline as often as it is
+	   saved as a file, and a prolog inside an HTML document parses as a bogus
+	   comment. */
 	return (
 		`<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="${widthPx}" height="${heightPx}"` +
 		` viewBox="${n(vbX)} ${n(vbY)} ${n(vbW)} ${n(vbH)}">` +
-		`<defs>${hatch}</defs>` +
 		`<rect x="${n(vbX)}" y="${n(vbY)}" width="${n(vbW)}" height="${n(vbH)}" fill="${PAPER}"/>` +
 		`<g data-layer="plan">${body.join('')}</g>` +
 		`<g data-layer="dimensions">${dims.join('')}</g>` +
