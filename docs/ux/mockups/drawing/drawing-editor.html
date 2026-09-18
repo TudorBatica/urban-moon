@@ -1,0 +1,1411 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drawing editor mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Newsreader:opsz,wght@6..72,300;6..72,400&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F5F4F0; --white:#FFFFFF; --ink:#141414; --body:#33322F; --soft:#5A5955; --grey:#7A7975;
+  --hair:#E0DFD9; --line-strong:#CFCEC8; --wash:#ECEBE6; --off:#C9C8C2; --place:#B5B4AE;
+  --s:"Newsreader",Georgia,serif; --f:"Figtree","Helvetica Neue",Arial,sans-serif;
+  /* the only colours in the product: one per landmark, for its square and name chip on the plan only */
+  --apa:#2F6F9F; --gaz:#C08A1E; --centrala:#3E7D5A; --aer:#6E63A6; --semineu:#B4553A; --calorifer:#8A6244; --hota:#9B4A86;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1b1b1a;color:#b9b7b1;font-family:var(--f);padding:32px 20px 120px}
+.doc{max-width:1420px;margin:0 auto}
+.doc > h1{font:300 40px/1.1 var(--s);color:#f2f1ec;margin-bottom:10px}
+.doc > p.lead{max-width:80ch;line-height:1.5;margin-bottom:8px}
+nav.toc{margin:18px 0 8px;display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px}
+nav.toc a{color:#e9e7e1}
+h2.part{font:300 30px/1.1 var(--s);color:#f2f1ec;margin:64px 0 6px;padding-top:24px;border-top:1px solid #333}
+.sec{margin:40px 0 0}
+.sec > h3{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#8d8b85;margin-bottom:6px}
+.sec > p{max-width:90ch;line-height:1.5;margin-bottom:14px;font-size:14px}
+.sec > p b{color:#ecebe6;font-weight:500}
+.row{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.chosen{display:inline-block;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#1b1b1a;background:#ecebe6;padding:3px 7px;border-radius:3px;margin-left:8px;vertical-align:1px}
+details.notchosen{margin-top:40px;border-top:1px solid #333;padding-top:16px}
+details.notchosen > summary{cursor:pointer;font-size:13px;color:#e9e7e1}
+
+/* ---------- device frames ---------- */
+.ph,.dk{background:var(--paper);color:var(--ink);font-family:var(--f);position:relative;overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,.45);display:flex;flex-direction:column;flex:none}
+.ph{width:360px;height:740px}
+.dk{width:1000px;height:640px}
+.cap{font-size:11px;color:#8d8b85;margin-top:8px;letter-spacing:.04em;max-width:360px;line-height:1.4}
+.dk + .cap{max-width:1000px}
+
+.top{display:flex;justify-content:space-between;align-items:baseline;padding:18px 22px 12px;flex:none}
+.dk .top{padding:20px 32px 14px}
+.wm{font:600 13px/1 "Playfair Display",Georgia,serif;letter-spacing:.14em;text-transform:uppercase}
+.ct{color:var(--grey);font-size:11.5px;letter-spacing:.06em}
+.bot{display:flex;justify-content:space-between;align-items:center;padding:12px 22px 18px;flex:none;background:var(--paper)}
+.dk .bot{padding:12px 32px 20px}
+.lnk{font-size:14px;color:var(--grey)}
+.go{width:54px;height:54px;border-radius:50%;background:var(--ink);display:flex;align-items:center;justify-content:center}
+.go.off{background:var(--off)}
+.go.press{transform:scale(.94)}
+.go svg{width:20px;height:20px;stroke:var(--paper);stroke-width:1.5;fill:none}
+
+.canvas{position:relative;flex:1;min-height:0;overflow:hidden}
+.canvas > svg.plan{position:absolute;inset:0;width:100%;height:100%}
+/* the drawing never runs under the tool plate, the hint or the corner plates */
+.ph .canvas > svg.plan{top:118px;bottom:150px;height:auto;width:auto;left:0;right:0}
+.dk .canvas > svg.plan{top:96px;bottom:64px;height:auto;width:auto;left:0;right:0}
+
+/* ---------- plates and tools ---------- */
+.plate{position:absolute;background:var(--white);border:1px solid var(--line-strong);border-radius:4px;display:flex;align-items:stretch}
+.tool{display:flex;align-items:center;gap:7px;height:44px;padding:0 12px;border-radius:3px;font-size:13px;color:var(--grey);white-space:nowrap;position:relative}
+.tool svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.5;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.tool.on{background:var(--ink);color:var(--paper)}
+.tool.ico{padding:0;width:44px;justify-content:center}
+.tool.dim{color:var(--off)}
+.tool.breath::after{content:"";position:absolute;inset:-4px;border:1.5px solid var(--ink);border-radius:5px;animation:breathe 2.4s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.tool.breath::after{animation:none}}
+.vsep{width:1px;background:var(--hair);margin:8px 3px}
+/* the tool plate now sits at the top of the canvas; the bottom holds only Înapoi and the arrow */
+.tools{left:50%;top:12px;transform:translateX(-50%);padding:4px;gap:2px}
+.ph .tools{padding:3px;gap:1px}
+.ph .tools .tool{flex-direction:column;justify-content:center;gap:4px;width:65px;height:52px;padding:0;font-size:11.5px}
+.ph .tools .tool.breath::after{inset:-3px}
+.dk .tools .tool{padding:0 11px}
+/* view controls bottom right, undo and redo bottom left (inside the tool plate on desktop) */
+.view{right:12px;bottom:12px;flex-direction:column;padding:2px}
+.hist{left:12px;bottom:12px;flex-direction:row;padding:2px}
+.view .tool, .hist .tool{width:40px;height:40px;padding:0;justify-content:center}
+.view .hsep{height:1px;background:var(--hair);margin:0 6px}
+.hist .vsep{margin:6px 2px}
+.hint{position:absolute;left:50%;transform:translateX(-50%);top:78px;background:rgba(245,244,240,.92);padding:3px 10px;border-radius:3px;width:max-content;max-width:calc(100% - 32px);text-align:center;font-size:13px;line-height:1.35;color:var(--grey)}
+.dk .hint{top:74px}
+.hint u{color:var(--ink);text-underline-offset:3px;text-decoration-thickness:1px}
+.hint b{color:var(--ink);font-weight:500}
+/* the selected thing's plate, next to it on the canvas (placed by the script from plan coordinates) */
+.pop{align-items:center;padding:3px;white-space:nowrap;z-index:2}
+.pop .fl{font-size:12.5px;color:var(--grey);padding:0 7px 0 9px}
+.pop .num{min-width:46px;height:34px;border:1px solid var(--hair);border-radius:3px;display:flex;align-items:center;justify-content:flex-end;padding:0 7px;font-size:14px;color:var(--ink)}
+.pop .num.d{color:var(--grey);font-style:italic}
+.pop .u{font-size:12.5px;color:var(--grey);padding:0 8px 0 6px}
+.pop .tool{height:40px;padding:0 10px;color:var(--body)}
+.pop .vsep{margin:6px 2px}
+.pop.two{flex-direction:column;align-items:stretch}
+.pop .r{display:flex;align-items:center}
+.pop .r + .r{border-top:1px solid var(--hair);margin-top:3px;padding-top:3px}
+.pop .grow{flex:1;min-width:14px}
+
+/* old plates, kept only for the not-chosen directions B and C */
+.ceil{left:12px;top:12px;align-items:center;gap:6px;padding:0 4px 0 12px;height:46px;font-size:12.5px;color:var(--grey);position:absolute}
+.ceil .num{min-width:46px;height:34px;border:1px solid var(--hair);border-radius:3px;display:flex;align-items:center;justify-content:flex-end;padding:0 7px;font-size:14px;color:var(--ink)}
+.ceil .u{margin-right:8px}
+.oldtools{left:50%;bottom:14px;top:auto;transform:translateX(-50%);padding:4px;gap:2px}
+.oldview{right:12px;top:12px;bottom:auto;flex-direction:column;padding:2px}
+.oldview .tool{width:40px;height:40px;padding:0;justify-content:center}
+.oldview .hsep{height:1px;background:var(--hair);margin:0 6px}
+.sel{left:50%;transform:translateX(-50%);bottom:66px;flex-direction:column;padding:4px;width:max-content;max-width:calc(100% - 20px)}
+.seg{display:flex;border:1px solid var(--line-strong);border-radius:3px;margin:4px;overflow:hidden}
+.seg span{padding:9px 10px;font-size:12.5px;color:var(--body);border-right:1px solid #E6E5E0;white-space:nowrap;position:relative}
+.seg span:last-child{border-right:0}
+.seg span.on{color:var(--ink);font-weight:500}
+.seg span.on::after{content:"";position:absolute;left:8px;right:8px;bottom:0;height:2px;background:var(--ink)}
+.acts{display:flex}
+.acts .tool{height:40px;padding:0 10px;color:var(--body)}
+
+.btn{height:44px;padding:0 16px;border-radius:4px;border:1px solid var(--line-strong);background:var(--paper);display:flex;align-items:center;font-size:13.5px;color:var(--ink);white-space:nowrap}
+.btn.fill{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.scrim{position:absolute;inset:0;background:rgba(20,20,20,.18)}
+
+/* ---------- the tutorial slides ---------- */
+.onb{position:absolute;left:0;right:0;bottom:0;background:var(--white);border-top:1px solid var(--line-strong);padding:14px 16px 16px;z-index:4}
+.ph .onb{top:64px}
+.dk .onb{left:50%;top:50%;bottom:auto;right:auto;transform:translate(-50%,-50%);width:640px;border:1px solid var(--line-strong);border-radius:4px;padding:18px 24px 20px}
+.onb .ot{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.onb .ot .lnk{font-size:13.5px}
+.onb .stage{background:var(--paper);border:1px solid var(--hair);border-radius:4px;overflow:hidden}
+.ph .onb .stage{height:400px}
+.dk .onb .stage{height:300px}
+.onb .stage svg{width:100%;height:100%;display:block}
+.ph .onb{display:flex;flex-direction:column}
+.onb .q2{font:300 24px/1.15 var(--s);margin:14px 0 6px}
+.onb p{font-size:14px;line-height:1.45;color:var(--body)}
+.ph .onb p{min-height:76px}
+.onb .ob{display:flex;align-items:center;justify-content:space-between;margin-top:12px;gap:12px}
+.onb .ob .lnk{min-width:52px}
+.dots{display:flex;gap:6px;align-items:center}
+.dots i{display:block;width:12px;height:2px;background:var(--line-strong)}
+.dots i.on{width:24px;background:var(--ink)}
+
+/* the stage is a small copy of the editor screen; the camera zooms into the toolbar and back out */
+.stage .mpill rect.bg{fill:#fff;stroke:#CFCEC8;stroke-width:.8}
+.stage .mpill .mg{fill:none;stroke:#7A7975;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.stage .mpill text{fill:#7A7975;font:500 6px Figtree,Arial,sans-serif}
+.stage .mpill.on rect.bg{fill:#141414;stroke:#141414}
+.stage .mpill.on .mg{stroke:#F5F4F0}
+.stage .mpill.on text{fill:#F5F4F0}
+.stage .cam{transform-box:view-box;transform-origin:0 0}
+/* the pill, tap and gesture animations are written by the script (they differ per slide) */
+/* the cameras and the gestures are written by the script, because they depend on the device the slide shows */
+@media (prefers-reduced-motion:reduce){
+  .stage *{animation:none!important}
+  .stage .fing,.stage .f1,.stage .f2,.stage .tapRing,.stage .tapDot,.stage .tapRing2,.stage .tapDot2,.stage .rotTap,.stage .h2{opacity:0}
+  .stage .selPill rect.bg{fill:#141414;stroke:#141414}
+  .stage .selPill .mg{stroke:#F5F4F0}
+  .stage .selPill text{fill:#F5F4F0}
+}
+
+/* ---------- question screens and landmark cards ---------- */
+.mid{flex:1;padding:18px 22px;display:flex;flex-direction:column;min-height:0}
+.dk .mid{padding:34px 0 0;width:680px;margin:0 auto}
+.q{font:300 27px/1.12 var(--s);letter-spacing:-.012em;margin-bottom:10px}
+.dk .q{font-size:34px}
+.sub{font:300 16px/1.4 var(--s);color:var(--soft);margin-bottom:22px;max-width:44ch}
+.dk .sub{font-size:17px}
+.fl{font-size:13px;color:var(--grey);margin-bottom:6px}
+.line{display:flex;align-items:baseline;gap:8px;border-bottom:1px solid var(--ink);padding-bottom:8px;max-width:220px}
+.line .val{font:400 34px/1 var(--f);color:var(--ink)}
+.line .val.empty{color:var(--place)}
+.line .u{font-size:15px;color:var(--grey)}
+.tiny{font-size:12.5px;color:var(--grey);margin-top:10px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.dk .cards{grid-template-columns:repeat(4,1fr);gap:12px}
+.card{background:var(--white);border:1px solid var(--hair);border-radius:4px;aspect-ratio:1/1.05;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;position:relative;padding:8px}
+.card svg{width:52%;height:auto}
+.dk .card svg{width:46%}
+.card .l{font-size:12.5px;text-align:center;line-height:1.2;color:var(--ink)}
+.dk .card .l{font-size:14px}
+.card.on{border-color:var(--ink);box-shadow:0 2px 0 rgba(20,20,20,.06)}
+.card.on .l{font-weight:500}
+.card .tick{position:absolute;right:7px;top:7px;width:17px;height:17px;border-radius:3px;background:var(--ink);display:flex;align-items:center;justify-content:center}
+.card .tick svg{width:11px;height:11px;stroke:var(--paper);stroke-width:2;fill:none}
+.card .n{position:absolute;left:7px;top:7px;font-size:11px;color:var(--grey)}
+/* a question that has to be answered before going on */
+.ask{position:absolute;left:12px;right:12px;bottom:14px;background:var(--white);border:1px solid var(--line-strong);border-radius:4px;padding:16px 18px;z-index:4}
+.dk .ask{left:50%;right:auto;transform:translateX(-50%);width:440px}
+.ask b{display:block;font-size:14px;font-weight:600;margin-bottom:6px}
+.ask p{font-size:13px;line-height:1.45;color:var(--body);margin-bottom:14px}
+.ask .na{display:flex;gap:10px;justify-content:flex-end}
+
+/* rotate strip */
+.strip{display:flex;flex-wrap:wrap;gap:10px;max-width:360px}
+.strip > div{background:var(--paper);width:175px}
+.strip .canvas{height:120px}
+.strip .l{font-size:11.5px;color:var(--body);padding:0 10px 10px;line-height:1.35}
+
+/* ---------- direction B: planșă ---------- */
+.dirB .canvas{margin:0 12px 0;}
+.dirB .sheetB{position:absolute;inset:0 0 0 0;background:var(--white);border:1px solid var(--line-strong)}
+.dk.dirB .canvas{margin:0 32px}
+.tb{position:absolute;right:10px;bottom:10px;border:1px solid var(--ink);display:grid;grid-template-columns:auto auto;font-size:10px;letter-spacing:.08em;text-transform:uppercase;background:var(--white)}
+.tb span{padding:5px 8px;border-right:1px solid var(--ink)}
+.tb span:nth-child(2n){border-right:0}
+.tb span:nth-child(-n+2){border-bottom:1px solid var(--ink)}
+.dirB .oldtools{bottom:auto;top:10px}
+.dirB .oldview{top:auto;bottom:48px;right:10px}
+.dirB .ceil{top:auto;bottom:10px;left:10px}
+.dirB .sel{bottom:auto;top:62px}
+.dk.dirB .oldtools{left:10px;transform:none;top:10px;flex-direction:column}
+.dk.dirB .oldtools .vsep{width:auto;height:1px;margin:3px 8px}
+.dk.dirB .oldview{top:10px;bottom:auto}
+.dk.dirB .sel{top:auto;bottom:48px}
+
+/* ---------- direction C: în ramă ---------- */
+.dk.dirC{flex-direction:row}
+.dirC .col{width:34%;flex:none;display:flex;flex-direction:column;padding:20px 32px 20px;border-right:1px solid var(--hair)}
+.dirC .col .q{font:300 30px/1.12 var(--s);margin:34px 0 10px}
+.dirC .col .sub{font:300 16px/1.4 var(--s);color:var(--soft);margin-bottom:18px}
+.dirC .col .tl{display:flex;flex-direction:column;gap:6px}
+.dirC .col .tl .tool{justify-content:flex-start;border:1px solid var(--hair);background:var(--white);height:auto;padding:10px 12px;align-items:flex-start;white-space:normal}
+.dirC .col .tl .tool.on{background:var(--ink);border-color:var(--ink)}
+.dirC .col .tl .tool .d{font-size:12.5px;line-height:1.35;color:var(--grey);display:block;margin-top:2px}
+.dirC .col .tl .tool.on .d{color:#bdbcb6}
+.dirC .col .tl .tool b{font-weight:500;font-size:14px}
+.dirC .col .tl .tool.on b{color:var(--paper)}
+.dirC .col .tl .tool:not(.on) b{color:var(--ink)}
+.dirC .col .fx{margin-top:18px;font-size:13px;color:var(--grey);display:flex;align-items:center;gap:8px}
+.dirC .col .fx .num{border:1px solid var(--hair);background:var(--white);border-radius:3px;height:36px;min-width:52px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;color:var(--ink);font-size:14px}
+.dirC .col .grow{flex:1}
+.dirC .right{flex:1;display:flex;flex-direction:column;min-width:0}
+.ph.dirC .qbar{padding:0 22px 8px;flex:none}
+.ph.dirC .qbar .q{font:300 22px/1.15 var(--s);margin:0 0 2px}
+.ph.dirC .qbar .sub{font:300 14px/1.4 var(--s);color:var(--soft);margin:0}
+</style>
+</head>
+<body>
+<div class="doc">
+  <h1>Drawing editor: mockups</h1>
+  <p class="lead">For the tickets <code>docs/backlog/drawing-1-editor-tools-and-view.md</code> to <code>docs/backlog/drawing-5-landmarks.md</code>. Static mockups, not a prototype: nothing is clickable (the slides in 2.1 animate). Direction A (Foaie) is chosen; part 1 shows it, with B and C kept folded for the record. This revision: no starting-shape chooser (the editor opens straight on the empty canvas), no ceiling-height plate, no "Începe din nou", the tool plate at the top of the canvas so the bottom holds only "Înapoi" and the arrow, no checks before saving, and the distances from a focused window or door to the first obstacle on each side. Every rule behind the frames is written down in part 3. Tools: Selectează and four one-shot tools — Perete, Fără perete, Fereastră, Ușă — each returning to Selectează after one use. Phone frames are 360×740, desktop 1000×640.</p>
+  <nav class="toc">
+    <a href="#dirs">1. Visual direction</a>
+    <a href="#f-onb">2.1 First thing: the slides</a>
+    <a href="#f-empty">2.2 Empty canvas</a>
+    <a href="#f-wall">2.3 Drawing a wall</a>
+    <a href="#f-open">2.4 Fără perete</a>
+    <a href="#f-win">2.5 Placing a window · distances</a>
+    <a href="#f-slide">2.6 Sliding an opening</a>
+    <a href="#f-door">2.7 Placing a door</a>
+    <a href="#f-select">2.8 Selecting a wall</a>
+    <a href="#f-zoom">2.9 Zoom</a>
+    <a href="#f-help">2.10 Cum desenez</a>
+    <a href="#f-done">2.11 Finishing</a>
+    <a href="#after">3.1 Gata cu planul?</a>
+    <a href="#p-ceil">3.2 Ceiling height</a>
+    <a href="#p-cards">3.3 What else is in the room</a>
+    <a href="#p-lmslide">3.4 Placing the first one</a>
+    <a href="#p-place">3.5 Placing a landmark</a>
+    <a href="#p-back">3.6 Back in the menu</a>
+    <a href="#sys">4. The systems</a>
+    <a href="#today">Today, for comparison</a>
+  </nav>
+
+  <h2 class="part" id="dirs">1. Visual direction</h2>
+
+  <div class="sec">
+    <h3>A · Foaie (the sheet) <span class="chosen">Chosen</span></h3>
+    <p><b>The canvas is the page.</b> Paper all the way to the edges, the questionnaire's own top and bottom bars, tools in a white plate at the top of the canvas. Walls are a solid ink band, so the outline reads at a glance at any zoom; openings are cut out of it. Numbers sit outside the walls in small white chips. The top bar carries only the wordmark and the step word; the bottom bar only "Înapoi" and the arrow. Shown here with a wall selected.</p>
+    <div class="row"><div><div id="dA-ph"></div><div class="cap">Phone</div></div><div><div id="dA-dk"></div><div class="cap">Desktop</div></div></div>
+  </div>
+
+  <details class="notchosen">
+    <summary>Not chosen: B · Planșă and C · În ramă (drawn with the earlier toolbar, ceiling plate and selection plate)</summary>
+    <div class="sec">
+      <h3>B · Planșă (the drawing board) · not chosen</h3>
+      <p><b>A white architect's sheet laid on the paper page.</b> A faint 50 cm grid, walls as two hairlines with a light hatch, a title block in the corner (room, scale). Feels like a professional plan and shows the scale; busier, and the grid and hatch compete with the numbers on a phone.</p>
+      <div class="row"><div><div id="dB-ph"></div><div class="cap">Phone</div></div><div><div id="dB-dk"></div><div class="cap">Desktop</div></div></div>
+    </div>
+    <div class="sec">
+      <h3>C · În ramă (in the frame) · not chosen</h3>
+      <p><b>The questionnaire's Frame, with the canvas where the photograph would be.</b> On desktop a left column asks in the serif and lists the tools; the canvas takes the rest. Gives up a third of the width, and the phone and desktop layouts differ the most.</p>
+      <div class="row"><div><div id="dC-ph"></div><div class="cap">Phone</div></div><div><div id="dC-dk"></div><div class="cap">Desktop</div></div></div>
+    </div>
+  </details>
+
+  <h2 class="part">2. The flow (direction A)</h2>
+
+  <div class="sec" id="f-onb">
+    <h3>2.1 First thing on the screen: the slides</h3>
+    <p><b>The editor opens on the empty canvas and the slides open over it at once</b>, the first time in this browser. Five slides, one per tool: Perete, Fără perete, Fereastră, Ușă, then Selectează with moving and zooming. Each slide plays the gesture on a small copy of this very screen: the camera starts zoomed in on the toolbar, the tool is tapped and fills, the camera pulls back to the whole screen, the gesture runs on the canvas, and for the window and the door it zooms in again on the piece and its plate. On phones the sheet takes the screen from under the top bar down, so the drawing is large enough to follow. "Sari peste" or Esc closes it; the last button is "Încep să desenez"; "Cum desenez" (2.10) opens the same slides again later. The position is a row of short bars, not dots (the round arrow stays the only circle). With <code>prefers-reduced-motion</code> nothing moves and each slide rests on a still frame.</p>
+    <div class="row"><div><div id="fOnb1-ph"></div><div class="cap">Phone · 1 / 5 Perete</div></div><div><div id="fOnb2-ph"></div><div class="cap">Phone · 2 / 5 Fără perete</div></div><div><div id="fOnb3-ph"></div><div class="cap">Phone · 3 / 5 Fereastră</div></div></div>
+    <div class="row" style="margin-top:24px"><div><div id="fOnb4-ph"></div><div class="cap">Phone · 4 / 5 Ușă</div></div><div><div id="fOnb5-ph"></div><div class="cap">Phone · 5 / 5 Selectează</div></div></div>
+    <div class="row" style="margin-top:24px"><div><div id="fOnb1-dk"></div><div class="cap">Desktop · 1 / 5, over the empty canvas</div></div></div>
+    <div class="row" style="margin-top:24px"><div><div id="fOnb3-dk"></div><div class="cap">Desktop · 3 / 5</div></div></div>
+  </div>
+
+  <div class="sec" id="f-empty">
+    <h3>2.2 Empty canvas</h3>
+    <p>What is behind the slides, and what the client sees from the second visit on. The tool plate at the top always shows the same five tools: <b>Selectează · Perete · Fără perete · Fereastră · Ușă</b>; Perete carries the breathing outline until it is first used. Fereastră and Ușă are not dimmed (tapping one says "Desenează întâi un perete."). Undo and redo sit bottom left, "Încadrează" bottom right, out of the way of the thumb that draws. The arrow waits (grey) until there is something to save.</p>
+    <div class="row"><div><div id="fEmpty-ph"></div><div class="cap">Phone</div></div><div><div id="fEmpty-dk"></div><div class="cap">Desktop</div></div></div>
+  </div>
+
+  <div class="sec" id="f-wall">
+    <h3>2.3 Drawing a wall</h3>
+    <p><b>One tool use, then back to Selectează.</b> Tapping Perete turns it on (filled ink); free ends show as small circles. One drag draws one wall with its live length; a wall starting or ending near a free end joins it. On release the tool turns itself off: Selectează is filled again, the new wall is selected (its number framed, a plate with "Șterge" next to it), and one finger now pans, drags or selects. The next wall needs Perete again. Tapping Perete when it is on, tapping Selectează, or Esc turns it off without drawing; a tap that does not drag draws nothing and leaves it on.</p>
+    <div class="row"><div><div id="fWall1-ph"></div><div class="cap">Phone · Perete on, mid-stroke on the fourth wall</div></div><div><div id="fWall2-ph"></div><div class="cap">Phone · released: back to Selectează, new wall selected</div></div></div>
+    <div class="row" style="margin-top:24px"><div><div id="fWall2-dk"></div><div class="cap">Desktop · released: back to Selectează, new wall selected</div></div></div>
+  </div>
+
+  <div class="sec" id="f-open">
+    <h3>2.4 Fără perete (the side with no wall)</h3>
+    <p>For a side of the room that opens into another room with nothing built between them. Drawn exactly like a wall, one drag, then back to Selectează; it shows as a dashed grey line with a tick at each end and has a length like a wall. Windows and doors cannot go on it, and an opening sliding along a wall stops where a Fără perete side begins. Selected, it gets the same plate as a wall ("Șterge").</p>
+    <div class="row"><div><div id="fOpen-ph"></div><div class="cap">Phone · Fără perete on, closing the room from the free end</div></div><div><div id="fOpen-dk"></div><div class="cap">Desktop · released, selected</div></div></div>
+  </div>
+
+  <div class="sec" id="f-win">
+    <h3>2.5 Placing a window, and the distances</h3>
+    <p>Tap Fereastră, then tap a wall: a 60 cm window is placed centred where the finger touched (moved along the wall just enough to fit, if it lands near a corner). The tool turns off and the window stays in focus until the client touches something else or picks a tool: a wash, a handle at each jamb (drag to resize), its width chip on the room side, the wall's numbers replaced by <b>one chain: the gap, the window, the gap</b> (4.4), and a plate with <b>Lățime</b> first, then <b>Înălțime pervaz</b>, then "Șterge" — docked at the bottom of the canvas on phones (two rows there), beside the window on desktop. The width is the number that matters most, so it comes first and is also the framed number in the chain: tap either and the same value is edited. It is prefilled with 90 cm, grey italic because the client did not type it; tapping the box opens the number keyboard, and a typed value turns ink. The keyboard does not open by itself. Once a client types a height, the next window is prefilled with that value (still grey italic). Tapping empty canvas or a Fără perete side with Fereastră on places nothing and keeps the tool on; the hint repeats "Atinge un perete". Both numbers are edited later by selecting the window again. The width starts at 60 cm and the sill at 90 cm, and both carry over to the next window once the client types them.</p>
+    <div class="row"><div><div id="fWin0-ph"></div><div class="cap">Phone · Fereastră on, waiting for a wall</div></div><div><div id="fWin1-ph"></div><div class="cap">Phone · placed: back to Selectează, window selected, 90 prefilled</div></div></div>
+    <div class="row" style="margin-top:24px"><div><div id="fWin1-dk"></div><div class="cap">Desktop · second window, prefilled with the 110 cm the client typed on the first</div></div></div>
+  </div>
+
+  <div class="sec" id="f-slide">
+    <h3>2.6 Sliding a window or door</h3>
+    <p><b>Drag the opening along the wall.</b> It travels as far as the wall is continuous: at a corner where two walls join it carries on to the next wall (it is always wholly on one wall; it moves over once its middle passes the corner). It stops against another opening and where the wall meets a Fără perete side. At a <b>free end</b> (a wall end joined to nothing) it may go past the end, until its near jamb meets the wall's end: the opening then is the end of the run, and its far jamb becomes the free end. Drawing a wall from there joins it, so the client can go on wall → window → wall. While dragging, the plate hides and the chain stays, counting up and down as it moves — it is what the client places the window by. Past a free end the chain simply ends with the window: there is no gap left on that side.</p>
+    <div class="row"><div><div id="fSlide1-ph"></div><div class="cap">Phone · dragged from the top wall round the corner (the dashed path is only in the mockup)</div></div><div><div id="fSlide2-ph"></div><div class="cap">Phone · past the free end of the top wall</div></div></div>
+    <div class="row" style="margin-top:24px"><div><div id="fSlide3-dk"></div><div class="cap">Desktop · Perete on again, the wall continues from the window's end</div></div></div>
+  </div>
+
+  <div class="sec" id="f-door">
+    <h3>2.7 Placing a door</h3>
+    <p>Like a window: tap Ușă, tap a wall; a 90 cm door is placed, the tool turns off and the door stays selected, slides the same way (2.6) and resizes by its jambs. Instead of the sill height its plate has <b>Rotește</b> (rotate glyph and word) and "Șterge". Rotește moves the swing to the next quarter, in a cycle of four: hinge at one jamb opening into the room, hinge at the other jamb into the room, hinge there opening out, hinge back at the first jamb opening out. A new door starts on the first (into the room; for an outline not closed, to the right of the wall's drawing direction). Key R on desktop. A door reads like a window (4.4): 20 | 90 | 190 along the wall, and its plate carries <b>Lățime</b> first, then Rotește and "Șterge". The 20 cm gap is too narrow for a number to sit in the chain, so that one steps out one lane on a leader.</p>
+    <div class="row"><div><div id="fDoor-ph"></div><div class="cap">Phone · placed: back to Selectează, door selected</div></div><div><div class="strip" id="fDoorStrip"></div><div class="cap">What Rotește cycles through, 1 → 2 → 3 → 4 → 1</div></div></div>
+    <div class="row" style="margin-top:24px"><div><div id="fDoor-dk"></div><div class="cap">Desktop · after one Rotește (hinge moved to the other jamb)</div></div></div>
+  </div>
+
+  <div class="sec" id="f-select">
+    <h3>2.8 Selecting a wall</h3>
+    <p>With Selectează, touching a wall or a Fără perete side selects it: a wash band and a heavier edge, its number framed in ink, a handle at each end, and a small plate next to it with only "Șterge". Its length is changed on its number chip; dragging the wall moves it, dragging a handle moves the corner, dragging empty canvas moves the view. There is no way to turn a wall into another kind: delete it (or undo) and draw it again. Deleting a wall deletes the windows and doors on it.</p>
+    <div class="row"><div><div id="fSel-ph"></div><div class="cap">Phone</div></div><div><div id="fSel-dk"></div><div class="cap">Desktop</div></div></div>
+  </div>
+
+  <div class="sec" id="f-zoom">
+    <h3>2.9 Zoom</h3>
+    <p>Zoomed in on a corner. Phone: pinch and two-finger drag, whatever the tool; one finger on empty canvas pans in Selectează, which is now the tool almost all the time. "Încadrează" (fit) bottom right. Desktop: wheel zooms around the pointer; +, − and fit bottom right. The hint shows once, the first time the client zooms or pans.</p>
+    <div class="row"><div><div id="fZoom-ph"></div><div class="cap">Phone</div></div><div><div id="fZoom-dk"></div><div class="cap">Desktop</div></div></div>
+  </div>
+
+  <div class="sec" id="f-help">
+    <h3>2.10 Cum desenez</h3>
+    <p><b>The same slides, reopened.</b> "Cum desenez" at the end of the hint (and on desktop the key ?) opens the slides of 2.1 again, from the first one, over whatever is on the canvas. There is no second help sheet to keep in step with them. Closing returns to the drawing exactly as it was; nothing is selected or deselected by opening it.</p>
+    <div class="row"><div><div id="fHelp-ph"></div><div class="cap">Phone · reopened over a drawing in progress</div></div></div>
+  </div>
+
+  <div class="sec" id="f-done">
+    <h3>2.11 Finishing</h3>
+    <p><b>No checks before saving, for now.</b> The arrow ("Gata, salvează planul") is grey while the canvas is empty and available as soon as anything is drawn. Pressing it saves whatever is there: an outline that is not closed, lengths nobody typed (every wall has the length it was drawn at, shown grey italic), a missing sill height. While it saves, the arrow shows as pressed and does not take a second press. The notes about missing lengths and an unclosed outline are gone.</p>
+    <div class="row"><div><div id="fDone-ph"></div><div class="cap">Phone · saving</div></div><div><div id="fDone-dk"></div><div class="cap">Desktop · saving, with an outline that is not closed</div></div></div>
+  </div>
+
+  <h2 class="part" id="after">3. After the layout</h2>
+
+  <div class="sec">
+    <h3>3.1 "Gata cu planul?"</h3>
+    <p>The arrow on the drawing screen now asks before it leaves: a plate over a light scrim, "Mai am de lucru" (outline) to go back to the drawing, "Continuă" (filled) to go on. It is the only thing in the way of saving — there are still no checks on what was drawn (4.10). Answering "Continuă" saves the plan and opens the ceiling question.</p>
+    <div class="row"><div><div id="pConfirm-ph"></div><div class="cap">Phone</div></div><div><div id="pConfirm-dk"></div><div class="cap">Desktop</div></div></div>
+  </div>
+
+  <div class="sec" id="p-ceil">
+    <h3>3.2 Ceiling height</h3>
+    <p>The ceiling height left the canvas (there is no "Tavan" plate any more) and comes back here, as an ordinary question in the questionnaire's shape: serif question, one line to write on, the unit beside it, the arrow waiting until there is a number. Same screen on both widths; on phones the number keyboard opens with it.</p>
+    <div class="row"><div><div id="pCeil-ph"></div><div class="cap">Phone · answered</div></div><div><div id="pCeil-dk"></div><div class="cap">Desktop · empty, the arrow waits</div></div></div>
+  </div>
+
+  <div class="sec" id="p-cards">
+    <h3>3.3 What else is in the room</h3>
+    <p>A card menu in the language of the appliance screens: a line drawing and a name, seven of them — Țeavă de apă, Gaz, Centrală, Aer condiționat, Șemineu, Calorifer, Evacuare hotă. Three to a row on phones, four on desktop. <b>The drawings are object drawings, exactly as on the appliance cards</b>: a 64 grid, 1.1 ink strokes with .7 details, light bodies and dark parts, no colour. The landmark's colour is met on the plan, never in the menu: on the tool that places it, on its square and on its name chip. Tapping a card opens the plan with that landmark ready to place. Nothing here is required: the arrow goes on with none of them chosen.</p>
+    <div class="row"><div><div id="pCards-ph"></div><div class="cap">Phone · nothing placed yet</div></div><div><div id="pCards-dk"></div><div class="cap">Desktop · nothing placed yet</div></div></div>
+  </div>
+
+  <div class="sec" id="p-lmslide">
+    <h3>3.4 Placing the first one: one slide</h3>
+    <p>The first time a landmark is placed, one slide explains this one mechanic, in the same shape as the drawing slides and on the same small copy of the screen: the tool is tapped, a wall is tapped, the square appears with its name and its two distances, and then it is dragged along the wall and over it to the other side. "Am înțeles" closes it and it does not come back. The tool plate behind it has changed: <b>Selectează and the chosen landmark, nothing else</b> — walls, windows and doors cannot be changed any more at this step.</p>
+    <div class="row"><div><div id="pLmSlide-ph"></div><div class="cap">Phone</div></div></div>
+    <div class="row" style="margin-top:24px"><div><div id="pLmSlide-dk"></div><div class="cap">Desktop</div></div></div>
+  </div>
+
+  <div class="sec" id="p-place">
+    <h3>3.5 Placing a landmark</h3>
+    <p>Tap the wall it is on: a <b>30 cm square in the landmark's colour</b> sits against that wall on the room side, with its name on a small white chip beside it. Like a window, the tool then turns off and the square stays in focus: a wash, an ink edge, its plate ("Șterge"), and <b>its distances to the first obstacle on each side</b> — the same near row as windows and doors (4.4), counting openings, corners, wall ends and other landmarks. Dragging it slides it along the wall; dragging it across the wall puts it on the other side. The arrow is "Gata" and goes back to the card menu.</p>
+    <div class="row"><div><div id="pPlace0-ph"></div><div class="cap">Phone · Gaz chosen, waiting for a wall</div></div><div><div id="pPlace1-ph"></div><div class="cap">Phone · placed and in focus: 155 cm to the window, 45 cm to the corner</div></div></div>
+    <div class="row" style="margin-top:24px"><div><div id="pPlace1-dk"></div><div class="cap">Desktop · placed and in focus</div></div></div>
+    <div class="row" style="margin-top:24px"><div><div id="pPlaced-dk"></div><div class="cap">Desktop · four landmarks placed, none in focus: colour and name carry them, the numbers only come back on the one the client touches</div></div></div>
+  </div>
+
+  <div class="sec" id="p-back">
+    <h3>3.6 Back in the menu</h3>
+    <p>A card whose landmark is on the plan has an ink border and a tick. A landmark can be placed more than once (two radiators, two water points): the card keeps the tick and shows how many in its corner. Tapping a ticked card goes back to the plan with that landmark ready to place again, and the ones already there can be touched, moved or deleted. The arrow goes on to the rest of the questionnaire.</p>
+    <div class="row"><div><div id="pCards2-ph"></div><div class="cap">Phone · Gaz once, Calorifer twice</div></div><div><div id="pCards2-dk"></div><div class="cap">Desktop</div></div></div>
+  </div>
+
+  <h2 class="part" id="sys">4. The systems</h2>
+  <p class="lead">Everything the frames above obey, written out. This is the part to argue with; the pictures only show it happening.</p>
+
+  <div class="sec">
+    <h3>4.1 Tools</h3>
+    <p>Five tools, always the same five, in one plate at the top of the canvas: <b>Selectează</b> (the resting tool) and four that make something: <b>Perete</b>, <b>Fără perete</b>, <b>Fereastră</b>, <b>Ușă</b>. Undo and redo are in the plate on desktop, bottom left on phones; the view controls are bottom right.</p>
+    <p><b>One use, then back to Selectează.</b> Picking a tool fills it ink; the moment it has made one thing it turns itself off and Selectează fills again. Nothing is drawn by touching the canvas while Selectează is on, and nothing is ever drawn twice by accident. A tap that draws nothing (a tap without a drag for Perete and Fără perete; a tap that misses a wall for Fereastră and Ușă) leaves the tool on and the hint repeats what to do. Tapping the tool again, tapping Selectează, or Esc turns it off.</p>
+    <p>Perete and Fără perete are drawn: one drag, from one end to the other, joining a free end it starts or ends near. Fereastră and Ușă are placed: one tap on a wall. They never go on a Fără perete side. On an empty canvas Perete carries the breathing outline; Fereastră and Ușă are not dimmed, and tapping one says "Desenează întâi un perete." Keys: V, P, L, F, U, R for Rotește, Delete for the selection.</p>
+  </div>
+
+  <div class="sec">
+    <h3>4.2 Focus</h3>
+    <p>One thing at a time is in focus: the wall, the Fără perete side, the window or the door the client last touched, or the one a tool has just made. In focus means a <code>--wash</code> band, a heavier edge, a handle at each end or jamb, its number framed in ink, its own plate, and — for a window or a door — its distances (3.4). Focus ends when the client touches something else, taps empty canvas, or picks a tool. It survives panning and zooming.</p>
+  </div>
+
+  <div class="sec">
+    <h3>4.3 Numbers on the drawing</h3>
+    <p>Every number is a white chip with a hairline, Figtree 13.5px, with its unit. A length the client typed is ink; one that comes from the drawing is grey italic; one not given yet is <code>—</code>. Tapping a chip edits that number in place.</p>
+    <p><b>One lane, outside the wall, 34px out.</b> At rest it holds one number per wall: that wall's length. When a piece on that wall comes into focus, that number stands down and the same lane holds the chain of 4.4 instead — so the numbers never stack up in two places and the eye always reads one line per wall. A number too narrow to sit in the chain steps out one lane (68px on a horizontal wall, 96px on a vertical one, where chips sit side by side rather than stacking) on a thin leader, and two such numbers in a row are pushed apart. The room side of the wall stays free for the piece's plate and, for a landmark, its name.</p>
+    <p><b>The drawing area is the canvas minus the plate bands.</b> The plan is fitted into what is left after the tool plate and the hint at the top and the corner plates (and, on a phone, the docked plate) at the bottom, so a number can never end up under the chrome. A number whose wall is off screen is not drawn.</p>
+  </div>
+
+  <div class="sec">
+    <h3>4.4 The chain: what is next to what</h3>
+    <p>While a window, a door or a landmark is in focus or being dragged, its wall reads as <b>one chain of numbers along the wall</b> — gap, the piece itself, gap — with a tick at every boundary and a hairline back to the wall. It adds up to the wall's length, which is why that number stands down while the chain is up.</p>
+    <ul style="max-width:90ch;line-height:1.5;font-size:14px;margin:0 0 14px 18px">
+      <li>A gap runs from the piece's edge to the <b>first obstacle</b> on that side: another opening or landmark, a corner where the run turns, a free end of the wall, or where the wall meets a Fără perete side.</li>
+      <li>The chain stops at a corner even though the piece itself can slide round it: a number that bent round a corner is not one a client can hold a tape to. So <code>capăt---perete---fereastră---ușă</code>, touched on the window, reads <code>gap | fereastră | gap</code> on that wall alone.</li>
+      <li>The middle number is the piece's own size and is the same value as the first field in its plate; tapping either edits it. A landmark has no size to state, so its square is a break in the line with no number.</li>
+      <li>A gap of zero shows nothing; the chain simply starts at the piece. Past a free end the chain ends with the piece.</li>
+      <li>The numbers are grey italic, since the drawing is what says them, and they count up and down live while the piece is dragged. The piece's own number is framed in ink, because it is the one in focus.</li>
+      <li>A number too narrow for its span steps out one lane on a leader instead of shrinking or overlapping; two in a row are pushed apart along the wall.</li>
+    </ul>
+    <p>They are read-only in these mockups. Making a gap typed — write 100 and the piece moves to 100 cm from the corner — is the obvious next step and the one open question here.</p>
+  </div>
+
+  <div class="sec">
+    <h3>4.5 Plates</h3>
+    <p>White, <code>--line-strong</code> hairline, 4px radius, 44px rows. The focused thing's plate holds only what that thing needs: a wall or a Fără perete side, "Șterge"; a window, "Înălțime pervaz" with its number and "Șterge"; a door, "Rotește" and "Șterge". Lengths are never in the plate — they are on the drawing.</p>
+    <p><b>Where it sits.</b> On desktop, beside the piece. On a phone it docks at the bottom centre of the canvas, above the undo and fit plates: a plate 278px wide next to a piece on a 360px screen would always land on the drawing or run off the edge, and a docked plate is also where the thumb already is and where the keyboard pushes it. It is the same plate, in the one place the client learns.</p>
+  </div>
+
+  <div class="sec">
+    <h3>4.6 Hints</h3>
+    <p>One grey line under the tool plate, on a soft paper backdrop so it stays readable when the drawing runs under it. It says the one next thing and changes with the state and the device ("atinge" on touch, "dă clic" with a mouse). "Cum desenez" at its end reopens the slides.</p>
+  </div>
+
+  <div class="sec">
+    <h3>4.7 The slides</h3>
+    <p>Five slides, one per tool, over the empty canvas the first time and from "Cum desenez" after that. Each plays on a small copy of the client's own screen — the same tool plate, the same room, the same numbers, the same hint line — so nothing has to be translated from the slide to the screen.</p>
+    <p>One timeline, eight seconds, and it starts on the tool the slide is about: the camera opens zoomed on that tool, taps it at once (no waiting), the tool fills; the camera pulls back to the whole screen; the gesture runs; then either the camera looks at the tool plate again to show it back on Selectează (Perete, Fără perete), or it moves in close on what was placed and its numbers (Fereastră, Ușă). Slide five opens on Selectează and stays on the whole screen for the pinch. With <code>prefers-reduced-motion</code> nothing moves and every slide rests on a still frame.</p>
+  </div>
+
+  <div class="sec">
+    <h3>4.8 Defaults and what is carried over</h3>
+    <p>A window is 60 cm wide, a door 90 cm, a sill 90 cm from the floor. A prefilled number is grey italic, because the client did not give it; typing it makes it ink. Both the width and the sill carry over: once the client types one, the next window of that kind starts from that value, still grey italic until it is typed on that window too. Most homes repeat their windows, so the second one is usually right already.</p>
+  </div>
+
+  <div class="sec">
+    <h3>4.9 Landmarks</h3>
+    <p>Landmarks are what the room has that the plan cannot show: water, gas, the boiler, air conditioning, a fireplace, a radiator, the hood's outlet. They are placed after the plan is finished, one kind at a time, from the card menu (3.3).</p>
+    <ul style="max-width:90ch;line-height:1.5;font-size:14px;margin:0 0 14px 18px">
+      <li><b>The tool plate changes.</b> During this step it holds Selectează and the one landmark that was chosen. Walls, windows and doors are drawn as they are but cannot be selected or changed; to change them the client goes back to the plan step.</li>
+      <li><b>Placing</b> is a tap on a wall, like a window: a 30 cm square in the landmark's colour, against that wall, on the room side. Then the tool turns off and the square is in focus.</li>
+      <li><b>Dragging</b> along the wall moves it, round corners like an opening; dragging it across the wall puts it on the other face. The face is part of the answer: a radiator under the window is on the room side, the gas riser may be behind the wall.</li>
+      <li><b>Numbers.</b> In focus it gets the same distances as a window or a door (4.4), and other landmarks count as obstacles. Landmarks have no width to show; the square is a fixed 30 cm on the plan whatever the zoom.</li>
+      <li><b>Its name</b> is on a small white chip beside the square, in the same colour, on the room side, so a plan full of squares can be read without a legend.</li>
+      <li><b>More than one of a kind</b> is allowed; the card counts them.</li>
+      <li><b>Colour is the exception.</b> `design.md` allows ink, greys and photographs only. Seven landmarks that must be told apart at a glance is the one case that earns colour, and the palette is muted enough to sit on paper. The colour appears only on the plan: the square, its name chip, and the small square that stands for the landmark in the tool plate. The cards in the menu stay ink on paper, like every other object drawing. Nothing else in the product gains a colour.</li>
+    </ul>
+  </div>
+
+  <div class="sec">
+    <h3>4.10 Saving</h3>
+    <p>No checks. The arrow is grey while the canvas is empty and available as soon as anything is drawn. It saves what is there: an outline that is not closed, lengths nobody typed, a sill nobody changed. While it saves it shows as pressed and takes no second press.</p>
+  </div>
+
+  <div class="sec" id="today">
+    <h3>Today, for comparison</h3>
+    <p>Screenshots of the current editor are not embedded (this file stays self-contained). See <code>docs/ux/screens/drawing.md</code>, "As it is today" and "Defects".</p>
+  </div>
+</div>
+
+<script>
+/* ---------------- glyphs (20x20, 1.5px) ---------------- */
+const G = {
+  select:'<path d="M5 3.5l10 5.8-4.4 1.1L8.4 15z"/>',
+  pen:'<path d="M3.8 16.2l.9-3.6 8.6-8.6 2.7 2.7-8.6 8.6z"/><path d="M11.6 5.7l2.7 2.7"/>',
+  wall:'<path d="M3 16.5V3.5h13.5"/><path d="M7 16.5V7.5h9.5"/>',
+  open:'<path d="M3.5 10h13" stroke-dasharray="2 2.6"/><path d="M3 6.5v7M17 6.5v7"/>',
+  undo:'<path d="M7.5 4.5L4 8l3.5 3.5"/><path d="M4 8h8a4 4 0 010 8H9"/>',
+  redo:'<path d="M12.5 4.5L16 8l-3.5 3.5"/><path d="M16 8H8a4 4 0 000 8h3"/>',
+  plus:'<path d="M10 4.5v11M4.5 10h11"/>',
+  minus:'<path d="M4.5 10h11"/>',
+  fit:'<path d="M3.5 7.5v-4h4M12.5 3.5h4v4M16.5 12.5v4h-4M7.5 16.5h-4v-4"/>',
+  door:'<path d="M4 16.5h3.5M4 16.5V5.5"/><path d="M4 5.5a11 11 0 0111 11" stroke-dasharray="2 2"/>',
+  win:'<path d="M2.5 7.5h15M2.5 10h15M2.5 12.5h15M2.5 7.5v5M17.5 7.5v5"/>',
+  del:'<path d="M4.5 6h11M8 6V4h4v2M6 6l.8 10h6.4L14 6"/>',
+  rotate:'<path d="M15.5 9a5.5 5.5 0 10-1.6 4.4"/><path d="M15.8 4.5V9h-4.5"/>',
+  arrow:'<path d="M4 10h11M11 6l4 4-4 4"/>',
+  pinch:'<path d="M6 14l-3 3M14 6l3-3M3 13v4h4M17 7V3h-4"/>',
+};
+const g = (n, extra='') => `<svg viewBox="0 0 20 20" ${extra}>${G[n]}</svg>`;
+
+/* ---------------- the L room (used for the direction and zoom frames) ---------------- */
+const L = [[0,0],[520,0],[520,260],[320,260],[320,420],[0,420]];
+
+function plan(o){
+  const pts = o.pts || L, n = pts.length, k = o.k || 1;   // k: screen px per cm
+  const dir = o.dir || 'A';
+  const vb = o.vb || [-110,-110,740,640];
+  const t = dir==='A' ? 16 : dir==='B' ? 20 : 10;          // wall thickness, cm
+  let s = `<svg class="plan" viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet">`;
+  if(dir==='B'){
+    s += `<defs><pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="#EDEBE5" stroke-width="${1/k}"/></pattern>
+      <pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V10" stroke="#141414" stroke-width="${0.8/k}"/></pattern></defs>
+      <rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="url(#grid)"/>`;
+  }
+  const poly = pts.map(p=>p.join(',')).join(' ');
+  if(o.selected!=null){
+    const a = pts[o.selected], b = pts[(o.selected+1)%n];
+    const x = Math.min(a[0],b[0])-t*1.6, y=Math.min(a[1],b[1])-t*1.6;
+    s += `<rect x="${x}" y="${y}" width="${Math.abs(a[0]-b[0])+t*3.2}" height="${Math.abs(a[1]-b[1])+t*3.2}" fill="#ECEBE6"/>`;
+  }
+  if(dir==='B'){
+    s += `<polygon points="${poly}" fill="none" stroke="url(#hatch)" stroke-width="${t}" stroke-linejoin="miter"/>`;
+    s += `<polygon points="${offset(pts,t/2)}" fill="none" stroke="#141414" stroke-width="${1.2/k}"/>`;
+    s += `<polygon points="${offset(pts,-t/2)}" fill="none" stroke="#141414" stroke-width="${1.2/k}"/>`;
+  } else {
+    s += `<polygon points="${poly}" fill="none" stroke="#141414" stroke-width="${t}" stroke-linejoin="miter"/>`;
+  }
+  if(o.selected!=null){
+    const a = pts[o.selected], b = pts[(o.selected+1)%n];
+    s += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#141414" stroke-width="${t+6/k}"/>`;
+    [a,b].forEach(p=> s += `<rect x="${p[0]-7/k}" y="${p[1]-7/k}" width="${14/k}" height="${14/k}" fill="#fff" stroke="#141414" stroke-width="${1.5/k}"/>`);
+  }
+  if(o.openings !== false){
+    // window on the top wall, 150..330
+    const wt = t+2/k;
+    s += `<rect x="150" y="${-wt/2}" width="180" height="${wt}" fill="${dir==='B'?'#fff':'#F5F4F0'}"/>`;
+    [-t/2,0,t/2].forEach(y=> s += `<line x1="150" y1="${y}" x2="330" y2="${y}" stroke="#141414" stroke-width="${1.2/k}"/>`);
+    [150,330].forEach(x=> s += `<line x1="${x}" y1="${-t/2}" x2="${x}" y2="${t/2}" stroke="#141414" stroke-width="${1.2/k}"/>`);
+    // door on the left wall, 280..370, opening inwards
+    s += `<rect x="${-wt/2}" y="280" width="${wt}" height="90" fill="${dir==='B'?'#fff':'#F5F4F0'}"/>`;
+    [280,370].forEach(y=> s += `<line x1="${-t/2}" y1="${y}" x2="${t/2}" y2="${y}" stroke="#141414" stroke-width="${1.2/k}"/>`);
+    s += `<line x1="${t/2}" y1="280" x2="${t/2+90}" y2="280" stroke="#141414" stroke-width="${1.6/k}"/>`;
+    s += `<path d="M${t/2+90} 280 A90 90 0 0 1 ${t/2} 370" fill="none" stroke="#141414" stroke-width="${1/k}" stroke-dasharray="${4/k} ${4/k}"/>`;
+  }
+  (o.chips||[]).forEach((c,i)=>{
+    if(c==null) return;
+    const a = pts[i], b = pts[(i+1)%n];
+    const dx=b[0]-a[0], dy=b[1]-a[1], len=Math.hypot(dx,dy);
+    const nx=dy/len, ny=-dx/len;
+    const side = i===2 ? -1 : 1;
+    const off = side*(t/2 + 34/k);
+    const mx=(a[0]+b[0])/2+nx*off, my=(a[1]+b[1])/2+ny*off;
+    const e = side*(t/2 + 14/k);
+    s += `<line x1="${a[0]+nx*e}" y1="${a[1]+ny*e}" x2="${b[0]+nx*e}" y2="${b[1]+ny*e}" stroke="#B5B4AE" stroke-width="${1/k}"/>`;
+    [a,b].forEach(p=> s += `<line x1="${p[0]+nx*(e-5/k)}" y1="${p[1]+ny*(e-5/k)}" x2="${p[0]+nx*(e+5/k)}" y2="${p[1]+ny*(e+5/k)}" stroke="#7A7975" stroke-width="${1/k}"/>`);
+    s += chip(mx, my, c, k);
+  });
+  if(o.live) s += live(o.live, k, t);
+  if(o.ends) o.ends.forEach(p=> s += endDot(p, k));
+  return s + '</svg>';
+}
+function chip(mx, my, c, k){
+  const fs = 13.5/k, ch = 28/k, pad = 7/k;
+  const txt = c.v==null ? '—' : c.v;
+  const w = Math.max(58, String(txt).length*7.6 + 22 + 2*pad*k)/k;
+  const col = c.v==null ? '#B5B4AE' : c.d ? '#7A7975' : '#141414';
+  const stroke = c.sel ? '#141414' : '#E0DFD9';
+  const sw = c.sel ? 1.5/k : 1/k;
+  let s = `<rect x="${mx-w/2}" y="${my-ch/2}" width="${w}" height="${ch}" rx="${3/k}" fill="#fff" stroke="${stroke}" stroke-width="${sw}"/>`;
+  s += `<text x="${mx}" y="${my+fs*0.36}" text-anchor="middle" font-family="Figtree,Arial" font-size="${fs}" fill="${col}" ${c.d?'font-style="italic"':''}>${txt}<tspan fill="#7A7975" font-style="normal" font-size="${fs*0.85}"> cm</tspan></text>`;
+  return s;
+}
+function live([a,b,label,kind], k, t){
+  const fs = 13.5/k, ch = 28/k;
+  let s = '';
+  if(kind==='open'){
+    s += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#7A7975" stroke-width="${2.5/k}" stroke-dasharray="${8/k} ${6/k}"/>`;
+  } else {
+    s += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#141414" stroke-width="${t}" opacity=".35"/>`;
+    s += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#141414" stroke-width="${1.5/k}" stroke-dasharray="${6/k} ${5/k}"/>`;
+  }
+  s += `<circle cx="${b[0]}" cy="${b[1]}" r="${22/k}" fill="none" stroke="#141414" stroke-width="${1/k}" opacity=".5"/>`;
+  const w=(label.length*7.6+22+14)/k;
+  s += `<rect x="${b[0]-w/2}" y="${b[1]-ch/2-44/k}" width="${w}" height="${ch}" rx="${3/k}" fill="#141414"/>`;
+  s += `<text x="${b[0]}" y="${b[1]+fs*0.36-44/k}" text-anchor="middle" font-family="Figtree,Arial" font-size="${fs}" fill="#F5F4F0">${label} cm</text>`;
+  return s;
+}
+const endDot = (p, k) => `<circle cx="${p[0]}" cy="${p[1]}" r="${7/k}" fill="#fff" stroke="#141414" stroke-width="${1.5/k}"/>`;
+function offset(pts, d){
+  const n=pts.length, out=[];
+  for(let i=0;i<n;i++){
+    const p=pts[(i-1+n)%n], c=pts[i], q=pts[(i+1)%n];
+    const n1=norm(p,c), n2=norm(c,q);
+    out.push([c[0]+(n1[0]+n2[0])*d, c[1]+(n1[1]+n2[1])*d].join(','));
+  }
+  return out.join(' ');
+}
+function norm(a,b){ const dx=b[0]-a[0], dy=b[1]-a[1], l=Math.hypot(dx,dy); return [dy/l,-dx/l]; }
+
+/* ---------------- freehand drawings: runs of walls or Fără perete sides, with openings ---------------- */
+// runs:  [{pts, kind:'wall'|'open'}]   (clockwise, so a segment's normal points out of the room)
+// open:  [{r, s, at, w, type:'win'|'door', hinge:0|1, side:-1|1, focus, drag}]   at = cm from the segment start
+function drw(o){
+  const k = o.k, vb = o.vb, t = 16, wt = t + 2/k;
+  const nest = o.nest ? ` x="${o.nest[0]}" y="${o.nest[1]}" width="${o.nest[2]}" height="${o.nest[3]}"` : '';
+  const runs = o.runs || [];
+  const P = (p, v, d) => [p[0]+v[0]*d, p[1]+v[1]*d];
+  const pt = p => p.join(',');
+  const seg = (r, i) => { const pts = runs[r].pts, a = pts[i], b = pts[i+1]; const dx=b[0]-a[0], dy=b[1]-a[1], l=Math.hypot(dx,dy); return {a, b, l, u:[dx/l,dy/l], n:[dy/l,-dx/l]}; };
+  const band = (a, b, u, n, ext, half) => [P(P(a,u,-ext),n,half), P(P(b,u,ext),n,half), P(P(b,u,ext),n,-half), P(P(a,u,-ext),n,-half)].map(pt).join(' ');
+  let s = `<svg class="plan"${nest} viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet">`;
+  if(o.sel){ const q = seg(...o.sel); s += `<polygon points="${band(q.a,q.b,q.u,q.n,t*0.6,t*1.6)}" fill="#ECEBE6"/>`; }
+  (o.open||[]).forEach(op=>{
+    if(!op.focus && !op.drag) return;
+    const q = seg(op.r, op.s), a = P(q.a,q.u,op.at), b = P(a,q.u,op.w);
+    s += `<polygon points="${band(a,b,q.u,q.n,t*0.8,t*1.7)}" fill="#ECEBE6"/>`;
+  });
+  if(o.path){
+    s += `<polyline points="${o.path.map(pt).join(' ')}" fill="none" stroke="#7A7975" stroke-width="${1.2/k}" stroke-dasharray="${5/k} ${5/k}"/>`;
+    const [p, q] = o.path.slice(-2), dx=q[0]-p[0], dy=q[1]-p[1], l=Math.hypot(dx,dy), u=[dx/l,dy/l], n=[dy/l,-dx/l];
+    s += `<polyline points="${pt(P(P(q,u,-8/k),n,6/k))} ${pt(q)} ${pt(P(P(q,u,-8/k),n,-6/k))}" fill="none" stroke="#7A7975" stroke-width="${1.2/k}"/>`;
+  }
+  runs.forEach(r=>{
+    const pts = r.pts.map(pt).join(' ');
+    if(r.kind==='open'){
+      s += `<polyline points="${pts}" fill="none" stroke="#7A7975" stroke-width="${2.2/k}" stroke-dasharray="${8/k} ${6/k}"/>`;
+      [r.pts[0], r.pts[r.pts.length-1]].forEach((p,j)=>{
+        const i = j ? r.pts.length-2 : 0, a = r.pts[i], b = r.pts[i+1], dx=b[0]-a[0], dy=b[1]-a[1], l=Math.hypot(dx,dy), n=[dy/l,-dx/l];
+        s += `<line x1="${P(p,n,t/2)[0]}" y1="${P(p,n,t/2)[1]}" x2="${P(p,n,-t/2)[0]}" y2="${P(p,n,-t/2)[1]}" stroke="#7A7975" stroke-width="${1.5/k}"/>`;
+      });
+    } else {
+      s += `<polyline points="${pts}" fill="none" stroke="#141414" stroke-width="${t}" stroke-linejoin="miter" stroke-linecap="square"/>`;
+    }
+  });
+  if(o.sel){
+    const q = seg(...o.sel), kind = runs[o.sel[0]].kind;
+    s += kind==='open'
+      ? `<line x1="${q.a[0]}" y1="${q.a[1]}" x2="${q.b[0]}" y2="${q.b[1]}" stroke="#141414" stroke-width="${2.6/k}" stroke-dasharray="${8/k} ${6/k}"/>`
+      : `<line x1="${q.a[0]}" y1="${q.a[1]}" x2="${q.b[0]}" y2="${q.b[1]}" stroke="#141414" stroke-width="${t+6/k}"/>`;
+    [q.a,q.b].forEach(p=> s += `<rect x="${p[0]-7/k}" y="${p[1]-7/k}" width="${14/k}" height="${14/k}" fill="#fff" stroke="#141414" stroke-width="${1.5/k}"/>`);
+  }
+  (o.open||[]).forEach(op=>{
+    const q = seg(op.r, op.s), a = P(q.a,q.u,op.at), b = P(a,q.u,op.w);
+    const lw = (op.focus||op.drag) ? 1.5/k : 1.2/k;
+    s += `<polygon points="${band(a,b,q.u,q.n,0,wt/2)}" fill="${(op.focus||op.drag)?'#ECEBE6':'#F5F4F0'}"/>`;
+    [a,b].forEach(p=> s += `<line x1="${P(p,q.n,t/2)[0]}" y1="${P(p,q.n,t/2)[1]}" x2="${P(p,q.n,-t/2)[0]}" y2="${P(p,q.n,-t/2)[1]}" stroke="#141414" stroke-width="${lw}"/>`);
+    if(op.type==='win'){
+      [-t/2,0,t/2].forEach(d=>{ const p1=P(a,q.n,d), p2=P(b,q.n,d); s += `<line x1="${p1[0]}" y1="${p1[1]}" x2="${p2[0]}" y2="${p2[1]}" stroke="#141414" stroke-width="${lw}"/>`; });
+    } else {
+      const h = op.hinge ? b : a, other = op.hinge ? a : b, sd = op.side;
+      const h0 = P(h,q.n,sd*t/2), tip = P(h0,q.n,sd*op.w), end = P(other,q.n,sd*t/2);
+      const v=[tip[0]-h0[0],tip[1]-h0[1]], w=[end[0]-h0[0],end[1]-h0[1]];
+      const sweep = (v[0]*w[1]-v[1]*w[0]) > 0 ? 1 : 0;
+      s += `<line x1="${h0[0]}" y1="${h0[1]}" x2="${tip[0]}" y2="${tip[1]}" stroke="#141414" stroke-width="${1.8/k}"/>`;
+      s += `<path d="M${pt(tip)} A${op.w} ${op.w} 0 0 ${sweep} ${pt(end)}" fill="none" stroke="#141414" stroke-width="${1/k}" stroke-dasharray="${4/k} ${4/k}"/>`;
+    }
+    if(op.focus||op.drag) [a,b].forEach(p=> s += `<rect x="${p[0]-6/k}" y="${p[1]-6/k}" width="${12/k}" height="${12/k}" fill="#fff" stroke="#141414" stroke-width="${1.5/k}"/>`);
+    if(op.drag){ const m = P(a,q.u,op.w/2); s += `<circle cx="${m[0]}" cy="${m[1]}" r="${22/k}" fill="none" stroke="#141414" stroke-width="${1/k}" opacity=".5"/>`; }
+  });
+  const lane2 = q => Math.abs(q.u[0]) > Math.abs(q.u[1]) ? 68 : 96;  // px out for the distances lane
+  // landmarks: a small square against the wall, on one side or the other, in its own colour
+  (o.marks||[]).forEach(mk=>{
+    const q = seg(mk.r, mk.s), sd = mk.side || -1, half = 15;          // 30 cm square
+    const c0 = P(P(q.a, q.u, mk.at), q.n, sd*(t/2 + half));
+    if(mk.focus){
+      s += `<polygon points="${band(P(c0,q.u,-half*1.7), P(c0,q.u,half*1.7), q.u, q.n, 0, half*1.7)}" fill="#ECEBE6"/>`;
+    }
+    const corners = [P(P(c0,q.u,-half),q.n,-half), P(P(c0,q.u,half),q.n,-half), P(P(c0,q.u,half),q.n,half), P(P(c0,q.u,-half),q.n,half)];
+    s += `<polygon points="${corners.map(pt).join(' ')}" fill="${mk.color}" stroke="${mk.focus ? '#141414' : mk.color}" stroke-width="${(mk.focus?1.5:1)/k}"/>`;
+    const vlab = [q.n[0]*sd, q.n[1]*sd];                      // away from the wall, on the square's side
+    const lab = P(c0, vlab, half + 10/k);
+    const fs = 12.5/k, wlab = (mk.name.length*6.6 + 14)/k, hlab = 22/k;
+    const flat = Math.abs(q.u[0]) > Math.abs(q.u[1]);
+    const lx = flat ? lab[0] : lab[0] + vlab[0]*(wlab/2 - half);
+    const ly = flat ? lab[1] + vlab[1]*(hlab/2 - half) : lab[1];
+    s += `<rect x="${lx-wlab/2}" y="${ly-hlab/2}" width="${wlab}" height="${hlab}" rx="${3/k}" fill="#fff" stroke="${mk.color}" stroke-width="${1/k}" opacity=".95"/>`;
+    s += `<text x="${lx}" y="${ly+fs*0.36}" text-anchor="middle" font-family="Figtree,Arial" font-size="${fs}" fill="${mk.color}">${mk.name}</text>`;
+  });
+  (o.chips||[]).forEach(c=>{
+    const q = seg(c.r, c.s);
+    const off = t/2 + 34/k, e = t/2 + 14/k;
+    const m = P([(q.a[0]+q.b[0])/2,(q.a[1]+q.b[1])/2], q.n, off);
+    const d1 = P(q.a,q.n,e), d2 = P(q.b,q.n,e);
+    s += `<line x1="${d1[0]}" y1="${d1[1]}" x2="${d2[0]}" y2="${d2[1]}" stroke="#B5B4AE" stroke-width="${1/k}"/>`;
+    [q.a,q.b].forEach(p=>{ const p1=P(p,q.n,e-5/k), p2=P(p,q.n,e+5/k); s += `<line x1="${p1[0]}" y1="${p1[1]}" x2="${p2[0]}" y2="${p2[1]}" stroke="#7A7975" stroke-width="${1/k}"/>`; });
+    s += chip(m[0], m[1], c, k);
+  });
+  // the near row: from a focused opening's jambs to the first obstacle on each side
+  // one chain along the wall while a piece is in focus: gap, the piece itself, gap — it adds up to the
+  // wall, so the wall's own number stands down while it is shown
+  (o.chain ? [].concat(o.chain) : []).forEach(ch=>{
+    const q = seg(ch.r, ch.s), flat = Math.abs(q.u[0]) > Math.abs(q.u[1]);
+    const e = t/2 + 16/k, off = t/2 + 34/k, out = t/2 + (flat ? 68 : 96)/k;
+    const minW = (flat ? 62 : 32)/k;                    // the chip's own length along the wall
+    const first = ch.items[0], last = ch.items[ch.items.length-1];
+    const A0 = P(P(q.a, q.u, first.a), q.n, e), B0 = P(P(q.a, q.u, last.b), q.n, e);
+    s += `<line x1="${A0[0]}" y1="${A0[1]}" x2="${B0[0]}" y2="${B0[1]}" stroke="#B5B4AE" stroke-width="${1/k}"/>`;
+    const bounds = [first.a, ...ch.items.map(it=>it.b)];
+    bounds.forEach(d=>{
+      const p = P(q.a, q.u, d), t1 = P(p, q.n, e - 5/k), t2 = P(p, q.n, e + 5/k);
+      s += `<line x1="${t1[0]}" y1="${t1[1]}" x2="${t2[0]}" y2="${t2[1]}" stroke="#7A7975" stroke-width="${1/k}"/>`;
+      const w1 = P(p, q.n, t/2), w2 = P(p, q.n, e - 5/k);
+      s += `<line x1="${w1[0]}" y1="${w1[1]}" x2="${w2[0]}" y2="${w2[1]}" stroke="#E0DFD9" stroke-width="${1/k}"/>`;
+    });
+    const spots = ch.items.map(it=>{
+      const mid = (it.a + it.b)/2;
+      return {it, mid, fits: (it.b - it.a) >= minW, at: mid};
+    }).filter(sp=>sp.it.v != null);
+    spots.filter(sp=>!sp.fits).forEach((sp,i,arr)=>{            // keep the stepped-out ones apart
+      const prev = arr[i-1];
+      if(prev && sp.at - prev.at < minW) sp.at = prev.at + minW;
+    });
+    spots.forEach(({it, mid, fits, at})=>{
+      const m = P(P(q.a, q.u, fits ? mid : at), q.n, fits ? off : out);
+      if(!fits){                                        // too tight to sit in the chain: one step out, on a leader
+        const l1 = P(P(q.a, q.u, mid), q.n, e), l2 = P(P(q.a, q.u, at), q.n, out - 14/k);
+        s += `<line x1="${l1[0]}" y1="${l1[1]}" x2="${l2[0]}" y2="${l2[1]}" stroke="#B5B4AE" stroke-width="${1/k}"/>`;
+      }
+      if(it.v != null) s += chip(m[0], m[1], {v:it.v, d:it.d!==false, sel:it.sel}, k);
+    });
+  });
+  (o.ochips||[]).forEach(c=>{
+    const op = o.open[c.i], q = seg(op.r, op.s), a = P(q.a,q.u,op.at);
+    const m = P(P(a,q.u,op.w/2), q.n, (c.side||-1)*(t/2 + (c.off!=null ? c.off : 30/k)));
+    s += chip(m[0], m[1], {v:c.v, d:c.d, sel:op.focus||op.drag}, k);
+  });
+  if(o.live) s += live(o.live, k, t);
+  if(o.ends) o.ends.forEach(p=> s += endDot(p, k));
+  return s + '</svg>';
+}
+
+/* ---------------- chrome pieces ---------------- */
+const topBar = (word='Plan') => `<div class="top"><span class="wm">Urban Moon</span><span class="ct">${word}</span></div>`;
+const bot = (on=true, press=false) => `<div class="bot"><span class="lnk">Înapoi</span><span class="go ${on?'':'off'} ${press?'press':''}">${g('arrow')}</span></div>`;
+const TOOLS = [['select','select','Selectează'],['wall','wall','Perete'],['open','open','Fără perete'],['win','win','Fereastră'],['door','door','Ușă']];
+function tools(active='select', dev='ph', o={}){
+  return `<div class="plate tools">
+    ${TOOLS.map(([id,gl,label])=>`<span class="tool ${active===id?'on':''} ${o.breath===id?'breath':''}">${g(gl)}${label}</span>`).join('')}
+    ${dev==='dk' ? `<span class="vsep"></span>
+    <span class="tool ico ${o.undo===false?'dim':''}">${g('undo')}</span>
+    <span class="tool ico dim">${g('redo')}</span>` : ''}
+  </div>`;
+}
+const view = (dev, o={}) => dev==='ph'
+  ? `<div class="plate view"><span class="tool">${g('fit')}</span></div>
+     <div class="plate hist"><span class="tool ${o.undo===false?'dim':''}">${g('undo')}</span><span class="vsep"></span><span class="tool dim">${g('redo')}</span></div>`
+  : `<div class="plate view"><span class="tool">${g('plus')}</span><span class="hsep"></span><span class="tool">${g('minus')}</span><span class="hsep"></span><span class="tool">${g('fit')}</span></div>`;
+const hint = h => `<div class="hint">${h}</div>`;
+// a plate next to the selected thing; cx/cy in plan cm, ax: l|c|r, ay: t|m|b
+const pop = (cx, cy, ax, ay, inner, cls='') => `<div class="plate pop ${cls}" data-cx="${cx}" data-cy="${cy}" data-ax="${ax}" data-ay="${ay}">${inner}</div>`;
+const delBtn = `<span class="tool">${g('del')}Șterge</span>`;
+const fieldBit = (label, v, d) => `<span class="fl">${label}</span><span class="num ${d?'d':''}">${v}</span><span class="u">cm</span>`;
+// a window: its width first, then how high the sill is; a door: its width, then which way it opens
+const winPlate = (dev, w, sill) => dev==='ph'
+  ? `<div class="r">${fieldBit('Lățime', w, true)}<span class="grow"></span><span class="vsep"></span>${delBtn}</div>
+     <div class="r">${fieldBit('Înălțime pervaz', sill, true)}</div>`
+  : `${fieldBit('Lățime', w, true)}<span class="vsep"></span>${fieldBit('Înălțime pervaz', sill, true)}<span class="vsep"></span>${delBtn}`;
+const doorPlate = w => `${fieldBit('Lățime', w, true)}<span class="vsep"></span><span class="tool">${g('rotate')}Rotește</span><span class="vsep"></span>${delBtn}`;
+
+// the earlier chrome, kept only for the not-chosen directions B and C
+const oldTop = `<div class="top"><span class="wm">Urban Moon</span><span class="lnk" style="font-size:13px">Începe din nou</span></div>`;
+const oldTools = () => `<div class="plate oldtools">
+  <span class="tool on">${g('select')}Selectează</span>
+  <span class="tool">${g('pen')}Desenează</span>
+  <span class="vsep"></span>
+  <span class="tool ico">${g('undo')}</span>
+  <span class="tool ico dim">${g('redo')}</span>
+</div>`;
+const oldView = dev => dev==='ph'
+  ? `<div class="plate oldview"><span class="tool">${g('fit')}</span></div>`
+  : `<div class="plate oldview"><span class="tool">${g('plus')}</span><span class="hsep"></span><span class="tool">${g('minus')}</span><span class="hsep"></span><span class="tool">${g('fit')}</span></div>`;
+const oldSel = () => `<div class="plate sel">
+  <div class="seg">${['Perete','Deschis','Fereastră','Ușă'].map(x=>`<span class="${x==='Perete'?'on':''}">${x}</span>`).join('')}</div>
+  <div class="acts"><span class="tool">${g('door')}Ușă</span><span class="tool">${g('win')}Fereastră</span><span class="tool">${g('del')}Șterge</span></div>
+</div>`;
+const ceil = v => `<div class="plate ceil">Tavan<span class="num">${v}</span><span class="u">cm</span></div>`;
+
+const chipsL = [{v:520},{v:260},{v:200,d:1},{v:160},{v:320,d:1},{v:420}];
+const chipsLsel = chipsL.map((c,i)=>i===1?{...c,sel:1}:c);
+
+function screen(id, dev, dir, inner, o={}){
+  const el = document.getElementById(id);
+  const cls = `${dev} dir${dir}`;
+  if(dir==='C' && dev==='dk'){
+    el.innerHTML = `<div class="${cls}">${o.col}<div class="right"><div class="canvas">${inner}</div>${bot(o.on!==false)}</div></div>`;
+    return;
+  }
+  const top = o.old ? oldTop : topBar(o.word);
+  el.innerHTML = `<div class="${cls}">${top}${o.qbar||''}<div class="canvas">${dir==='B'?'<div class="sheetB"></div>':''}${inner}</div>${bot(o.on!==false, o.press)}${o.overlay||''}</div>`;
+}
+
+/* ---------------- views ----------------
+   The drawing area is the canvas minus the plate bands (see the CSS above). A view is worked out from
+   that box, the size of the room and the margins the numbers need: 64px where a wall shows one lane,
+   126px where a chain may step a number out to the second lane. */
+const BOX = {ph:{w:360, h:345}, dk:{w:1000, h:347}};
+function vbFor(dev, roomW, roomH, m){
+  const B = BOX[dev];
+  const k = Math.min((B.w - m.l - m.r)/roomW, (B.h - m.t - m.b)/roomH);
+  return {k, vb:[ -(m.l + (B.w - m.l - m.r - roomW*k)/2)/k, -(m.t + (B.h - m.t - m.b - roomH*k)/2)/k, B.w/k, B.h/k ]};
+}
+const M1 = {l:70, r:70, t:70, b:70};                       // one lane all round
+const V = {
+  ph:      vbFor('ph', 440, 300, M1),
+  phTop:   vbFor('ph', 440, 300, {...M1, t:132}),          // a chain on the top wall
+  phLeft:  vbFor('ph', 440, 300, {...M1, l:132}),
+  phRight: vbFor('ph', 440, 300, {...M1, r:132}),
+  dk:      vbFor('dk', 440, 300, M1),
+  dkTop:   vbFor('dk', 440, 300, {...M1, t:132}),
+  dkLeft:  vbFor('dk', 440, 300, {...M1, l:132}),
+  dkRight: vbFor('dk', 440, 300, {...M1, r:132}),
+  phHalf:  vbFor('ph', 440, 300, {...M1, t:132, r:132}),
+  dkHalf:  vbFor('dk', 440, 300, {...M1, t:132, r:132}),
+  phL:     vbFor('ph', 520, 420, M1),
+  dkL:     vbFor('dk', 520, 420, M1),
+};
+const phK = 0.46;
+const PH_L = V.phL.vb, DK_L = V.dkL.vb, PH_R = V.ph.vb, DK_R = V.dk.vb;
+const kPH_R = V.ph.k, kDK_R = V.dk.k;
+
+/* ---------------- Part 1: directions ---------------- */
+const lWallPop = pop(470, 70, 'r', 'm', delBtn);
+screen('dA-ph','ph','A',
+  plan({dir:'A',k:V.phL.k,vb:PH_L,chips:chipsLsel,selected:1}) + view('ph') + lWallPop + tools('select','ph'));
+screen('dA-dk','dk','A',
+  plan({dir:'A',k:V.dkL.k,vb:DK_L,chips:chipsLsel,selected:1}) + view('dk') + lWallPop + tools('select','dk'));
+screen('dB-ph','ph','B',
+  plan({dir:'B',k:phK,vb:[-130,-190,780,880],chips:chipsLsel,selected:1})
+  + `<div class="tb"><span>Living</span><span>Plan</span><span>Scara</span><span>1:50</span></div>`
+  + ceil('260') + oldView('ph') + oldSel() + oldTools(), {old:1});
+screen('dB-dk','dk','B',
+  plan({dir:'B',k:0.855,vb:[-300,-70,1110,560],chips:chipsLsel,selected:1})
+  + `<div class="tb"><span>Living</span><span>Plan</span><span>Scara</span><span>1:50</span></div>`
+  + ceil('260') + oldView('dk') + oldSel() + oldTools(), {old:1});
+screen('dC-ph','ph','C',
+  plan({dir:'C',k:phK,vb:[-150,-190,820,860],chips:chipsLsel,selected:1}) + oldView('ph') + oldSel() + oldTools(),
+  {old:1, qbar:`<div class="qbar"><div class="q">Desenează conturul camerei</div><div class="sub">Livingul · Tavan 260 cm</div></div>`});
+screen('dC-dk','dk','C',
+  plan({dir:'C',k:0.8,vb:[-150,-110,820,620],chips:chipsLsel,selected:1}) + oldView('dk') + oldSel(),
+  {col:`<div class="col"><div class="top" style="padding:0"><span class="wm">Urban Moon</span><span class="lnk" style="font-size:13px">Începe din nou</span></div>
+    <div class="q">Desenează conturul camerei</div><div class="sub">Livingul, cu lungimile măsurate de tine.</div>
+    <div class="tl">
+      <span class="tool on">${g('select')}<span><b>Selectează</b><span class="d">Dă clic pe un perete ca să-l schimbi. Trage de fundal ca să muți planul.</span></span></span>
+      <span class="tool">${g('pen')}<span><b>Desenează</b><span class="d">Ține apăsat și trage ca să faci un perete.</span></span></span>
+    </div>
+    <div class="fx">Înălțimea tavanului <span class="num">260</span> cm</div>
+    <div class="grow"></div>
+    <div style="display:flex;gap:4px;color:#7A7975"><span class="tool ico">${g('undo')}</span><span class="tool ico">${g('redo')}</span></div>
+  </div>`});
+
+/* ---------------- 2.1 the slides ---------------- */
+// Each stage is a small copy of the screen the client is on: a phone screen in the phone slides, a
+// desktop screen in the desktop ones, with the same tool plate, the same numbers on the drawing and
+// the same hint line. The camera opens zoomed on the tool the slide is about, taps it, pulls back
+// for the gesture, and zooms in again on what was placed.
+const miniTools = [['select','Selectează'],['wall','Perete'],['open','Fără perete'],['win','Fereastră'],['door','Ușă']];
+const ink = '#141414', grey = '#7A7975', place = '#B5B4AE';
+const MINI_VB = [-150,-200,760,700], MS = 0.25;            // the plan box inside a stage, and stage units per cm
+const SCR = {
+  ph:{ W:200, H:340, cx:100, cy:170, zs:3, hintY:57, hintS:7.2, nest:[5,88,190,175], k:0.45, pill:i=>[25.5+37*i, 26],
+    bar(cls){
+      let s = `<rect x="5" y="6" width="190" height="40" rx="3" fill="#fff" stroke="#CFCEC8" stroke-width=".8"/>`;
+      miniTools.forEach(([gl,label],i)=>{ const x = 8+37*i;
+        s += `<g class="mpill ${cls[i]||''}"><rect class="bg" x="${x}" y="9" width="35" height="34" rx="2.5"/>
+          <g class="mg" transform="translate(${x+11},13) scale(.65)">${G[gl]}</g>
+          <text x="${x+17.5}" y="39" text-anchor="middle">${label}</text></g>`; });
+      return s;
+    },
+    chrome:`<text x="12" y="326" font-family="Figtree,Arial" font-size="7" fill="${grey}">Înapoi</text>
+      <circle cx="176" cy="318" r="11" fill="${ink}"/><g transform="translate(169,311) scale(.7)" fill="none" stroke="#F5F4F0" stroke-width="2" stroke-linecap="round">${G.arrow}</g>
+      <rect x="8" y="276" width="34" height="17" rx="2.5" fill="#fff" stroke="#CFCEC8" stroke-width=".8"/>
+      <g transform="translate(11,279) scale(.55)" fill="none" stroke="${grey}" stroke-width="2.2" stroke-linecap="round">${G.undo}</g>
+      <g transform="translate(26,279) scale(.55)" fill="none" stroke="#C9C8C2" stroke-width="2.2" stroke-linecap="round">${G.redo}</g>
+      <rect x="158" y="276" width="19" height="17" rx="2.5" fill="#fff" stroke="#CFCEC8" stroke-width=".8"/>
+      <g transform="translate(161,279) scale(.55)" fill="none" stroke="${grey}" stroke-width="2.2" stroke-linecap="round">${G.fit}</g>`,
+    plate:[100,258,154,18]                                   // docked plate: centre x, centre y, w, h
+  },
+  dk:{ W:320, H:200, cx:160, cy:100, zs:3.2, hintY:45, hintS:4.2, nest:[65,42,190,175], k:0.78, pill:i=>[34+52*i, 20],
+    bar(cls){
+      let s = `<rect x="6" y="5" width="308" height="30" rx="3" fill="#fff" stroke="#CFCEC8" stroke-width=".8"/>`;
+      miniTools.forEach(([gl,label],i)=>{ const x = 9+52*i;
+        s += `<g class="mpill ${cls[i]||''}"><rect class="bg" x="${x}" y="8" width="50" height="24" rx="2.5"/>
+          <g class="mg" transform="translate(${x+3},12) scale(.8)">${G[gl]}</g>
+          <text x="${x+19}" y="22.5">${label}</text></g>`; });
+      s += `<line x1="270" y1="12" x2="270" y2="28" stroke="#E0DFD9" stroke-width=".8"/>
+        <g transform="translate(274,13) scale(.7)" fill="none" stroke="${grey}" stroke-width="2" stroke-linecap="round">${G.undo}</g>
+        <g transform="translate(294,13) scale(.7)" fill="none" stroke="#C9C8C2" stroke-width="2" stroke-linecap="round">${G.redo}</g>`;
+      return s;
+    },
+    chrome:`<text x="14" y="190" font-family="Figtree,Arial" font-size="7" fill="${grey}">Înapoi</text>
+      <circle cx="300" cy="184" r="10" fill="${ink}"/><g transform="translate(294,178) scale(.6)" fill="none" stroke="#F5F4F0" stroke-width="2" stroke-linecap="round">${G.arrow}</g>
+      <rect x="294" y="110" width="18" height="50" rx="2.5" fill="#fff" stroke="#CFCEC8" stroke-width=".8"/>
+      <g transform="translate(297,113) scale(.6)" fill="none" stroke="${grey}" stroke-width="2.2" stroke-linecap="round">${G.plus}</g>
+      <g transform="translate(297,129) scale(.6)" fill="none" stroke="${grey}" stroke-width="2.2" stroke-linecap="round">${G.minus}</g>
+      <g transform="translate(297,145) scale(.6)" fill="none" stroke="${grey}" stroke-width="2.2" stroke-linecap="round">${G.fit}</g>`,
+    plate:null
+  }
+};
+// cm on the plan → stage units, for the pieces that have to move
+function mapper(dv){
+  const d = SCR[dv], [nx, ny] = d.nest;
+  return { X: cm => nx + (cm - MINI_VB[0])*MS, Y: cm => ny + (cm - MINI_VB[1])*MS,
+           L: cm => cm*MS, P: px => px*MS/d.k, k: d.k, d };
+}
+const tapAt = (x, y, n='') => `<circle class="tapRing${n}" cx="${x}" cy="${y}" r="13" fill="none" stroke="${ink}" stroke-width="1"/><circle class="tapDot${n}" cx="${x}" cy="${y}" r="7" fill="rgba(20,20,20,.12)" stroke="${ink}" stroke-width="1"/>`;
+const fingerAt = (dev, x, y) => dev==='ph'
+  ? `<circle cx="${x}" cy="${y}" r="9" fill="rgba(20,20,20,.08)" stroke="${ink}" stroke-width="1"/>`
+  : `<path d="M${x-3} ${y-4}l10 5.8-4.4 1.1-2.6 4.6z" fill="#fff" stroke="${ink}" stroke-width="1.2" stroke-linejoin="round"/>`;
+// a number chip on the stage, placed by its centre in cm
+const sChip = (g, cx, cy, v) => {
+  const w = g.P(58), h = g.P(28), fs = g.P(13.5);
+  return `<rect x="${g.X(cx)-w/2}" y="${g.Y(cy)-h/2}" width="${w}" height="${h}" rx="${g.P(3)}" fill="#fff" stroke="#E0DFD9" stroke-width="${g.P(1)}"/>`
+    + `<text x="${g.X(cx)}" y="${g.Y(cy)+fs*0.36}" text-anchor="middle" font-family="Figtree,Arial" font-size="${fs}" fill="${grey}" font-style="italic">${v}<tspan font-style="normal" font-size="${fs*0.85}"> cm</tspan></text>`;
+};
+// the plate of the piece in focus: docked at the bottom on phones, beside the piece on desktop
+function sPlate(g, dv, items, atCm, second, rot){
+  const d = SCR[dv], fs = g.P(12.5);
+  let x, y, w = g.P(dv==='ph' ? 278 : 250), h = g.P(46);
+  if(dv==='ph'){ [x, y, w, h] = [d.plate[0]-d.plate[2]/2, d.plate[1]-d.plate[3]/2, d.plate[2], d.plate[3]]; }
+  else { x = g.X(atCm[0]); y = g.Y(atCm[1]) - h/2; }
+  let s = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${g.P(4)}" fill="#fff" stroke="#CFCEC8" stroke-width="${g.P(1)}"/>`;
+  if(items[1]){
+    s += `<text x="${x + g.P(9)}" y="${y + h/2 + fs*0.36}" font-family="Figtree,Arial" font-size="${fs}" fill="${grey}">${items[0]}</text>`;
+  } else {
+    s += `<g transform="translate(${x + g.P(10)},${y + h/2 - g.P(10)}) scale(${g.P(20)/20})" fill="none" stroke="#33322F" stroke-width="1.5" stroke-linecap="round">${G.rotate}</g>`;
+    s += `<text x="${x + g.P(37)}" y="${y + h/2 + fs*0.36}" font-family="Figtree,Arial" font-size="${fs}" fill="#33322F">${items[0]}</text>`;
+  }
+  if(items[1]){
+    const bw = g.P(46), bh = g.P(30);
+    s += `<rect x="${x + w - g.P(156)}" y="${y + (h-bh)/2}" width="${bw}" height="${bh}" rx="${g.P(3)}" fill="#fff" stroke="#E0DFD9" stroke-width="${g.P(1)}"/>`;
+    s += `<text x="${x + w - g.P(114)}" y="${y + h/2 + fs*0.36}" text-anchor="end" font-family="Figtree,Arial" font-size="${g.P(14)}" fill="${grey}" font-style="italic">${items[1]}</text>`;
+    s += `<text x="${x + w - g.P(106)}" y="${y + h/2 + fs*0.36}" font-family="Figtree,Arial" font-size="${fs}" fill="${grey}">cm</text>`;
+  }
+  s += `<g transform="translate(${x + w - g.P(88)},${y + h/2 - g.P(10)}) scale(${g.P(20)/20})" fill="none" stroke="#33322F" stroke-width="1.5" stroke-linecap="round">${G.del}</g>`;
+  s += `<text x="${x + w - g.P(59)}" y="${y + h/2 + fs*0.36}" font-family="Figtree,Arial" font-size="${fs}" fill="#33322F">Șterge</text>`;
+  if(second){                                // a second row: the sill height, or which way the door opens
+    const y2 = y + h + g.P(3);
+    s += `<rect x="${x}" y="${y2}" width="${w}" height="${h}" rx="${g.P(4)}" fill="#fff" stroke="#CFCEC8" stroke-width="${g.P(1)}"/>`;
+    if(rot) s += `<g transform="translate(${x + g.P(10)},${y2 + h/2 - g.P(10)}) scale(${g.P(20)/20})" fill="none" stroke="#33322F" stroke-width="1.5" stroke-linecap="round">${G.rotate}</g>`;
+    s += `<text x="${x + g.P(rot ? 37 : 9)}" y="${y2 + h/2 + fs*0.36}" font-family="Figtree,Arial" font-size="${fs}" fill="${rot ? '#33322F' : grey}">${second[0]}</text>`;
+    if(second[1]){
+      const bw = g.P(46), bh = g.P(30);
+      s += `<rect x="${x + g.P(112)}" y="${y2 + (h-bh)/2}" width="${bw}" height="${bh}" rx="${g.P(3)}" fill="#fff" stroke="#E0DFD9" stroke-width="${g.P(1)}"/>`;
+      s += `<text x="${x + g.P(112) + bw - g.P(7)}" y="${y2 + h/2 + fs*0.36}" text-anchor="end" font-family="Figtree,Arial" font-size="${g.P(14)}" fill="${grey}" font-style="italic">${second[1]}</text>`;
+      s += `<text x="${x + g.P(164)}" y="${y2 + h/2 + fs*0.36}" font-family="Figtree,Arial" font-size="${fs}" fill="${grey}">cm</text>`;
+    }
+  }
+  return s;
+}
+const sHint = (dv, t1, t2) => {
+  const d = SCR[dv];
+  return `<g class="h1"><text x="${d.W/2}" y="${d.hintY}" text-anchor="middle" font-family="Figtree,Arial" font-size="${d.hintS}" fill="${grey}">${t1}</text></g>`
+    + (t2 ? `<g class="h2"><text x="${d.W/2}" y="${d.hintY}" text-anchor="middle" font-family="Figtree,Arial" font-size="${d.hintS}" fill="${grey}">${t2}</text></g>` : '');
+};
+// the room of sections 2.3 to 2.7, drawn into the stage by the same renderer as the big frames
+const SROOM = [{pts:[[0,300],[0,0],[440,0],[440,300],[260,300]]},{pts:[[260,300],[0,300]],kind:'open'}];
+const sRoom = (g, o={}) => drw(Object.assign({k:g.k, vb:MINI_VB, nest:g.d.nest}, o));
+const SLIDE_TOOL = [1,2,3,4,0];
+const barFor = n => { const c = []; if(n<4){ c[0] = 'selPill'; c[SLIDE_TOOL[n]] = 'armPill'; } else c[0] = 'on'; return c; };
+const sSvg = (n, dv, body) => { const d = SCR[dv];
+  return `<svg class="s${dv}${n+1} sc${dv} ${n<2?'kA':'kB'}" viewBox="0 0 ${d.W} ${d.H}" preserveAspectRatio="xMidYMid meet"><g class="cam">${d.chrome}${body}${d.bar(barFor(n))}${tapAt(...d.pill(SLIDE_TOOL[n]))}</g></svg>`; };
+
+const stages = {
+  // 1 · Perete: one drag draws the top wall, then the tool goes back to Selectează
+  wall: dv => { const g = mapper(dv);
+    return sSvg(0, dv, `${sRoom(g, {runs:[]})}
+      <rect class="grow" x="${g.X(0)}" y="${g.Y(0)-g.L(8)}" width="${g.L(440)}" height="${g.L(16)}" fill="${ink}"/>
+      <g class="late">${sChip(g, 220, -83, '440')}</g>
+      <g class="fing">${fingerAt(dv, g.X(0), g.Y(0))}</g>
+      ${sHint(dv, dv==='ph' ? 'Trage cu degetul de la un capăt al peretelui la celălalt.' : 'Ține apăsat și trage de la un capăt al peretelui la celălalt.',
+                  dv==='ph' ? 'Atinge numărul ca să scrii lungimea.' : 'Dă clic pe număr ca să scrii lungimea.')}`); },
+  // 2 · Fără perete: the same drag, on the side that has no wall
+  open: dv => { const g = mapper(dv);
+    return sSvg(1, dv, `${sRoom(g, {runs:[{pts:[[260,300],[440,300],[440,0],[0,0],[0,300]]}],
+        chips:[{r:0,s:0,v:180,d:1},{r:0,s:1,v:300,d:1},{r:0,s:2,v:440},{r:0,s:3,v:300}]})}
+      <g class="grow"><line x1="${g.X(260)}" y1="${g.Y(300)}" x2="${g.X(0)}" y2="${g.Y(300)}" stroke="${grey}" stroke-width="${g.L(14)}" stroke-dasharray="${g.L(50)} ${g.L(38)}"/></g>
+      <g class="late">${sChip(g, 130, 383, '260')}</g>
+      <g class="fing">${fingerAt(dv, g.X(260), g.Y(300))}</g>
+      ${sHint(dv, 'Trage pe unde camera se deschide spre altă cameră.',
+                  dv==='ph' ? 'Atinge numărul ca să scrii lungimea.' : 'Dă clic pe număr ca să scrii lungimea.')}`); },
+  // 3 · Fereastră: placed on a wall, then slid along it and round the corner
+  win: dv => { const g = mapper(dv);
+    return sSvg(2, dv, `${sRoom(g, {runs:SROOM, chips:[{r:0,s:0,v:300},{r:0,s:2,v:300,d:1},{r:0,s:3,v:180,d:1},{r:1,s:0,v:260,d:1}]})}
+      ${tapAt(g.X(180), g.Y(0), '2')}
+      <g class="placed">${sChip(g, 75, -75, '150')}${sChip(g, 325, -75, '230')}${sChip(g, 180, -130, '60')}
+        <line x1="${g.X(0)}" y1="${g.Y(-40)}" x2="${g.X(150)}" y2="${g.Y(-40)}" stroke="${place}" stroke-width="${g.P(1)}"/>
+        <line x1="${g.X(210)}" y1="${g.Y(-40)}" x2="${g.X(440)}" y2="${g.Y(-40)}" stroke="${place}" stroke-width="${g.P(1)}"/>
+        ${sPlate(g, dv, ['Lățime', '60'], [60, 195], ['Înălțime pervaz', '90'])}</g>
+      <g class="winMove"><rect x="${-g.L(30)}" y="${-g.L(9)}" width="${g.L(60)}" height="${g.L(18)}" fill="#ECEBE6"/>
+        <path d="M${-g.L(30)} ${-g.L(8)}H${g.L(30)}M${-g.L(30)} 0H${g.L(30)}M${-g.L(30)} ${g.L(8)}H${g.L(30)}M${-g.L(30)} ${-g.L(8)}V${g.L(8)}M${g.L(30)} ${-g.L(8)}V${g.L(8)}" stroke="${ink}" stroke-width="${g.P(1.2)}" fill="none"/></g>
+      ${sHint(dv, dv==='ph' ? 'Atinge peretele pe care e fereastra.' : 'Dă clic pe peretele pe care e fereastra.',
+                  'Trage fereastra ca s-o muți pe perete.')}`); },
+  // 4 · Ușă: placed, then Rotește turns the swing a quarter at a time
+  door: dv => { const g = mapper(dv), R = g.L(90);
+    return sSvg(3, dv, `${sRoom(g, {runs:SROOM, chips:[{r:0,s:1,v:440},{r:0,s:2,v:300,d:1},{r:0,s:3,v:180,d:1},{r:1,s:0,v:260,d:1}]})}
+      ${tapAt(g.X(0), g.Y(235), '2')}
+      <g class="placed"><rect x="${g.X(-9)}" y="${g.Y(190)}" width="${g.L(18)}" height="${g.L(90)}" fill="#F5F4F0"/>
+        <path d="M${g.X(-8)} ${g.Y(190)}H${g.X(8)}M${g.X(-8)} ${g.Y(280)}H${g.X(8)}" stroke="${ink}" stroke-width="${g.P(1.2)}"/>
+        <g class="doorFlip" style="transform-origin:${g.X(0)}px ${g.Y(235)}px">
+          <line x1="${g.X(8)}" y1="${g.Y(280)}" x2="${g.X(98)}" y2="${g.Y(280)}" stroke="${ink}" stroke-width="${g.P(1.8)}"/>
+          <path d="M${g.X(98)} ${g.Y(280)}A${R} ${R} 0 0 0 ${g.X(8)} ${g.Y(190)}" fill="none" stroke="${ink}" stroke-width="${g.P(1)}" stroke-dasharray="${g.P(4)} ${g.P(4)}"/></g>
+        ${sChip(g, -170, 300, '20')}${sChip(g, -75, 95, '190')}${sChip(g, 178, 235, '90')}
+        <line x1="${g.X(-40)}" y1="${g.Y(300)}" x2="${g.X(-40)}" y2="${g.Y(280)}" stroke="${place}" stroke-width="${g.P(1)}"/>
+        <line x1="${g.X(-40)}" y1="${g.Y(190)}" x2="${g.X(-40)}" y2="${g.Y(0)}" stroke="${place}" stroke-width="${g.P(1)}"/>
+        ${sPlate(g, dv, ['Lățime', '90'], [60, 150], ['Rotește', null], true)}
+        <circle class="rotTap" cx="${dv==='ph' ? SCR.ph.plate[0]-46 : g.X(80)}" cy="${(dv==='ph' ? SCR.ph.plate[1] : g.Y(150)) + g.P(49)}" r="9" fill="rgba(20,20,20,.08)" stroke="${ink}" stroke-width="1"/></g>
+      ${sHint(dv, dv==='ph' ? 'Atinge peretele pe care e ușa.' : 'Dă clic pe peretele pe care e ușa.',
+                  'Apasă Rotește până se deschide ca la tine.')}`); },
+  // 5 · Selectează: two fingers zoom, one finger moves what is drawn
+  view: dv => { const g = mapper(dv);
+    return sSvg(4, dv, `<g class="zoomPlan" style="transform-origin:${g.X(220)}px ${g.Y(150)}px">${sRoom(g, {runs:SROOM,
+        chips:[{r:0,s:0,v:300},{r:0,s:1,v:440},{r:0,s:2,v:300,d:1},{r:0,s:3,v:180,d:1},{r:1,s:0,v:260,d:1}],
+        open:[{r:0,s:1,at:150,w:60,type:'win'}]})}</g>
+      ${dv==='ph'
+        ? `<g class="f1">${fingerAt('ph', g.X(150), g.Y(90))}</g><g class="f2">${fingerAt('ph', g.X(300), g.Y(220))}</g>`
+        : `<g transform="translate(${g.X(480)},${g.Y(120)})" fill="none" stroke="${ink}" stroke-width="1.2"><rect x="0" y="0" width="14" height="21" rx="7"/><line x1="7" y1="4" x2="7" y2="9"/></g>`}
+      ${sHint(dv, dv==='ph' ? 'Atinge un perete ca să-l schimbi.' : 'Dă clic pe un perete ca să-l schimbi.')}`); },
+};
+
+/* The camera and the gestures depend on the screen each slide shows, so their keyframes are written
+   here. One timeline, 8 s: the tool is tapped at once (no waiting), the camera pulls back, the
+   gesture runs, and what was placed is looked at close up. */
+(function animCss(){
+  const css = [];
+  const kf = (n, b) => css.push(`@keyframes ${n}{${b}}`);
+  const tr = (d, t) => t ? `translate(${(d.cx - t[2]*t[0]).toFixed(1)}px,${(d.cy - t[2]*t[1]).toFixed(1)}px) scale(${t[2]})` : 'translate(0px,0px) scale(1)';
+  const cam = (n, d, steps) => kf(n, steps.map(([a,b,t])=>`${a}%,${b}%{transform:${tr(d,t)}}`).join(''));
+  const xy = p => `${p[0]}px,${p[1]}px`;
+  // the tool is picked at 5%; it lets go when what it makes is there (54% for a wall, 26% for an opening)
+  [['A',54],['B',27]].forEach(([v, off])=>{
+    kf(`armR${v}`, `0%{fill:#fff;stroke:#CFCEC8}5%{fill:#141414;stroke:#141414}${off}%{fill:#fff;stroke:#CFCEC8}`);
+    kf(`armG${v}`, `0%{stroke:#7A7975}5%{stroke:#F5F4F0}${off}%{stroke:#7A7975}`);
+    kf(`armT${v}`, `0%{fill:#7A7975}5%{fill:#F5F4F0}${off}%{fill:#7A7975}`);
+    kf(`selR${v}`, `0%{fill:#fff;stroke:#CFCEC8}${off}%{fill:#141414;stroke:#141414}`);
+    kf(`selG${v}`, `0%{stroke:#7A7975}${off}%{stroke:#F5F4F0}`);
+    kf(`selT${v}`, `0%{fill:#7A7975}${off}%{fill:#F5F4F0}`);
+    const sel = v==='A' ? '.kA' : '.kB';
+    css.push(`${sel} .armPill rect.bg{animation:armR${v} 8s step-end infinite}`, `${sel} .armPill .mg{animation:armG${v} 8s step-end infinite}`, `${sel} .armPill text{animation:armT${v} 8s step-end infinite}`,
+             `${sel} .selPill rect.bg{animation:selR${v} 8s step-end infinite}`, `${sel} .selPill .mg{animation:selG${v} 8s step-end infinite}`, `${sel} .selPill text{animation:selT${v} 8s step-end infinite}`);
+  });
+  // the tap on the tool, and the tap on the wall
+  css.push(`.stage .tapRing{transform-box:fill-box;transform-origin:center;animation:s-ring 8s ease-out infinite;opacity:0}`);
+  kf('s-ring', '0%{opacity:0;transform:scale(.5)}2%{opacity:1;transform:scale(1)}10%,100%{opacity:0;transform:scale(1.5)}');
+  css.push(`.stage .tapDot{animation:s-dot 8s ease-out infinite;opacity:0}`);
+  kf('s-dot', '0%{opacity:0}1%,8%{opacity:1}12%,100%{opacity:0}');
+  css.push(`.stage .tapRing2{transform-box:fill-box;transform-origin:center;animation:s-ring2 8s ease-out infinite;opacity:0}`);
+  kf('s-ring2', '0%,18%{opacity:0;transform:scale(.5)}21%{opacity:1;transform:scale(1)}28%,100%{opacity:0;transform:scale(1.5)}');
+  css.push(`.stage .tapDot2{animation:s-dot2 8s ease-out infinite;opacity:0}`);
+  kf('s-dot2', '0%,18%{opacity:0}20%,25%{opacity:1}29%,100%{opacity:0}');
+  // what the gesture makes
+  css.push(`.stage .grow{transform-box:fill-box;transform-origin:0 50%;animation:s-grow 8s ease-in-out infinite}`);
+  kf('s-grow', '0%,20%{transform:scaleX(0)}52%,100%{transform:scaleX(1)}');
+  css.push(`.stage .late{animation:s-late 8s ease-in-out infinite}`);
+  kf('s-late', '0%,54%{opacity:0}58%,100%{opacity:1}');
+  css.push(`.stage .placed{animation:s-placed 8s ease-in-out infinite}`);
+  kf('s-placed', '0%,25%{opacity:0}30%,100%{opacity:1}');
+  css.push(`.stage .h1{animation:s-h1 8s step-end infinite}`, `.stage .h2{animation:s-h2 8s step-end infinite}`);
+  kf('s-h1', '0%{opacity:1}54%{opacity:0}');
+  kf('s-h2', '0%{opacity:0}54%{opacity:1}');
+  css.push(`.kB .h1{animation:s-h1b 8s step-end infinite}`, `.kB .h2{animation:s-h2b 8s step-end infinite}`);
+  kf('s-h1b', '0%{opacity:1}27%{opacity:0}');
+  kf('s-h2b', '0%{opacity:0}27%{opacity:1}');
+  css.push(`.stage .doorFlip{animation:s-door 8s step-end infinite}`);
+  kf('s-door', '0%,52%{transform:scale(1,1)}62%{transform:scale(-1,1)}74%{transform:scale(-1,-1)}86%{transform:scale(1,-1)}');
+  css.push(`.stage .rotTap{animation:s-rotTap 8s ease-out infinite;opacity:0}`);
+  kf('s-rotTap', '0%,49%{opacity:0}51%,53%{opacity:1}56%,59%{opacity:0}61%,63%{opacity:1}66%,71%{opacity:0}73%,75%{opacity:1}78%,83%{opacity:0}85%,87%{opacity:1}90%,100%{opacity:0}');
+  css.push(`.stage .zoomPlan{animation:s-zoom 8s ease-in-out infinite}`);
+  kf('s-zoom', '0%,22%{transform:scale(.8)}58%,100%{transform:scale(1.12)}');
+  ['ph','dk'].forEach(dv=>{
+    const d = SCR[dv], g = mapper(dv), Z = d.zs, p = i => [...d.pill(i), Z];
+    // on a phone the plate is docked at the bottom, so the close-up has to hold the whole width
+    const winZoom  = dv==='ph' ? [100, 200, 1.4] : [g.X(180), g.Y(70), 2.1];
+    const doorZoom = dv==='ph' ? [100, 210, 1.3] : [g.X(70), g.Y(210), 2.1];
+    cam(`cam1${dv}`, d, [[0,11,p(1)],[19,64,null],[74,100,[...d.pill(0), Z]]]);
+    cam(`cam2${dv}`, d, [[0,11,p(2)],[19,64,null],[74,100,[...d.pill(0), Z]]]);
+    cam(`cam3${dv}`, d, [[0,11,p(3)],[19,32,null],[40,62,winZoom],[70,100,null]]);
+    cam(`cam4${dv}`, d, [[0,11,p(4)],[19,32,null],[40,100,doorZoom]]);
+    cam(`cam5${dv}`, d, [[0,8,p(0)],[16,100,null]]);
+    [1,2,3,4,5].forEach(n=> css.push(`.s${dv}${n} .cam{animation:cam${n}${dv} 8s ease-in-out infinite}`));
+    // the finger that draws, along the wall it draws
+    const travel = (a, b) => `0%,18%{opacity:0;transform:translate(0px,0px)}22%{opacity:1;transform:translate(0px,0px)}52%{opacity:1;transform:translate(${a}px,${b}px)}58%,100%{opacity:0;transform:translate(${a}px,${b}px)}`;
+    kf(`fing1${dv}`, travel(g.L(440), 0));
+    kf(`fing2${dv}`, travel(-g.L(260), 0));
+    css.push(`.s${dv}1 .fing{animation:fing1${dv} 8s ease-in-out infinite}`, `.s${dv}2 .fing{animation:fing2${dv} 8s ease-in-out infinite}`);
+    // the window: placed on the top wall, then slid along it and round the corner
+    const W = [[g.X(180), g.Y(0)], [g.X(410), g.Y(0)], [g.X(440), g.Y(30)], [g.X(440), g.Y(150)]];
+    kf(`win${dv}`, `0%,25%{opacity:0;transform:translate(${xy(W[0])})}30%,72%{opacity:1;transform:translate(${xy(W[0])}) rotate(0deg)}86%{transform:translate(${xy(W[1])}) rotate(0deg)}90%{transform:translate(${xy(W[2])}) rotate(90deg)}100%{opacity:1;transform:translate(${xy(W[3])}) rotate(90deg)}`);
+    css.push(`.s${dv}3 .winMove{animation:win${dv} 8s ease-in-out infinite;transform:translate(${xy(W[0])})}`);
+    const f = g.L(60);
+    kf(`f1${dv}`, `0%,18%{opacity:0;transform:translate(0px,0px)}22%{opacity:1;transform:translate(0px,0px)}58%{opacity:1;transform:translate(${-f}px,${-f*0.6}px)}66%,100%{opacity:0;transform:translate(${-f}px,${-f*0.6}px)}`);
+    kf(`f2${dv}`, `0%,18%{opacity:0;transform:translate(0px,0px)}22%{opacity:1;transform:translate(0px,0px)}58%{opacity:1;transform:translate(${f}px,${f*0.6}px)}66%,100%{opacity:0;transform:translate(${f}px,${f*0.6}px)}`);
+    css.push(`.s${dv}5 .f1{animation:f1${dv} 8s ease-in-out infinite}`, `.s${dv}5 .f2{animation:f2${dv} 8s ease-in-out infinite}`);
+  });
+  css.push(`.scph .mpill text{font-size:4.8px}`, `.scdk .mpill text{font-size:5.6px}`);
+  document.head.insertAdjacentHTML('beforeend', `<style>${css.join('\n')}</style>`);
+})();
+
+const slides = [
+  ['wall','Perete',
+    'Alege Perete din bara de sus, apoi trage cu degetul de la un capăt al peretelui la celălalt. După fiecare perete revii la Selectează, ca să poți muta și mări planul.',
+    'Alege Perete (P) din bara de sus, apoi ține apăsat și trage de la un capăt al peretelui la celălalt. După fiecare perete revii la Selectează, ca să poți muta și mări planul.'],
+  ['open','Fără perete',
+    'Pentru o latură unde camera se deschide spre altă cameră, fără perete între ele. Alege Fără perete și trage pe acolo, la fel ca la un perete.',
+    'Pentru o latură unde camera se deschide spre altă cameră, fără perete între ele. Alege Fără perete (L) și trage pe acolo, la fel ca la un perete.'],
+  ['win','Fereastră',
+    'Alege Fereastră și atinge peretele pe care e fereastra. Apoi o poți trage pe perete, chiar și după colț. Înălțimea pervazului e de la podea până la fereastră; schimb-o dacă nu e 90 cm.',
+    'Alege Fereastră (F) și dă clic pe peretele pe care e fereastra. Apoi o poți trage pe perete, chiar și după colț. Înălțimea pervazului e de la podea până la fereastră; schimb-o dacă nu e 90 cm.'],
+  ['door','Ușă',
+    'Alege Ușă și atinge peretele pe care e ușa. Trage-o unde este, apoi apasă Rotește până se deschide ca la tine acasă.',
+    'Alege Ușă (U) și dă clic pe peretele pe care e ușa. Trage-o unde este, apoi apasă Rotește (R) până se deschide ca la tine acasă.'],
+  ['view','Selectează, mută, mărește',
+    'Cu Selectează atingi ce ai desenat ca să-l muți, să-i scrii lungimea sau să-l ștergi. Cu două degete mărești și muți planul.',
+    'Cu Selectează dai clic pe ce ai desenat ca să-l muți, să-i scrii lungimea sau să-l ștergi. Rotița mărește planul; trage de fundal ca să-l muți.'],
+];
+function onb(dev, i){
+  const [st, title, ph, dk] = slides[i], last = i===slides.length-1;
+  return `<div class="scrim" style="z-index:3"></div><div class="onb">
+    <div class="ot"><span class="ct">${i+1} / ${slides.length}</span><span class="lnk">Sari peste</span></div>
+    <div class="stage">${stages[st](dev)}</div>
+    <div class="q2">${title}</div>
+    <p>${dev==='ph'?ph:dk}</p>
+    <div class="ob"><span class="lnk">${i?'Înapoi':''}</span><span class="dots">${slides.map((_,j)=>`<i class="${j===i?'on':''}"></i>`).join('')}</span><span class="btn fill">${last?'Încep să desenez':'Mai departe'}</span></div>
+  </div>`;
+}
+const emptyBg = dev => view(dev,{undo:false}) + tools('select', dev, {undo:false});
+[0,1,2,3,4].forEach(i=> screen(`fOnb${i+1}-ph`,'ph','A', emptyBg('ph'), {on:false, overlay:onb('ph',i)}));
+screen('fOnb1-dk','dk','A', emptyBg('dk'), {on:false, overlay:onb('dk',0)});
+screen('fOnb3-dk','dk','A', emptyBg('dk'), {on:false, overlay:onb('dk',2)});
+
+/* ---------------- 2.2 empty canvas ---------------- */
+screen('fEmpty-ph','ph','A',
+  view('ph',{undo:false}) + hint('Alege <b>Perete</b>, apoi trage cu degetul ca să faci primul perete. · <u>Cum desenez</u>') + tools('select','ph',{breath:'wall'}), {on:false});
+screen('fEmpty-dk','dk','A',
+  view('dk') + hint('Alege <b>Perete</b> (tasta P), apoi ține apăsat și trage ca să faci primul perete. · <u>Cum desenez</u>') + tools('select','dk',{breath:'wall',undo:false}), {on:false});
+
+/* ---------------- the freehand room used from 2.3 on: 440 x 300 ---------------- */
+const R4 = [[0,300],[0,0],[440,0],[440,300]];
+const R5 = [...R4,[150,300]];
+const RW = [...R4,[260,300]];
+const roomChips = (extra=[]) => [{r:0,s:0,v:300},{r:0,s:1,v:440},{r:0,s:2,v:300,d:1},...extra];
+
+// 2.3 drawing a wall
+screen('fWall1-ph','ph','A',
+  drw({k:kPH_R,vb:PH_R,runs:[{pts:R4}],chips:roomChips(),live:[[440,300],[150,300],'290'],ends:[[0,300]]})
+  + view('ph') + hint('Ridică degetul ca să termini peretele.') + tools('wall','ph'));
+screen('fWall2-ph','ph','A',
+  drw({k:kPH_R,vb:PH_R,runs:[{pts:R5}],sel:[0,3],chips:roomChips([{r:0,s:3,v:290,d:1,sel:1}])})
+  + view('ph') + pop(295, 272, 'c', 'b', delBtn)
+  + hint('Atinge numărul ca să scrii lungimea.<br>Pentru încă un perete, alege din nou Perete.') + tools('select','ph'));
+screen('fWall2-dk','dk','A',
+  drw({k:kDK_R,vb:DK_R,runs:[{pts:R5}],sel:[0,3],chips:roomChips([{r:0,s:3,v:290,d:1,sel:1}])})
+  + view('dk') + pop(295, 276, 'c', 'b', delBtn)
+  + hint('Dă clic pe număr ca să scrii lungimea. Pentru încă un perete, alege din nou Perete (P).') + tools('select','dk'));
+
+// 2.4 Fără perete
+screen('fOpen-ph','ph','A',
+  drw({k:kPH_R,vb:PH_R,runs:[{pts:RW}],chips:roomChips([{r:0,s:3,v:180,d:1}]),live:[[260,300],[10,300],'250','open'],ends:[[0,300]]})
+  + view('ph') + hint('Trage pe unde camera se deschide spre altă cameră.') + tools('open','ph'));
+screen('fOpen-dk','dk','A',
+  drw({k:kDK_R,vb:DK_R,runs:[{pts:RW},{pts:[[260,300],[0,300]],kind:'open'}],sel:[1,0],chips:roomChips([{r:0,s:3,v:180,d:1},{r:1,s:0,v:260,d:1,sel:1}])})
+  + view('dk') + pop(130, 276, 'c', 'b', delBtn)
+  + hint('Dă clic pe număr ca să scrii lungimea. Trage linia ca s-o muți.') + tools('select','dk'));
+
+// 2.5 window
+const room = [{pts:RW},{pts:[[260,300],[0,300]],kind:'open'}];
+const roomC = roomChips([{r:0,s:3,v:180,d:1},{r:1,s:0,v:260,d:1}]);
+screen('fWin0-ph','ph','A',
+  drw({k:kPH_R,vb:PH_R,runs:room,chips:roomC})
+  + view('ph') + hint('Atinge peretele pe care e fereastra.') + tools('win','ph'));
+const chipsNo = (list, r, sg) => list.filter(c => !(c.r===r && c.s===sg));
+const win1 = {r:0,s:1,at:150,w:60,type:'win',focus:1};
+screen('fWin1-ph','ph','A',
+  drw({k:V.phTop.k,vb:V.phTop.vb,runs:room,chips:chipsNo(roomC,0,1),open:[win1],
+       chain:{r:0,s:1,items:[{a:0,b:150,v:150},{a:150,b:210,v:60,sel:1},{a:210,b:440,v:230}]}})
+  + view('ph') + pop(180, 195, 'c', 't', winPlate('ph','60','90'), 'two')
+  + hint('Trage fereastra ca s-o muți pe perete.<br>Atinge înălțimea pervazului ca s-o schimbi.') + tools('select','ph'));
+screen('fWin1-dk','dk','A',
+  drw({k:V.dkRight.k,vb:V.dkRight.vb,runs:room,chips:chipsNo(roomC,0,2),open:[{...win1,focus:0},{r:0,s:2,at:30,w:60,type:'win',focus:1}],
+       chain:{r:0,s:2,items:[{a:0,b:30,v:30},{a:30,b:90,v:60,sel:1},{a:90,b:300,v:210}]}})
+  + view('dk') + pop(360, 60, 'r', 'm', winPlate('dk','60','110'))
+  + hint('Trage fereastra ca s-o muți pe perete. Dă clic pe înălțimea pervazului ca s-o schimbi.') + tools('select','dk'));
+
+// 2.6 sliding
+screen('fSlide1-ph','ph','A',
+  drw({k:V.phRight.k,vb:V.phRight.vb,runs:room,chips:chipsNo(roomC,0,2),open:[{r:0,s:2,at:40,w:60,type:'win',drag:1}],
+       chain:{r:0,s:2,items:[{a:0,b:40,v:40},{a:40,b:100,v:60,sel:1},{a:100,b:300,v:200}]},
+       path:[[180,50],[380,50],[380,62]]})
+  + view('ph') + hint('Fereastra merge pe perete și după colț,<br>cât timp peretele continuă.') + tools('select','ph'));
+const halfRoom = [{pts:[[0,300],[0,0],[300,0]]}];
+screen('fSlide2-ph','ph','A',
+  drw({k:V.phTop.k,vb:V.phTop.vb,runs:halfRoom,chips:[{r:0,s:0,v:300}],open:[{r:0,s:1,at:300,w:60,type:'win',focus:1}],
+       chain:{r:0,s:1,items:[{a:0,b:300,v:300},{a:300,b:360,v:60,sel:1}]}})
+  + view('ph') + pop(250, 195, 'c', 't', winPlate('ph','60','90'), 'two')
+  + hint('Fereastra poate trece de capătul liber.<br>Apoi continuă peretele din capătul ei.') + tools('select','ph'));
+screen('fSlide3-dk','dk','A',
+  drw({k:V.dk.k,vb:V.dk.vb,runs:halfRoom,chips:[{r:0,s:0,v:300},{r:0,s:1,v:300,d:1}],open:[{r:0,s:1,at:300,w:60,type:'win'}],
+       live:[[360,0],[440,0],'80'],ends:[[0,300]]})
+  + view('dk') + hint('Dă drumul butonului ca să termini peretele. Esc renunță.') + tools('wall','dk'));
+
+// 2.7 door
+const door = (hinge, side) => ({r:0,s:0,at:20,w:90,type:'door',hinge,side,focus:1});
+const doorChain = {r:0,s:0,items:[{a:0,b:20,v:20},{a:20,b:110,v:90,sel:1},{a:110,b:300,v:190}]};
+screen('fDoor-ph','ph','A',
+  drw({k:V.phLeft.k,vb:V.phLeft.vb,runs:room,chips:chipsNo(roomC,0,0),open:[{...win1,focus:0},door(0,-1)],chain:doorChain})
+  + view('ph') + pop(220, 175, 'c', 'b', doorPlate('90'))
+  + hint('Trage ușa ca s-o muți pe perete.<br>Apasă Rotește până se deschide ca la tine.') + tools('select','ph'));
+screen('fDoor-dk','dk','A',
+  drw({k:V.dkLeft.k,vb:V.dkLeft.vb,runs:room,chips:chipsNo(roomC,0,0),open:[{...win1,focus:0},door(1,-1)],chain:doorChain})
+  + view('dk') + pop(160, 120, 'l', 'b', doorPlate('90'))
+  + hint('Trage ușa ca s-o muți pe perete. Apasă Rotește (R) până se deschide ca la tine.') + tools('select','dk'));
+document.getElementById('fDoorStrip').innerHTML = [[0,-1,'1 · hinge left, into the room'],[1,-1,'2 · hinge right, into the room'],[1,1,'3 · hinge right, out of the room'],[0,1,'4 · hinge left, out of the room']]
+  .map(([h,sd,l])=>`<div><div class="canvas">${drw({k:0.62,vb:[-40,-110,320,220],runs:[{pts:[[0,0],[240,0]]}],open:[{r:0,s:0,at:75,w:90,type:'door',hinge:h,side:sd}]}).replace('</svg>','<text x="215" y="80" text-anchor="middle" font-family="Figtree,Arial" font-size="20" fill="#B5B4AE">camera</text></svg>')}</div><div class="l">${l}</div></div>`).join('');
+
+// 2.8 select
+screen('fSel-ph','ph','A',
+  plan({dir:'A',k:V.phL.k,vb:PH_L,chips:chipsLsel,selected:1}) + view('ph') + lWallPop
+  + hint('Trage peretele ca să-l muți.<br>Atinge numărul ca să schimbi lungimea.') + tools('select','ph'));
+screen('fSel-dk','dk','A',
+  plan({dir:'A',k:V.dkL.k,vb:DK_L,chips:chipsLsel,selected:1}) + view('dk') + lWallPop
+  + hint('Trage peretele ca să-l muți. Dă clic pe număr ca să schimbi lungimea.') + tools('select','dk'));
+
+// 2.9 zoom
+screen('fZoom-ph','ph','A',
+  plan({dir:'A',k:1.15,vb:[-90,130,313,300],chips:[null,null,null,null,{v:320,d:1},{v:420}]}) + view('ph')
+  + hint('Apropie sau depărtează două degete ca să mărești. Cu două degete muți planul.') + tools('select','ph'));
+screen('fZoom-dk','dk','A',
+  plan({dir:'A',k:1.35,vb:[-90,150,740,257],chips:[null,null,{v:200,d:1},{v:160},null,{v:420}]}) + view('dk')
+  + hint('Rotița mărește în jurul cursorului. Trage de fundal ca să muți planul.') + tools('select','dk'));
+
+// 2.10 Cum desenez: the same slides, reopened over the drawing
+screen('fHelp-ph','ph','A',
+  drw({k:kPH_R,vb:PH_R,runs:room,chips:roomC,open:[{...win1,focus:0}]}) + view('ph') + tools('select','ph'),
+  {overlay:onb('ph',0)});
+
+// 2.11 finishing: no checks, the arrow saves whatever is drawn
+screen('fDone-ph','ph','A',
+  drw({k:kPH_R,vb:PH_R,runs:room,chips:roomC,open:[{...win1,focus:0},{r:0,s:0,at:20,w:90,type:'door',hinge:0,side:-1}]})
+  + view('ph') + hint('Se salvează…') + tools('select','ph'), {press:true});
+screen('fDone-dk','dk','A',
+  drw({k:kDK_R,vb:DK_R,runs:halfRoom,chips:[{r:0,s:0,v:300},{r:0,s:1,v:300,d:1}],open:[{r:0,s:1,at:180,w:60,type:'win'}],ends:[]})
+  + view('dk') + hint('Se salvează…') + tools('select','dk'), {press:true});
+
+
+/* ================= 3. After the layout: ceiling, landmarks ================= */
+// c is the colour of the landmark's square and name chip on the plan, and nowhere else.
+// icon is an object drawing in the appliance language (64 grid, 1.1 ink strokes, .7 details,
+// light #F7F6F2 bodies, dark #2A2825 parts); gaz is the app's own `gas` drawing.
+const LM = [
+  {id:'apa', name:'Țeavă de apă', c:'#2F6F9F', icon:'<rect x="12" y="5" width="9" height="54" fill="#F7F6F2" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><path d="M12 12h9M12 52h9" fill="none" stroke="#1A1917" stroke-width=".7" stroke-linecap="round"/><rect x="21" y="24" width="17" height="8" fill="#F7F6F2" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><path d="M47 24h5a5 5 0 0 1 5 5v7h-8v-4h-2z" fill="#F7F6F2" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><rect x="38" y="21" width="9" height="14" rx="1" fill="#2A2825" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><path d="M42.5 21v-6" fill="none" stroke="#1A1917" stroke-width="1.1" stroke-linecap="round"/><path d="M36 15h13" fill="none" stroke="#1A1917" stroke-width="1.9" stroke-linecap="round"/><path d="M53 41c2 3 3.5 4.6 3.5 7a3.5 3.5 0 0 1-7 0c0-2.4 1.5-4 3.5-7z" fill="#2A2825" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/>'},
+  {id:'gaz', name:'Gaz', c:'#C08A1E', icon:'<path d="M32 6c4 10 15 17 15 31a15 15 0 0 1-30 0c0-9 6-13 8-20 3 5 4 7 6 8 1-7 0-12 1-19z" fill="#F7F6F2" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><path d="M32 30c3 5 7 8 7 13a7 7 0 0 1-14 0c0-5 4-8 7-13z" fill="#2A2825" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/>'},
+  {id:'centrala', name:'Centrală', c:'#3E7D5A', icon:'<path d="M23 46v12M29 46v8M35 46v8M41 46v12" fill="none" stroke="#1A1917" stroke-width="1.1" stroke-linecap="round"/><rect x="17" y="5" width="30" height="41" rx="2" fill="#F7F6F2" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><circle cx="32" cy="18" r="5.5" fill="#F7F6F2" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><path d="M32 18l3-3" fill="none" stroke="#1A1917" stroke-width=".7" stroke-linecap="round"/><path d="M26 28h12" fill="none" stroke="#1A1917" stroke-width=".7" stroke-linecap="round"/><rect x="21" y="33" width="22" height="9" rx="1" fill="#2A2825" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><circle cx="26.5" cy="37.5" r="1.4" fill="#F7F6F2"/><circle cx="37.5" cy="37.5" r="1.4" fill="#F7F6F2"/><path d="M31 37.5h2" fill="none" stroke="#8C877E" stroke-width=".8" stroke-linecap="round"/>'},
+  {id:'aer', name:'Aer condiționat', c:'#6E63A6', icon:'<rect x="5" y="16" width="54" height="20" rx="3" fill="#F7F6F2" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><path d="M10 21.5h44" fill="none" stroke="#1A1917" stroke-width=".7" stroke-linecap="round"/><rect x="9" y="29" width="46" height="4" rx="1" fill="#2A2825" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><circle cx="51" cy="25.5" r="1" fill="#1A1917"/><path d="M18 41c-2 3 2 5 0 8M32 41c-2 3 2 5 0 8M46 41c-2 3 2 5 0 8" fill="none" stroke="#1A1917" stroke-width="1.1" stroke-linecap="round"/>'},
+  {id:'semineu', name:'Șemineu', c:'#B4553A', icon:'<rect x="18" y="4" width="28" height="8" fill="#DDD9D0" stroke="#1A1917" stroke-width="1.1"/><rect x="10" y="17" width="44" height="39" fill="#F7F6F2" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><rect x="6" y="12" width="52" height="5" rx=".5" fill="#F7F6F2" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><path d="M19 56V35a13 13 0 0 1 26 0v21z" fill="#2A2825" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><path d="M32 38c3 4 5.5 6.5 5.5 10.5a5.5 5.5 0 0 1-11 0c0-4 2.5-6.5 5.5-10.5z" fill="#F7F6F2" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><rect x="6" y="56" width="52" height="4" rx=".5" fill="#F7F6F2" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/>'},
+  {id:'calorifer', name:'Calorifer', c:'#8A6244', icon:'<path d="M14 48v7M50 48v7" fill="none" stroke="#1A1917" stroke-width="1.1" stroke-linecap="round"/><rect x="8" y="15" width="48" height="33" rx="2" fill="#F7F6F2" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><path d="M16 15v33M24 15v33M32 15v33M40 15v33M48 15v33" fill="none" stroke="#1A1917" stroke-width="1.1" stroke-linecap="round"/><path d="M8 20h48M8 43h48" fill="none" stroke="#1A1917" stroke-width=".7" stroke-linecap="round"/><rect x="56" y="17" width="5" height="7" rx="1.5" fill="#2A2825" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><path d="M58.5 24v3" fill="none" stroke="#1A1917" stroke-width=".7" stroke-linecap="round"/>'},
+  {id:'hota', name:'Evacuare hotă', c:'#9B4A86', icon:'<rect x="11" y="11" width="42" height="42" rx="2" fill="#F7F6F2" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><circle cx="32" cy="32" r="14" fill="#2A2825" stroke="#1A1917" stroke-width="1.1" stroke-linejoin="round"/><path d="M21.5 26h21M19.5 32h25M21.5 38h21" fill="none" stroke="#F7F6F2" stroke-width="1.1" stroke-linecap="round"/><circle cx="15.5" cy="15.5" r="1" fill="#1A1917"/><circle cx="48.5" cy="15.5" r="1" fill="#1A1917"/><circle cx="15.5" cy="48.5" r="1" fill="#1A1917"/><circle cx="48.5" cy="48.5" r="1" fill="#1A1917"/>'},
+];
+const lmIcon = l => `<svg viewBox="0 0 64 64" aria-hidden="true">${l.icon}</svg>`;
+const lmTick = `<span class="tick"><svg viewBox="0 0 12 12"><path d="M3 6.5l2.2 2.2L9.5 4"/></svg></span>`;
+
+// the question screen shape of the questionnaire
+const ceilScreen = (dev, v) => `<div class="${dev} dirA">${topBar('Plan')}<div class="mid">
+  <div class="q">Cât de înalt e tavanul?</div>
+  <div class="sub">Măsoară de la podea până la tavan, în cameră.</div>
+  <div class="fl">Înălțime</div>
+  <div class="line"><span class="val ${v?'':'empty'}">${v||'—'}</span><span class="u">cm</span></div>
+  <div class="tiny">De obicei între 250 și 300 cm.</div>
+</div>${bot(!!v)}</div>`;
+const cardsScreen = (dev, placed={}) => `<div class="${dev} dirA">${topBar('Plan')}<div class="mid">
+  <div class="q">Ce mai e prin cameră?</div>
+  <div class="sub">Alege pe rând și arată pe plan unde se află. Sari peste ce nu ai.</div>
+  <div class="cards">${LM.map(l=>`<div class="card ${placed[l.id]?'on':''}">${placed[l.id]?lmTick:''}${placed[l.id]>1?`<span class="n">${placed[l.id]}</span>`:''}${lmIcon(l)}<span class="l">${l.name}</span></div>`).join('')}</div>
+</div>${bot(true)}</div>`;
+const askPlate = `<div class="scrim" style="z-index:3"></div><div class="ask"><b>Gata cu planul?</b>
+  <p>Urmează înălțimea tavanului și ce mai e prin cameră. Te poți întoarce oricând la plan.</p>
+  <div class="na"><span class="btn">Mai am de lucru</span><span class="btn fill">Continuă</span></div></div>`;
+const fullRoom = {k:kPH_R, vb:PH_R, runs:room, chips:roomC, open:[{...win1,focus:0},{r:0,s:0,at:20,w:90,type:'door',hinge:0,side:-1}]};
+screen('pConfirm-ph','ph','A', drw(fullRoom) + view('ph') + tools('select','ph'), {overlay:askPlate});
+screen('pConfirm-dk','dk','A', drw({...fullRoom, k:kDK_R, vb:DK_R}) + view('dk') + tools('select','dk'), {overlay:askPlate});
+document.getElementById('pCeil-ph').innerHTML = ceilScreen('ph','270');
+document.getElementById('pCeil-dk').innerHTML = ceilScreen('dk','');
+document.getElementById('pCards-ph').innerHTML = cardsScreen('ph');
+document.getElementById('pCards-dk').innerHTML = cardsScreen('dk');
+document.getElementById('pCards2-ph').innerHTML = cardsScreen('ph', {gaz:1, calorifer:2});
+document.getElementById('pCards2-dk').innerHTML = cardsScreen('dk', {gaz:1, calorifer:2, apa:1});
+
+// placing a landmark: the plate keeps only Selectează and the landmark that was chosen
+function lmTools(active, dev, l){
+  return `<div class="plate tools">
+    <span class="tool ${active==='select'?'on':''}">${g('select')}Selectează</span>
+    <span class="tool ${active==='lm'?'on':''}"><svg viewBox="0 0 20 20"><rect x="4.5" y="4.5" width="11" height="11" rx="1" fill="${l.c}" stroke="none"/></svg>${l.name}</span>
+    ${dev==='dk' ? `<span class="vsep"></span><span class="tool ico">${g('undo')}</span><span class="tool ico dim">${g('redo')}</span>` : ''}
+  </div>`;
+}
+const gaz = LM[1], calorifer = LM[5];
+const lmRoom = extra => ({runs:room, chips:roomC, open:[{...win1,focus:0},{r:0,s:0,at:20,w:90,type:'door',hinge:0,side:-1}], ...extra});
+screen('pPlace0-ph','ph','A',
+  drw(lmRoom({k:kPH_R, vb:PH_R}))
+  + view('ph') + hint('Atinge peretele unde e gazul.') + lmTools('lm','ph',gaz));
+screen('pPlace1-ph','ph','A',
+  drw(lmRoom({k:V.phTop.k, vb:V.phTop.vb, marks:[{r:0,s:1,at:380,side:-1,color:gaz.c,name:gaz.name,focus:1}],
+    chips:chipsNo(roomC,0,1),
+    chain:{r:0,s:1,items:[{a:210,b:365,v:155},{a:365,b:395,v:null},{a:395,b:440,v:45}]}}))
+  + view('ph') + pop(380, 62, 'c', 't', delBtn)
+  + hint('Trage pătratul pe perete.<br>Trage-l peste perete ca să-l muți pe partea cealaltă.') + lmTools('select','ph',gaz));
+screen('pPlace1-dk','dk','A',
+  drw(lmRoom({k:V.dkTop.k, vb:V.dkTop.vb, marks:[{r:0,s:1,at:380,side:-1,color:gaz.c,name:gaz.name,focus:1}],
+    chips:chipsNo(roomC,0,1),
+    chain:{r:0,s:1,items:[{a:210,b:365,v:155},{a:365,b:395,v:null},{a:395,b:440,v:45}]}}))
+  + view('dk') + pop(340, 95, 'r', 't', delBtn)
+  + hint('Trage pătratul pe perete. Trage-l peste perete ca să-l muți pe partea cealaltă.') + lmTools('select','dk',gaz));
+screen('pPlaced-dk','dk','A',
+  drw(lmRoom({k:kDK_R, vb:DK_R, marks:[
+    {r:0,s:1,at:380,side:-1,color:gaz.c,name:gaz.name},
+    {r:0,s:0,at:150,side:-1,color:LM[0].c,name:LM[0].name},
+    {r:0,s:2,at:110,side:-1,color:calorifer.c,name:calorifer.name},
+    {r:0,s:2,at:220,side:-1,color:LM[3].c,name:LM[3].name}]}))
+  + view('dk') + hint('Dă clic pe un pătrat ca să-l muți sau să-l ștergi.') + lmTools('select','dk',calorifer));
+
+/* the one-slide tutorial for the landmark mechanic */
+const lmBar = (dv, cls) => {
+  const d = SCR[dv];
+  if(dv==='ph'){
+    let s = `<rect x="5" y="6" width="190" height="40" rx="3" fill="#fff" stroke="#CFCEC8" stroke-width=".8"/>`;
+    [['select','Selectează',null],['sq','Gaz',gaz.c]].forEach(([gl,label,col],i)=>{ const x = 8 + 93*i;
+      s += `<g class="mpill ${cls[i]||''}"><rect class="bg" x="${x}" y="9" width="91" height="34" rx="2.5"/>
+        ${col ? `<rect x="${x+38}" y="13" width="9" height="9" rx="1" style="fill:${col};stroke:none"/>` : `<g class="mg" transform="translate(${x+39},13) scale(.65)">${G[gl]}</g>`}
+        <text x="${x+45.5}" y="39" text-anchor="middle">${label}</text></g>`; });
+    return s;
+  }
+  let s = `<rect x="86" y="5" width="148" height="30" rx="3" fill="#fff" stroke="#CFCEC8" stroke-width=".8"/>`;
+  [['select','Selectează',null],['sq','Gaz',gaz.c]].forEach(([gl,label,col],i)=>{ const x = 89 + 72*i;
+    s += `<g class="mpill ${cls[i]||''}"><rect class="bg" x="${x}" y="8" width="70" height="24" rx="2.5"/>
+      ${col ? `<rect x="${x+4}" y="15" width="9" height="9" rx="1" style="fill:${col};stroke:none"/>` : `<g class="mg" transform="translate(${x+3},12) scale(.8)">${G[gl]}</g>`}
+      <text x="${x+19}" y="22.5">${label}</text></g>`; });
+  return s;
+};
+const lmPill = dv => dv==='ph' ? [[53.5,26],[146.5,26]] : [[124,20],[196,20]];
+function lmStage(dv){
+  const d = SCR[dv], g = mapper(dv), sq = g.L(30), fs = g.P(12.5);
+  const at = 330;
+  const label = `<rect x="${-g.P(38)}" y="${sq/2 + g.P(4)}" width="${g.P(76)}" height="${g.P(22)}" rx="${g.P(3)}" fill="#fff" stroke="${gaz.c}" stroke-width="${g.P(1)}"/>`
+    + `<text x="0" y="${sq/2 + g.P(4) + g.P(15)}" text-anchor="middle" font-family="Figtree,Arial" font-size="${fs}" fill="${gaz.c}">Gaz</text>`;
+  return `<svg class="sm${dv} sc${dv} kB" viewBox="0 0 ${d.W} ${d.H}" preserveAspectRatio="xMidYMid meet"><g class="cam">${d.chrome}
+    ${drw({k:g.k, vb:MINI_VB, nest:d.nest, runs:SROOM,
+      chips:[{r:0,s:0,v:300},{r:0,s:1,v:440},{r:0,s:2,v:300,d:1},{r:0,s:3,v:180,d:1},{r:1,s:0,v:260,d:1}],
+      open:[{r:0,s:1,at:150,w:60,type:'win'}]})}
+    ${tapAt(g.X(at), g.Y(0), '2')}
+    <g class="placed">${sChip(g, 270, -75, '105')}${sChip(g, 393, -75, '95')}
+      <line x1="${g.X(210)}" y1="${g.Y(-40)}" x2="${g.X(315)}" y2="${g.Y(-40)}" stroke="${place}" stroke-width="${g.P(1)}"/>
+      <line x1="${g.X(345)}" y1="${g.Y(-40)}" x2="${g.X(440)}" y2="${g.Y(-40)}" stroke="${place}" stroke-width="${g.P(1)}"/></g>
+    <g class="markMove"><rect x="${-sq/2}" y="${-sq/2}" width="${sq}" height="${sq}" fill="${gaz.c}"/>${label}</g>
+    ${sHint(dv, dv==='ph' ? 'Atinge peretele unde e gazul.' : 'Dă clic pe peretele unde e gazul.', 'Trage pătratul pe perete sau peste el.')}
+    ${lmBar(dv, ['selPill','armPill'])}${tapAt(...lmPill(dv)[1])}</g></svg>`;
+}
+const lmSlide = dv => `<div class="scrim" style="z-index:3"></div><div class="onb">
+  <div class="ot"><span class="ct">Gaz</span><span class="lnk">Sari peste</span></div>
+  <div class="stage">${lmStage(dv)}</div>
+  <div class="q2">Arată unde se află</div>
+  <p>${dv==='ph'
+    ? 'Atinge peretele lângă care se află. Apoi trage pătratul pe perete, sau peste el, dacă e pe partea cealaltă. Numerele îți arată cât e până la colț sau până la următorul lucru de pe perete.'
+    : 'Dă clic pe peretele lângă care se află. Apoi trage pătratul pe perete, sau peste el, dacă e pe partea cealaltă. Numerele îți arată cât e până la colț sau până la următorul lucru de pe perete.'}</p>
+  <div class="ob"><span class="lnk"></span><span class="dots"><i class="on"></i></span><span class="btn fill">Am înțeles</span></div>
+</div>`;
+screen('pLmSlide-ph','ph','A', drw(lmRoom({k:kPH_R, vb:PH_R})) + view('ph') + lmTools('lm','ph',gaz), {on:false, overlay:lmSlide('ph')});
+screen('pLmSlide-dk','dk','A', drw(lmRoom({k:kDK_R, vb:DK_R})) + view('dk') + lmTools('lm','dk',gaz), {on:false, overlay:lmSlide('dk')});
+
+(function lmCss(){
+  const css = [];
+  const kf = (n, b) => css.push(`@keyframes ${n}{${b}}`);
+  const tr = (d, t) => t ? `translate(${(d.cx - t[2]*t[0]).toFixed(1)}px,${(d.cy - t[2]*t[1]).toFixed(1)}px) scale(${t[2]})` : 'translate(0px,0px) scale(1)';
+  const xy = p => `${p[0]}px,${p[1]}px`;
+  css.push(`.stage .markMove{opacity:0}`);
+  ['ph','dk'].forEach(dv=>{
+    const d = SCR[dv], g = mapper(dv), Z = d.zs;
+    const zoom = dv==='ph' ? [100, 175, 1.5] : [g.X(330), g.Y(40), 2.1];
+    kf(`camlm${dv}`, [[0,11,[...lmPill(dv)[1], Z]],[19,30,null],[38,60,zoom],[68,100,zoom]]
+      .map(([a,b,t])=>`${a}%,${b}%{transform:${tr(d,t)}}`).join(''));
+    css.push(`.sm${dv} .cam{animation:camlm${dv} 8s ease-in-out infinite}`);
+    const inside = [g.X(330), g.Y(23)], along = [g.X(390), g.Y(23)], outside = [g.X(390), g.Y(-23)];
+    kf(`mark${dv}`, `0%,25%{opacity:0;transform:translate(${xy(inside)})}30%,66%{opacity:1;transform:translate(${xy(inside)})}78%{transform:translate(${xy(along)})}88%,100%{transform:translate(${xy(outside)})}`);
+    css.push(`.sm${dv} .markMove{animation:mark${dv} 8s ease-in-out infinite}`);
+  });
+  document.head.insertAdjacentHTML('beforeend', `<style>${css.join('\n')}</style>`);
+})();
+
+/* ---------------- place the plates that sit next to a selected thing ---------------- */
+function placePops(){
+  document.querySelectorAll('.pop[data-cx]').forEach(el=>{
+    const cv = el.closest('.canvas'), svg = cv && cv.querySelector('svg.plan');
+    if(!svg || !svg.getScreenCTM()) return;
+    const p = svg.createSVGPoint(); p.x = +el.dataset.cx; p.y = +el.dataset.cy;
+    const q = p.matrixTransform(svg.getScreenCTM()), r = cv.getBoundingClientRect();
+    if(el.closest('.ph')){                    // phone: docked bottom centre, clear of the drawing
+      el.style.left = '50%'; el.style.top = 'auto'; el.style.bottom = '74px';
+      el.style.transform = 'translateX(-50%)';
+      return;
+    }
+    const tx = {l:'0', c:'-50%', r:'-100%'}[el.dataset.ax], ty = {t:'0', m:'-50%', b:'-100%'}[el.dataset.ay];
+    el.style.left = (q.x - r.left) + 'px'; el.style.top = (q.y - r.top) + 'px';
+    el.style.transform = `translate(${tx},${ty})`;
+  });
+}
+placePops();
+window.addEventListener('resize', placePops);
+document.querySelectorAll('details').forEach(d=> d.addEventListener('toggle', placePops));
+</script>
+</body>
+</html>

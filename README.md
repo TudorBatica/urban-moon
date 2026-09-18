@@ -10,13 +10,16 @@ packages/
   domain-data/           the shared source of truth: question catalog, answer + manifest schemas,
                          upload limits, fixture submissions
   bucket/                the Cloud Storage client both apps use (Google or the emulator)
+e2e/                     the end-to-end suite: Playwright journeys through the whole local system, with a
+                         HubSpot fake (not built yet: docs/backlog/e2e-harness.md)
 docs/
   README.md              the map: where things are, which doc to read when
   architecture/          how the built system works: overview, flow, storage, security; adr/ for decisions
   backlog/               one file per piece of work not built yet
-  code/                  coding standards
+  code/                  coding standards, testing conventions
   operations/            infrastructure inventory, deploying, the runbook, observability
-  ux/                    the design language of the questionnaire
+  ux/                    what the client sees: the design language (design.md), shared parts,
+                         one doc per screen group (screens/), mockups; index in ux/README.md
 infra/                   deploy settings (deploy/web.env, deploy/worker.env), bucket CORS, image cleanup,
                          alert policy templates (not applied yet)
 CLAUDE.md                what every agent loads: the system in brief, the rules for all agents
@@ -34,6 +37,8 @@ npm run deps:up        # the Cloud Storage emulator on :4443, with the um-submis
 npm run dev            # the questionnaire on http://localhost:5173
 npm run check          # type-check every package
 npm test               # every package's tests
+npm run e2e            # the smoke journeys through the whole local system (starts what it needs; Docker running)
+npm run e2e:full       # every journey · e2e:report opens the last report · once per machine: npx playwright install chromium
 npm run build          # build what has a build (the web app)
 npm run pdf:demo       # build PDFs from the fixture submissions → apps/input-pdf-worker/out/demo/
 npm run worker:dev     # the PDF worker on :3001, working through pending/ every minute

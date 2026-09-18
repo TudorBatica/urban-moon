@@ -25,6 +25,9 @@ are in `docs/architecture/` and its ADRs.
   `submit.ts`.
 - **Settings come from the environment**, never hard-coded values that differ between local and
   deployed runs.
+- **Outbound integrations take their base URL from the environment** (HubSpot today), with the
+  real address as the default, so a local fake can stand in for them in the end-to-end suite and
+  no test ever reaches a real account.
 
 ## Language and types
 
@@ -46,4 +49,6 @@ are in `docs/architecture/` and its ADRs.
 
 - **Unit tests sit next to the code** as `*.test.ts`, run by vitest, with no services: fakes and
   in-memory implementations instead.
+- **End-to-end journeys live in `e2e/`** as `*.spec.ts`, run by Playwright against the local
+  system, by the conventions in `testing.md`. Code under `e2e/` follows every rule on this page.
 - **`npm test` from the root must pass** before a change is done.

@@ -13,5 +13,6 @@ The map of the repo and its docs: `docs/README.md`.
 - Never deploy, and never run a command that changes cloud resources or the HubSpot account.
   Prepare the commands; a person runs them.
 - Never commit unless asked.
-- Never point a local `.env` at the real HubSpot account.
+- Never point a local `.env` at the real HubSpot account. Tests, unit or end-to-end, run only
+  against the local system: the emulator, the local apps and the HubSpot fake.
 - Code never references docs (`docs/code/standards.md`).

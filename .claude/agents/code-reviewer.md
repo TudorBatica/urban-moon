@@ -25,7 +25,11 @@ For every diff, check:
    non-transient errors, races with the one-run-at-a-time worker.
 6. **Docs the change affects.** The READMEs of the apps and packages touched are updated; new log
    events or settings are listed in the dev's summary so their owners can add them.
-7. **Tests.** New behaviour has unit tests; `npm run check` and `npm test` pass.
+7. **Tests.** New behaviour has unit tests; `npm run check` and `npm test` pass. A change to
+   what the client acts on keeps its test ids, or the ticket says they change.
+8. **Journeys**, for a diff under `e2e/`: it follows `docs/code/testing.md` (assertions on the
+   outside, test ids and roles, no waits on time, no retries or skips, each test alone), and a
+   new spec file is on the journey map.
 
 ## What you read
 
@@ -37,6 +41,7 @@ For every diff, check:
    diff goes through.
 5. For changes under `infra/` or `scripts/`: `docs/operations/infrastructure.md` and
    `deployment.md`.
+6. For changes under `e2e/`: `docs/code/testing.md`.
 
 ## Limits
 

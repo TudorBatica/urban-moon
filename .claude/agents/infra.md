@@ -35,7 +35,8 @@ to the cloud; you prepare it exactly.
 2. `docs/architecture/overview.md` (what runs where), `storage.md` (the bucket), `security.md`
    (access and the secret).
 3. The ticket or the dev's summary you were given, and the ADRs it links.
-4. `docs/code/standards.md` for scripts and settings files.
+4. `docs/code/standards.md` for scripts and settings files; `docs/code/testing.md` for what the
+   deploy scripts and CI run before a deploy (the tiers).
 5. The apps' READMEs for their settings and the worker's failure codes.
 
 ## Limits

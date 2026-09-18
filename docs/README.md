@@ -14,6 +14,7 @@ Where things are in this repo, and which doc answers what.
 | `packages/bucket` | The Cloud Storage client both apps use, for Google and the local emulator. |
 | `infra/` | How the infrastructure is managed: deploy settings (`infra/deploy/*.env`), bucket CORS, image cleanup policy, alert policy templates. |
 | `scripts/` | The deploy scripts and the local bucket inspector. |
+| `e2e/` | The end-to-end suite: the Playwright harness, the HubSpot fake, the journeys and their data. Not built yet: `backlog/e2e-harness.md`. |
 | `docs/` | Knowledge about the system, below. |
 | `.claude/agents/` | The agents that work on this repo, their responsibilities and what each reads. |
 
@@ -32,7 +33,11 @@ Root commands (install, local run, check, test, bucket inspection, deploy) are i
 | `architecture/adr/` | a ticket links a decision, or you are about to reverse a system-wide rule |
 | `backlog/` | you are given a ticket, or planning what to build: one file per unbuilt piece of work |
 | `code/standards.md` | you write or review code |
-| `ux/design.md` | you change or review anything the client sees |
+| `code/testing.md` | you write, run or review an end-to-end journey, or decide which tier runs before a deploy |
+| `ux/README.md` | you need to find a UX doc: the index of `ux/` |
+| `ux/design.md` | you change or review anything the client sees: the design language every screen follows |
+| `ux/components.md` | you build or review a screen: the shared UI parts and where they live |
+| `ux/screens/*.md` | you touch the questionnaire, the plans step, the drawing editor or the screens after it (ceiling height, landmarks): what those screens do for the client |
 | `operations/infrastructure.md` | you need what exists in the cloud: resources, identities, addresses |
 | `operations/deployment.md` | you prepare a release or change deploy settings |
 | `operations/runbook.md` | something is wrong in production, or a submission must be re-run |
