@@ -9,8 +9,8 @@
 	import GoBar from '$lib/ui/GoBar.svelte';
 	import Note from '$lib/ui/Note.svelte';
 
-	/** Where the height leads next; the landmark cards take this place later. */
-	const AFTER = '/planuri';
+	/** Where the height leads next: what else the room has. */
+	const AFTER = '/deseneaza/repere';
 
 	let height = $state(String(plans.drawing?.room?.ceilingHeightCm ?? ''));
 	let saving = $state(false);

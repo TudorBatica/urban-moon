@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { DRAWING_TOOLS } from './tools';
-import { DRAWING_SLIDES, LAST_LABEL, NEXT_LABEL, slideView } from './tutorialSlides';
+import {
+	DRAWING_SLIDES,
+	GOT_IT_LABEL,
+	LANDMARK_SLIDES,
+	LAST_LABEL,
+	NEXT_LABEL,
+	slideView
+} from './tutorialSlides';
 
 describe('the drawing slides', () => {
 	it('are one per tool, in the order the client meets them', () => {
@@ -26,6 +33,25 @@ describe('the drawing slides', () => {
 		}
 		expect(DRAWING_SLIDES[0].phone).toContain('degetul');
 		expect(DRAWING_SLIDES[2].desktop).toContain('dă clic');
+	});
+});
+
+describe('the landmark slide', () => {
+	it('is one, about the mechanic rather than a tool', () => {
+		expect(LANDMARK_SLIDES).toHaveLength(1);
+		expect(LANDMARK_SLIDES[0].id).toBe('landmark');
+		expect(LANDMARK_SLIDES[0].title).toBe('Arată unde se află');
+	});
+
+	it('says it in both the touch words and the mouse words', () => {
+		expect(LANDMARK_SLIDES[0].phone).toContain('Atinge');
+		expect(LANDMARK_SLIDES[0].desktop).toContain('Dă clic');
+	});
+
+	it('has nothing to go back to, and closes on "Am înțeles"', () => {
+		const v = slideView(LANDMARK_SLIDES, 0, 'phone', GOT_IT_LABEL);
+		expect(v.showBack).toBe(false);
+		expect(v.nextLabel).toBe(GOT_IT_LABEL);
 	});
 });
 

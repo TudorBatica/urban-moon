@@ -8,18 +8,24 @@
 	interface Props {
 		/** An engine model from a previous session — restored with setModel. */
 		initialModel?: unknown;
+		/** the step this editor is for: drawing the plan, or placing landmarks on it */
+		mode?: 'plan' | 'landmarks';
+		/** in landmarks mode, the kind the tool places */
+		landmarkKind?: string;
 		onchange?: (room: RoomSnapshot) => void;
 		/** the client asked how to draw: the hint's link, or the ? key */
 		onhelp?: () => void;
 	}
 
-	let { initialModel, onchange, onhelp }: Props = $props();
+	let { initialModel, mode = 'plan', landmarkKind, onchange, onhelp }: Props = $props();
 
 	let host: HTMLDivElement;
 	let api: FloorplanHandle | null = null;
 
 	onMount(() => {
 		api = mountFloorplan(host, {
+			mode,
+			landmarkKind,
 			onChange: (r: RoomSnapshot) => onchange?.(r),
 			onHelp: onhelp ? () => onhelp?.() : undefined
 		});

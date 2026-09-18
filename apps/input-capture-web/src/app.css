@@ -6,6 +6,10 @@
   --sans:"Figtree", "Helvetica Neue", Arial, sans-serif;
   --serif:"Playfair Display", Georgia, serif;
   --r:4px;
+  /* the only hues in the product: one per kind of landmark the client places on a plan, used on
+     the mark, its name chip and the tool that places it, and nowhere else */
+  --apa:#2F6F9F; --gaz:#C08A1E; --centrala:#3E7D5A; --aer:#6E63A6;
+  --semineu:#B4553A; --calorifer:#8A6244; --hota:#9B4A86;
   /* motion: three durations, one exit curve, one curve with a slight recoil */
   --fast:180ms; --base:320ms; --slow:560ms;
   --ease:cubic-bezier(.2,.7,.2,1); --spring:cubic-bezier(.34,1.4,.4,1);

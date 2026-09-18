@@ -12,6 +12,8 @@ export type { Provenance, RoomSegment, RoomSnapshot, RoomWall };
 /** The engine's internal, opaque editing model — what getModel/setModel move. */
 export interface FloorplanModel {
 	walls: unknown[];
+	/** absent on a model saved before landmarks existed: it has none */
+	landmarks?: unknown[];
 	/** a model saved by an earlier editor still carries it; setModel ignores it */
 	ceilingHeightCm?: number | null;
 }
@@ -21,6 +23,14 @@ export interface MountFloorplanOptions {
 	onChange?: (room: RoomSnapshot) => void;
 	/** Asked for the help: the link at the end of the hint, or the ? key. Without it neither exists. */
 	onHelp?: () => void;
+	/**
+	 * The step this mounting is for. `plan` draws and changes the plan;
+	 * `landmarks` places one kind of landmark on a plan already drawn, leaving
+	 * the walls and the openings drawn but untouchable.
+	 */
+	mode?: 'plan' | 'landmarks';
+	/** in `landmarks` mode, the kind the tool places, armed at mount */
+	landmarkKind?: string;
 	/** The tools the plate offers; the first is the resting one. */
 	tools?: ToolDef[];
 	/** Where the seen-once flags are kept; defaults to the browser's localStorage. */

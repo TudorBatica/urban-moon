@@ -19,6 +19,7 @@ export const SKIP_LABEL = 'Sari peste';
 export const BACK_LABEL = 'Înapoi';
 export const NEXT_LABEL = 'Mai departe';
 export const LAST_LABEL = 'Încep să desenez';
+export const GOT_IT_LABEL = 'Am înțeles';
 
 export const DRAWING_SLIDES: SlideDef[] = [
 	{
@@ -63,6 +64,22 @@ export const DRAWING_SLIDES: SlideDef[] = [
 	}
 ];
 
+/**
+ * The one slide of the landmark step: the mechanic, not a tool. It plays over
+ * the placing screen the first time a landmark is about to be placed, and the
+ * landmark's own name stands where the position would.
+ */
+export const LANDMARK_SLIDES: SlideDef[] = [
+	{
+		id: 'landmark',
+		title: 'Arată unde se află',
+		phone:
+			'Atinge peretele lângă care se află. Apoi trage pătratul pe perete, sau peste el, dacă e pe partea cealaltă. Numerele îți arată cât e până la colț sau până la următorul lucru de pe perete.',
+		desktop:
+			'Dă clic pe peretele lângă care se află. Apoi trage pătratul pe perete, sau peste el, dacă e pe partea cealaltă. Numerele îți arată cât e până la colț sau până la următorul lucru de pe perete.'
+	}
+];
+
 export interface SlideView {
 	slide: SlideDef;
 	/** where in the set this one is, zero-based and inside the set */
@@ -75,8 +92,17 @@ export interface SlideView {
 	nextLabel: string;
 }
 
-/** What the surface shows for one step of a set, with the step clamped inside it. */
-export function slideView(slides: readonly SlideDef[], step: number, device: Device): SlideView {
+/**
+ * What the surface shows for one step of a set, with the step clamped inside
+ * it. `lastLabel` is what the button on the final slide says, since it names
+ * what happens next and that differs per set.
+ */
+export function slideView(
+	slides: readonly SlideDef[],
+	step: number,
+	device: Device,
+	lastLabel: string = LAST_LABEL
+): SlideView {
 	const index = Math.min(Math.max(Math.trunc(step), 0), slides.length - 1);
 	const slide = slides[index];
 	const last = index === slides.length - 1;
@@ -86,6 +112,6 @@ export function slideView(slides: readonly SlideDef[], step: number, device: Dev
 		position: index + 1 + ' / ' + slides.length,
 		paragraph: device === 'phone' ? slide.phone : slide.desktop,
 		showBack: index > 0,
-		nextLabel: last ? LAST_LABEL : NEXT_LABEL
+		nextLabel: last ? lastLabel : NEXT_LABEL
 	};
 }

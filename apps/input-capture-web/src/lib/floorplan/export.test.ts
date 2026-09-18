@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { roomToSvg, svgToPngDataUrl } from './export';
-import type { Provenance, RoomSegment, RoomSnapshot, RoomWall } from '$lib/types';
+import type { Provenance, RoomLandmark, RoomSegment, RoomSnapshot, RoomWall } from '$lib/types';
 
 /* The fixture is built by hand from the snapshot types, not captured from the
    engine: the export has to render whatever those types allow. A closed
@@ -95,9 +95,16 @@ function planLayer(svg: string): string {
 
 /** Every `<n> cm` label the dimensions layer carries, in document order. */
 function dimLabels(svg: string): string[] {
-	const layer = /<g data-layer="dimensions">([\s\S]*)<\/g><g data-layer="note">/.exec(svg);
+	const layer = /<g data-layer="dimensions">([\s\S]*)<\/g><g data-layer="landmarks">/.exec(svg);
 	expect(layer).not.toBeNull();
 	return [...(layer as RegExpExecArray)[1].matchAll(/data-dim="([^"]+)"/g)].map((m) => m[1]);
+}
+
+/** The landmark layer's own markup. */
+function landmarkLayer(svg: string): string {
+	const layer = /<g data-layer="landmarks">([\s\S]*?)<\/g><g data-layer="note">/.exec(svg);
+	expect(layer).not.toBeNull();
+	return (layer as RegExpExecArray)[1];
 }
 
 describe('roomToSvg', () => {
@@ -193,6 +200,66 @@ describe('roomToSvg', () => {
 		const empty = roomToSvg({ ...room, walls: [], openings: [], outline: [], closed: false });
 		expect(empty).toContain('<svg xmlns');
 		expect(dimLabels(empty)).toHaveLength(0);
+	});
+});
+
+describe('the landmarks on the exported plan', () => {
+	const marks: RoomLandmark[] = [
+		{
+			id: 'mark1',
+			kind: 'gas',
+			wallId: 'w1',
+			offsetFromStartCm: 300,
+			face: 'in',
+			gapBeforeCm: 45,
+			gapAfterCm: 90
+		},
+		{
+			id: 'mark2',
+			kind: 'radiator',
+			wallId: 'w2',
+			offsetFromStartCm: 20,
+			face: 'out',
+			gapBeforeCm: 20,
+			gapAfterCm: 45
+		}
+	];
+	const svg = roomToSvg({ ...room, landmarks: marks }, { widthPx: 1200 });
+
+	it('draws one square per landmark, each in its own colour', () => {
+		const layer = landmarkLayer(svg);
+		expect([...layer.matchAll(/<polygon [^>]*\/>/g)]).toHaveLength(2);
+		expect(layer).toContain('fill="#C08A1E"'); // gaz
+		expect(layer).toContain('fill="#8A6244"'); // calorifer
+	});
+
+	it('names each one on a chip in the same colour', () => {
+		const layer = landmarkLayer(svg);
+		expect(layer).toContain('>Gaz</text>');
+		expect(layer).toContain('>Calorifer</text>');
+		expect(layer).toContain(`fill="${PAPER}" stroke="#C08A1E"`);
+	});
+
+	it('draws the square 30 cm on a side, at the plan\'s own scale', () => {
+		const layer = landmarkLayer(svg);
+		const first = /<polygon points="([^"]+)"/.exec(layer);
+		expect(first).not.toBeNull();
+		const pts = (first as RegExpExecArray)[1]
+			.split(' ')
+			.map((p) => p.split(',').map(Number) as [number, number]);
+		const xs = pts.map((p) => p[0]);
+		const ys = pts.map((p) => p[1]);
+		expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(30, 6);
+		expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(30, 6);
+	});
+
+	it('states no distance: the list beside the plan carries those', () => {
+		expect(dimLabels(svg)).toEqual(dimLabels(roomToSvg(room, { widthPx: 1200 })));
+		expect(landmarkLayer(svg)).not.toContain('data-dim');
+	});
+
+	it('draws nothing where a snapshot has no landmarks', () => {
+		expect(landmarkLayer(roomToSvg(room))).toBe('');
 	});
 });
 

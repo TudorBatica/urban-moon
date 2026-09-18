@@ -5,7 +5,7 @@
 
 export const SEEN_KEY = 'um.draw.seen';
 
-export type SeenFlag = 'zoomHint' | 'slides';
+export type SeenFlag = 'zoomHint' | 'slides' | 'landmarkSlide';
 
 export interface SeenStorage {
 	getItem(key: string): string | null;

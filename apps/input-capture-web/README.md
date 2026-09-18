@@ -47,12 +47,14 @@ src/lib/flow/                 engine.ts (navigation, completeness, chrome) + the
 src/lib/questions/            readback.ts (the "Ce am înțeles" lines) · icons.ts (unused clay set)
 src/lib/ui/                   Frame (photo + side shell) · GoBar · Note · Keyed · Seg · CountRow · Reveal · Field · Roll
                               motion.ts (durations, curves, transitions) · images.ts (Unsplash ids, art per screen)
-                              lineIcons.ts (appliance + coffee drawings) · lineMap.ts
+                              lineIcons.ts (appliance, coffee and landmark drawings) · lineMap.ts
 src/lib/plans/                Dropzone · FileTile · DrawingCard · PhotoField · Thumb · Rejections
 src/lib/floorplan/            engine.js (the editor: geometry, rendering, pointers) · engine.css
                               tools.ts (which tool is on) · view.ts (fit, zoom, pan, the limits)
                               chain.ts (the chain of numbers on a wall, and where each one sits)
                               slide.ts (how far a window or a door travels while it is dragged)
+                              landmarks.ts (where a landmark may sit, and how it follows its wall)
+                              marks.ts (the one map from a landmark kind to its colour, token and literal)
                               glyphs.ts (the 20x20 tool and view glyphs, as markup)
                               drawing.ts (builds and saves the Drawing) · seen.ts ("um.draw.seen")
                               device.ts (touch words or mouse words) · tutorialSlides.ts (the help)
@@ -62,7 +64,7 @@ src/lib/submit/               submit.ts (uploads + commit) · resumable.ts (chun
 src/lib/server/               config.ts (env) · uploads.ts (session start) · commit.ts (checks + manifest)
                               objects.ts (object names) · log.ts · bucket.ts (re-exports @urban-moon/bucket)
 src/routes/                   / · /cuprins · /planuri · /deseneaza · /deseneaza/tavan · /rezumat
-                              /programare · /multumim
+                              /deseneaza/repere · /deseneaza/repere/[kind] · /programare · /multumim
                               /api/health · /api/uploads/start · /api/submissions/[id]/commit
 src/routes/+layout.ts         ssr = false — every screen is driven by browser state
 tools/icons/                  clay.mjs · build.mjs — the old icon set; nothing renders it since the redesign
@@ -96,7 +98,9 @@ limits live in `../../packages/domain-data`.
   `chain-piece`, `chain-gap-after`) instead. `chain.ts` decides what the chain is — each gap runs
   to the first obstacle on its side, the wall's own ends included, and a gap of zero is dropped —
   and where each number goes: one too narrow for its span steps out one lane on a leader, and two
-  such in a row are pushed apart. The gaps are read-only. A wall off screen shows no number.
+  such in a row are pushed apart. An obstacle the piece shares its stretch of wall with bounds the
+  gap too, at whichever of its own edges lies beyond the piece, so no run is ever drawn across a
+  jamb it does not stop at. The gaps are read-only. A wall off screen shows no number.
 - **An opening slides along a run of walls.** `slide.ts` builds the run — the walls that carry on
   into one another from the one it sits on, a ring coming back as one closed run that travel wraps
   round — and says which wall of it the opening lands on (always wholly one, changing over as its
@@ -107,23 +111,63 @@ limits live in `../../packages/domain-data`.
 - **The ceiling height** is asked on `/deseneaza/tavan` and lives on the saved drawing's own
   snapshot (`drawing.room.ceilingHeightCm`), not in the engine's model; a model saved by an
   earlier editor still carries it, and `setModel` accepts and ignores it.
+- **Landmarks are the step after the ceiling height.** `/deseneaza/repere` offers the seven kinds
+  of `LANDMARK_KINDS` as object cards (`landmark-card-<kind>`, with `aria-pressed` and
+  `data-count` read off `plans.drawing.room.landmarks`); nothing there has to be answered, and the
+  arrow goes on to `/planuri`. Picking a card opens `/deseneaza/repere/<kind>`, which mounts the
+  same engine with `mode: 'landmarks'` and that `landmarkKind`: the tool plate holds Selectează
+  and the landmark alone, walls and openings are drawn but take no pointer and their numbers are
+  read-only chips rather than fields, and "Gata" saves through `drawing.ts` exactly as the plan
+  step does. An unknown kind goes back to the cards.
+- **A landmark lives in the engine's model** (`model.landmarks`: id, kind, wallId, the offset of
+  its near edge, face), so it is undone, dragged and reported like everything else; a model saved
+  before they existed loads with none. `landmarks.ts` is the pure part: where a tap may put one
+  (centred, clamped, moved along to the nearest free stretch, refused on a Fără perete side), how
+  far a drag gets (its own free stretch, stopping against a landmark on the same face), which face
+  a pointer is asking for, and how one follows its wall when that wall is resized, split, merged
+  or deleted. Every wall edit ends in one settling pass (`settleOnWalls`) that puts each landmark
+  back on what its wall still allows — on the wall, off a stretch with nothing built, and clear of
+  the landmarks sharing its face — because clamping alone would leave two of them on the same spot
+  when a wall shortens or a split drops both onto one piece. It runs to the same answer however
+  many times it runs. A wall that can no longer hold one — shortened past the square, turned into
+  a Fără perete side, or cut into a piece too short — keeps it all the same, clamped to the wall's
+  start: `showsOnWall` is what decides that it is neither drawn nor touchable nor carried by the
+  snapshot until the wall can hold it again, and it is also what stops a drag travelling onto such
+  a wall, so an edit elsewhere never throws the client's answer away and the snapshot never states
+  a landmark that does not fit the wall it names. Only a deleted wall takes its landmarks with it.
+  `buildRoomSnapshot` reports them with `gapBeforeCm`/`gapAfterCm` measured by `chain.ts` — an
+  opening's jamb, another landmark's edge on either face, a corner, a free end and the start of a
+  Fără perete side all stop a gap, and a landmark may overlap an opening but never another
+  landmark on its own face. A radiator under a window measures to that window's jambs, not past
+  them.
+- **A mark is drawn in cm and named in px**: the square is `LANDMARK_SIZE_CM` against its wall's
+  band on its face, so it scales with the plan (`landmark-<id>`, with `data-kind` and
+  `data-face`), while its name rides in the HTML layer beside it and keeps its screen size. Colour
+  is the one place the product has any: it comes from the custom properties `app.css` defines,
+  through the single kind-to-colour map in `marks.ts`, and reaches only the square, its name chip
+  and the square that stands for the landmark in the tool plate. The exported plan draws the same
+  two things from that map's literals, since an SVG document string has no stylesheet to read.
 - **Saving the plan has no checks**: an open outline, drawn lengths and an unchanged sill are
   saved as they are. `setDrawing` throws when the browser refuses the write, which is what the
   save-failed note is for; deleting the drawing on `/planuri` reports a refused write in that
   screen's own rejection line.
 - **The slides are the editor's only help.** Five, one per tool, defined as data in
-  `tutorialSlides.ts` with a paragraph for each device; `Slides.svelte` shows a set of them and
-  `slideView` says what one step looks like (position, paragraph, whether "Înapoi" is there, what
-  the button says). They are mounted by `/deseneaza`, not by the engine, so opening and closing
-  them touches neither the model nor the view; while they are open the engine's keys stand down.
+  `tutorialSlides.ts` with a paragraph for each device, plus the one-entry `LANDMARK_SLIDES` the
+  placing screen opens the first time; `Slides.svelte` shows a set of them and `slideView` says
+  what one step looks like (position, paragraph, whether "Înapoi" is there, what the button says,
+  which the caller names for the last one — "Încep să desenez" for the drawing set, "Am înțeles"
+  for the landmark one, whose position text is the landmark's own name). They are mounted by the
+  screen, not by the engine, so opening and closing them touches neither the model nor the view;
+  while they are open the engine's keys stand down.
   The engine's `onHelp` is what the "Cum desenez" link at the end of the hint line and the `?` key
   call; without it the engine renders no link and `?` does nothing. `SlideStage.svelte` is a
-  placeholder: a still box with the tool's glyph, marked `data-placeholder="true"`.
+  placeholder: a still box with the tool's glyph, or, for the landmark slide, a square in that
+  landmark's colour; marked `data-placeholder="true"`.
 - **Touch words or mouse words** (`device.ts`): a screen starts from `(pointer: coarse)` and then
   follows whatever pointer was last used, the same rule the engine's hint line follows.
 - **Seen once per browser**: `um.draw.seen`, one JSON object, read and written through `seen.ts`
-  with storage injected — `zoomHint` and `slides` (written whenever the slides close, however they
-  close). Starting the questionnaire again does not clear it.
+  with storage injected — `zoomHint`, `slides` and `landmarkSlide` (each written whenever its
+  slides close, however they close). Starting the questionnaire again does not clear it.
 - **Sending is pure and injectable** (`submit.ts`): fetch, blob lookup, storage, ids and sleeps all
   arrive as options, so the tests drive a whole send without a browser or a bucket.
 - **The server only handles small JSON.** File bytes go from the browser straight to the bucket.

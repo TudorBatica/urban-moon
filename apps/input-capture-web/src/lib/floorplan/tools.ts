@@ -15,7 +15,7 @@ export interface ToolDef {
 	key: string;
 	gesture: ToolGesture;
 	/** what the tool makes, for the engine to act on */
-	makes?: 'wall' | 'open' | 'window' | 'door';
+	makes?: 'wall' | 'open' | 'window' | 'door' | 'landmark';
 	/** it has nothing to work on until there is a wall */
 	needsWall?: boolean;
 }
@@ -59,8 +59,10 @@ export function toolById(tools: readonly ToolDef[], id: ToolId): ToolDef | null 
 	return tools.find((t) => t.id === id) ?? null;
 }
 
+/** A tool with no key of its own is reachable by pointer only: no key picks it. */
 export function toolForKey(tools: readonly ToolDef[], key: string): ToolDef | null {
 	const k = key.toLowerCase();
+	if (k === '') return null;
 	return tools.find((t) => t.key === k) ?? null;
 }
 

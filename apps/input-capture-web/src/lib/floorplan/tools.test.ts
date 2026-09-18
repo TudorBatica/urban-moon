@@ -147,4 +147,16 @@ describe('another list of tools', () => {
 		expect(applyToolEvent(marks, 'gaz', { type: 'use', made: true }, drawn).active).toBe('select');
 		expect(applyToolEvent(marks, 'select', { type: 'pick', id: 'wall' }, drawn).handled).toBe(false);
 	});
+
+	it('leaves a tool with no key of its own to the pointer', () => {
+		const pointerOnly = [
+			{ id: 'select', label: 'Selectează', key: 'v', gesture: 'none' as const },
+			{ id: 'landmark', label: 'Gaz', key: '', gesture: 'tap' as const, needsWall: true }
+		];
+		expect(toolForKey(pointerOnly, '')).toBe(null);
+		expect(applyToolEvent(pointerOnly, 'select', { type: 'key', key: '' }, drawn).handled).toBe(
+			false
+		);
+		expect(toolForKey(pointerOnly, 'v')?.id).toBe('select');
+	});
 });

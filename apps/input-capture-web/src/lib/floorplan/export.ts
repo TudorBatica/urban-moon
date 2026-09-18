@@ -4,7 +4,9 @@
    Pure string building — roomToSvg has no DOM dependency at all, so it is
    unit-testable in node. Only svgToPngDataUrl needs a browser. */
 
+import { LANDMARK_SIZE_CM, landmarkKindOf } from '@urban-moon/domain-data';
 import type { RoomSegment, RoomSnapshot, RoomWall } from '$lib/types';
+import { markColourLiteral } from './marks';
 
 type Pt = [number, number];
 
@@ -288,6 +290,43 @@ export function roomToSvg(room: RoomSnapshot, opts?: { widthPx?: number }): stri
 		dimension(wall.from, wall.to, out, WALL_T / 2 + px(38), `${total} cm`, wall.lengthCm?.source === 'typed');
 	});
 
+	/* ---- the landmarks ------------------------------------------------ */
+	/* As on the canvas: the coloured square against its wall on the face it is
+	   on, with its name on a small white chip in the same colour. No distances
+	   — the architect reads those in the list beside the plan. */
+	const marks: string[] = [];
+	(room?.landmarks ?? []).forEach((mark) => {
+		const wall = walls.find((w) => w.id === mark.wallId);
+		if (!wall) return;
+		const d = dirOf(wall);
+		const nrm = normOf(d);
+		const sign = mark.face === 'out' ? -1 : 1;
+		const half = LANDMARK_SIZE_CM / 2;
+		const on = add(wall.from, mul(d, mark.offsetFromStartCm + half));
+		const centre = add(on, mul(nrm, sign * (WALL_T / 2 + half)));
+		const colour = markColourLiteral(mark.kind);
+		const corners: Pt[] = [
+			add(add(centre, mul(d, -half)), mul(nrm, -half)),
+			add(add(centre, mul(d, half)), mul(nrm, -half)),
+			add(add(centre, mul(d, half)), mul(nrm, half)),
+			add(add(centre, mul(d, -half)), mul(nrm, half))
+		];
+		marks.push(`<polygon points="${poly(corners)}" fill="${colour}"/>`);
+
+		const label = landmarkKindOf(mark.kind)?.label ?? mark.kind;
+		const fs = px(15);
+		const w = label.length * fs * 0.62 + px(14);
+		const h = fs * 1.6;
+		const flat = Math.abs(d[0]) > Math.abs(d[1]);
+		const away: Pt = [nrm[0] * sign, nrm[1] * sign];
+		const lift = half + px(6) + (flat ? h : w) / 2;
+		const at = add(centre, mul(away, lift));
+		marks.push(
+			`<rect x="${n(at[0] - w / 2)}" y="${n(at[1] - h / 2)}" width="${n(w)}" height="${n(h)}" rx="${n(px(3))}" fill="${PAPER}" stroke="${colour}" stroke-width="${n(px(1))}"/>`
+		);
+		marks.push(textEl(at[0], at[1], label, fs, colour));
+	});
+
 	/* ---- footer ------------------------------------------------------- */
 	const footY = maxY + margin + margin * 0.22;
 	let note = 'All dimensions in cm';
@@ -304,6 +343,7 @@ export function roomToSvg(room: RoomSnapshot, opts?: { widthPx?: number }): stri
 		`<rect x="${n(vbX)}" y="${n(vbY)}" width="${n(vbW)}" height="${n(vbH)}" fill="${PAPER}"/>` +
 		`<g data-layer="plan">${body.join('')}</g>` +
 		`<g data-layer="dimensions">${dims.join('')}</g>` +
+		`<g data-layer="landmarks">${marks.join('')}</g>` +
 		`<g data-layer="note">${footer}</g>` +
 		'</svg>'
 	);

@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import { landmarkKindOf } from '@urban-moon/domain-data';
 	import FloorplanEditor from '$lib/floorplan/FloorplanEditor.svelte';
 	import Slides from '$lib/floorplan/Slides.svelte';
-	import { DRAWING_SLIDES } from '$lib/floorplan/tutorialSlides';
+	import { GOT_IT_LABEL, LANDMARK_SLIDES } from '$lib/floorplan/tutorialSlides';
 	import { initialDevice, watchDevice, type Device } from '$lib/floorplan/device';
 	import { hasSeen, localSeenStorage, markSeen } from '$lib/floorplan/seen';
+	import { markColour } from '$lib/floorplan/marks';
 	import { roomToSvg, svgToPngDataUrl } from '$lib/floorplan/export';
 	import { saveEditedDrawing } from '$lib/floorplan/drawing';
 	import { roomCount } from '$lib/state/answers.svelte';
@@ -13,18 +16,19 @@
 	import GoBar from '$lib/ui/GoBar.svelte';
 	import Note from '$lib/ui/Note.svelte';
 
-	const SAVE_LABEL = 'Gata, salvează planul';
+	const CARDS = '/deseneaza/repere';
 
 	let editor = $state<ReturnType<typeof FloorplanEditor> | null>(null);
-	let empty = $state(true);
-	let ask = $state<'done' | 'discard' | 'save-failed' | null>(null);
+	let ask = $state<'discard' | 'save-failed' | null>(null);
 	let saving = $state(false);
 	let slidesOpen = $state(false);
 	let device = $state<Device>('desktop');
 
-	/** The model as it was when the editor opened — "changed?" compares against it. */
+	/** The model as it was when the screen opened — "changed?" compares against it. */
 	let baseline: string | null = null;
 
+	const kind = $derived(page.params.kind ?? '');
+	const entry = $derived(landmarkKindOf(kind));
 	const initialModel = plans.drawing?.model;
 
 	onMount(() => {
@@ -32,32 +36,32 @@
 			void goto('/?s=c_rooms');
 			return;
 		}
+		if (!plans.drawing) {
+			void goto('/deseneaza');
+			return;
+		}
+		if (!landmarkKindOf(page.params.kind ?? '')) {
+			void goto(CARDS);
+			return;
+		}
 		device = initialDevice(window);
 		const stopWatching = watchDevice(window, (d) => (device = d));
-		/* The only help there is, shown by itself once per browser — over an
-		   empty canvas and a restored drawing alike, since it changes neither. */
-		slidesOpen = !hasSeen(localSeenStorage(), 'slides');
-		/* After the flush: the editor's own onMount has run and any saved model
-		   has been restored, so this is the state "Înapoi" compares against. */
+		/* The one mechanic this step has, shown once per browser whatever the kind. */
+		slidesOpen = !hasSeen(localSeenStorage(), 'landmarkSlide');
 		void tick().then(() => {
 			baseline = JSON.stringify(editor?.getModel() ?? null);
-			empty = editor?.isEmpty() ?? true;
 		});
 		return stopWatching;
 	});
 
-	/* The editor's keys stand down while a note or the slides are open. */
+	/* The editor's keys stand down while a note or the slide is open. */
 	$effect(() => {
 		editor?.setKeysEnabled(ask === null && !slidesOpen);
 	});
 
 	function closeSlides(): void {
 		slidesOpen = false;
-		markSeen(localSeenStorage(), 'slides');
-	}
-
-	function onchange(): void {
-		empty = editor?.isEmpty() ?? true;
+		markSeen(localSeenStorage(), 'landmarkSlide');
 	}
 
 	function changed(): boolean {
@@ -80,7 +84,7 @@
 					now: () => Date.now()
 				}
 			);
-			await goto('/deseneaza/tavan');
+			await goto(CARDS);
 		} catch {
 			ask = 'save-failed';
 		} finally {
@@ -94,11 +98,11 @@
 			ask = 'discard';
 			return;
 		}
-		void goto('/planuri');
+		void goto(CARDS);
 	}
 </script>
 
-<svelte:head><title>Desenează planul — Urban Moon</title></svelte:head>
+<svelte:head><title>{entry?.label ?? 'Repere'} — Urban Moon</title></svelte:head>
 
 <div class="screen">
 	<header class="top">
@@ -107,27 +111,16 @@
 	</header>
 
 	<div class="canvas">
-		<FloorplanEditor
-			bind:this={editor}
-			{initialModel}
-			{onchange}
-			onhelp={() => (slidesOpen = true)}
-		/>
+		<FloorplanEditor bind:this={editor} {initialModel} mode="landmarks" landmarkKind={kind} />
 
 		{#if slidesOpen}
-			<Slides slides={DRAWING_SLIDES} {device} onclose={closeSlides} />
-		{/if}
-
-		{#if ask === 'done'}
-			<Note
-				testid="note-done"
-				scrim
-				title="Gata cu planul?"
-				lines={[
-					'Urmează înălțimea tavanului și ce mai e prin cameră. Te poți întoarce oricând la plan.'
-				]}
-				back={{ label: 'Mai am de lucru', testid: 'btn-keep-drawing', onclick: () => (ask = null) }}
-				go={{ label: 'Continuă', testid: 'btn-continue', onclick: () => void save() }}
+			<Slides
+				slides={LANDMARK_SLIDES}
+				{device}
+				position={entry?.label ?? ''}
+				lastLabel={GOT_IT_LABEL}
+				markColour={markColour(kind)}
+				onclose={closeSlides}
 			/>
 		{/if}
 	</div>
@@ -138,7 +131,7 @@
 				testid="note-discard"
 				title="Renunți la modificări?"
 				back={{ label: 'Rămân aici', testid: 'btn-stay', onclick: () => (ask = null) }}
-				go={{ label: 'Renunț', testid: 'btn-discard', onclick: () => void goto('/planuri') }}
+				go={{ label: 'Renunț', testid: 'btn-discard', onclick: () => void goto(CARDS) }}
 			/>
 		{/if}
 		{#if ask === 'save-failed'}
@@ -152,11 +145,11 @@
 
 		<footer class="bot">
 			<GoBar
-				label={SAVE_LABEL}
-				disabled={empty || saving}
+				label="Gata"
+				disabled={saving}
 				pressed={saving}
 				onback={back}
-				onnext={() => (ask = 'done')}
+				onnext={() => void save()}
 			/>
 		</footer>
 	</div>

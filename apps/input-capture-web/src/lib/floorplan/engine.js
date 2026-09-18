@@ -24,6 +24,24 @@ import { CHAIN_LANE_PX, chainOfPiece, placeChainChips } from './chain';
 import { buildRun, extendEndOf, ownOffsetOf, placeAlongRun } from './slide';
 import { hasSeen, localSeenStorage, markSeen } from './seen';
 import { glyphSvg as glyph } from './glyphs';
+import { markColour } from './marks';
+import {
+  clampToWall,
+  entryOffsetCm,
+  faceOfSide,
+  fitsAt,
+  landmarksOfModel,
+  marksAsBlockers,
+  placeOnWall,
+  reassignOnMerge,
+  reassignOnSplit,
+  settleOnWalls,
+  showsOnWall,
+  slideOnWall,
+  snapshotLandmarks,
+  withoutWall
+} from './landmarks';
+import { LANDMARK_SIZE_CM, landmarkKindOf } from '@urban-moon/domain-data';
 import { BASE, ease, ms } from '$lib/ui/motion';
 
 /* ----------------------------------------------------------------------
@@ -104,7 +122,29 @@ const RO = {
         ? 'Apropie sau depărtează două degete ca să mărești. Cu două degete muți planul.'
         : 'Rotița mărește în jurul cursorului. Trage de fundal ca să muți planul.';
     },
+    landmarkOn: function(touch, kind){
+      var it = RO.landmarkThe[kind] || '';
+      return touch ? 'Atinge peretele unde e ' + it + '.' : 'Dă clic pe peretele unde e ' + it + '.';
+    },
+    landmarkFocus: function(){
+      return 'Trage pătratul pe perete. Trage-l peste perete ca să-l muți pe partea cealaltă.';
+    },
+    landmarkIdle: function(touch){
+      return touch
+        ? 'Atinge un pătrat ca să-l muți sau să-l ștergi.'
+        : 'Dă clic pe un pătrat ca să-l muți sau să-l ștergi.';
+    },
     saving: function(){ return 'Se salvează…'; }
+  },
+  /* each landmark named the way the hint says it, mid-sentence */
+  landmarkThe: {
+    water: 'țeava de apă',
+    gas: 'gazul',
+    boiler: 'centrala',
+    airConditioning: 'aerul condiționat',
+    fireplace: 'șemineul',
+    radiator: 'caloriferul',
+    hoodVent: 'evacuarea hotei'
   },
   firstWall: 'Desenează primul perete ca să începi.',
   freeEnds: function(n){
@@ -172,7 +212,8 @@ export const TEMPLATE = `
  * Mount the floorplan editor into `root`.
  *
  * @param {HTMLElement} root
- * @param {{ onChange?: (room:any)=>void, onHelp?: ()=>void, exposeGlobals?: boolean }} [opts]
+ * @param {{ onChange?: (room:any)=>void, onHelp?: ()=>void, mode?: 'plan'|'landmarks',
+ *           landmarkKind?: string, exposeGlobals?: boolean }} [opts]
  * @returns {{ room():any, getModel():any, setModel(m:any):void, reset():void, destroy():void }}
  */
 export function mountFloorplan(root, opts){
@@ -190,6 +231,7 @@ var exposeGlobals = !!opts.exposeGlobals;
 var destroyed = false;
 
 root.classList.add('fp');
+if(opts.mode === 'landmarks') root.classList.add('fp-placing');
 root.innerHTML = TEMPLATE;
 
 /* Every lookup is root-scoped, so the ids below resolve inside this
@@ -267,9 +309,9 @@ function uid(prefix){ return prefix + (_idCounter++); }
    array-order adjacency anywhere in this file: every neighbour lookup
    below is by shared POINT, via neighborAt().
    ====================================================================== */
-var model = { walls: [] };
+var model = { walls: [], landmarks: [] };
 var undoStack = [], redoStack = [];
-var selection = null;     // null | { segId }
+var selection = null;     // null | { segId } | { landmarkId }
 // Which segId render() last saw in focus, so it can notice the one
 // moment that matters for merging: the piece that was in focus a moment
 // ago no longer is. Not keyed to any gesture, because every path that
@@ -281,8 +323,27 @@ var confirmState = null;
 
 /* Session state, not model state: never snapshotted, never undoable, kept
    while the editor is mounted. */
-var tools = Array.isArray(opts.tools) && opts.tools.length ? opts.tools : DRAWING_TOOLS;
-var activeTool = restingTool(tools);
+/* The step this mounting is for: the plan itself, or placing one kind of
+   landmark on a plan already drawn. A later step narrows the tools and leaves
+   what earlier steps made drawn but untouchable. */
+var mode = opts.mode === 'landmarks' ? 'landmarks' : 'plan';
+var landmarkKind = typeof opts.landmarkKind === 'string' ? opts.landmarkKind : null;
+var LANDMARK_TOOL = 'landmark';
+function landmarkTools(){
+  var entry = landmarkKindOf(landmarkKind);
+  return [
+    DRAWING_TOOLS[0],
+    { id: LANDMARK_TOOL, label: entry ? entry.label : '', key: '', gesture: 'tap',
+      makes: LANDMARK_TOOL, needsWall: true }
+  ];
+}
+var tools = Array.isArray(opts.tools) && opts.tools.length
+  ? opts.tools
+  : (mode === 'landmarks' ? landmarkTools() : DRAWING_TOOLS);
+/* The landmark tool is armed the moment the screen opens: the client came here
+   from the card that chose it. */
+function armedTool(){ return mode === 'landmarks' ? LANDMARK_TOOL : restingTool(tools); }
+var activeTool = armedTool();
 var view = null;              // { cx, cy, scale }; fitted on the first render
 var justMade = null;          // the kind a tool made a moment ago, for the hint
 var refusedTool = false;      // a tool that cannot be used yet was picked
@@ -296,7 +357,10 @@ var seenStorage = opts.seenStorage !== undefined ? opts.seenStorage : localSeenS
 var carried = { windowWidth: DEFAULT_WINDOW_W, sill: DEFAULT_SILL };
 
 function snapshotModel(){
-  return { walls: JSON.parse(JSON.stringify(model.walls)) };
+  return {
+    walls: JSON.parse(JSON.stringify(model.walls)),
+    landmarks: JSON.parse(JSON.stringify(model.landmarks || []))
+  };
 }
 function pushHistory(){
   undoStack.push(snapshotModel());
@@ -305,6 +369,7 @@ function pushHistory(){
 }
 function restoreSnapshot(snap){
   model.walls = JSON.parse(JSON.stringify(snap.walls));
+  model.landmarks = JSON.parse(JSON.stringify(landmarksOfModel(snap)));
 }
 function undo(){
   if(!undoStack.length) return;
@@ -321,11 +386,11 @@ function redo(){
   render();
 }
 function resetAll(){
-  model = { walls: [] };
+  model = { walls: [], landmarks: [] };
   undoStack = []; redoStack = [];
   selection = null; dragState = null;
   toastState = null; confirmState = null;
-  activeTool = restingTool(tools); justMade = null; refusedTool = false;
+  activeTool = armedTool(); justMade = null; refusedTool = false;
   view = null;
   render();
 }
@@ -357,6 +422,91 @@ function makeWall(from, to, source, kind){
   return w;
 }
 function minFor(kind){ return (kind === 'window' || kind === 'door') ? MIN_OPEN : MIN_WALL; }
+
+/* ======================================================================
+   LANDMARKS — what the room has that the plan cannot show, each against a
+   wall on one of its two faces. They live in the model beside the walls, so
+   they are undone, dragged and reported like everything else; landmarks.ts
+   owns where one may sit, and this is what the engine does about it.
+   ====================================================================== */
+function findLandmark(id){
+  var list = model.landmarks || [];
+  for(var i=0;i<list.length;i++) if(list[i].id === id) return list[i];
+  return null;
+}
+function landmarksOn(wallId){
+  return (model.landmarks || []).filter(function(m){ return m.wallId === wallId; });
+}
+/** the landmark in focus, whose wall shows the chain */
+function focusedLandmark(){
+  return (selection && selection.landmarkId) ? findLandmark(selection.landmarkId) : null;
+}
+/**
+ * What a landmark on this wall may not overlap: a stretch with nothing built
+ * (a landmark never goes on a Fără perete side) and a landmark already on the
+ * same face. A window or a door is not one of them — a radiator sits under a
+ * window.
+ */
+function openSpansOf(w){
+  var out = [];
+  w.segments.forEach(function(s){
+    if(s.kind !== 'open') return;
+    out.push({ startCm: s.offsetFromStart, endCm: s.offsetFromStart + s.length.value });
+  });
+  return out;
+}
+function blockersFor(w, face, exceptId){
+  return openSpansOf(w).concat(marksAsBlockers(model.landmarks || [], w.id, face, exceptId || null));
+}
+/* The one wall length everything about a landmark is measured against: where
+   it may sit, how far it may travel, the chain the client reads and the gaps
+   the snapshot carries all use this, so the number in the manifest is the
+   number that was on screen. */
+function markWallLengthCm(w){ return r(wallLen(w)); }
+/** Everything a gap along this wall stops at, whichever face it is on. */
+function landmarkObstacles(w, exceptId){
+  var out = [];
+  w.segments.forEach(function(s){
+    if(s.kind === 'wall') return;
+    out.push({ startCm: s.offsetFromStart, endCm: s.offsetFromStart + s.length.value });
+  });
+  landmarksOn(w.id).forEach(function(m){
+    if(m.id === exceptId) return;
+    out.push({ startCm: m.offsetFromStartCm, endCm: m.offsetFromStartCm + LANDMARK_SIZE_CM });
+  });
+  return out;
+}
+/** Whether a landmark's wall can hold it right now: only then is it drawn, touched or reported. */
+function landmarkShows(m){
+  var w = findWall(m.wallId);
+  return !!w && showsOnWall({ lengthCm: markWallLengthCm(w), isOpen: !!w.isOpen });
+}
+/* Every path that moves a wall ends here: a landmark settles back onto what
+   its wall still allows, and goes with a wall that is gone. A wall that no
+   longer holds it — shortened past the square, or turned into a side with
+   nothing built — keeps it: it stops being drawn and stops being reported, and
+   comes back at that wall's start when the wall can hold it again. Splits and
+   merges are handled where they happen, because only there is it known which
+   piece is which; the settling here is what puts right what they leave. */
+function syncLandmarks(){
+  var list = model.landmarks || [];
+  if(list.length){
+    model.landmarks = settleOnWalls(list, function(m){
+      var w = findWall(m.wallId);
+      if(!w) return null;
+      return { lengthCm: markWallLengthCm(w), blockedSpans: openSpansOf(w) };
+    }).map(function(m){
+      m.offsetFromStartCm = r(m.offsetFromStartCm);
+      return m;
+    });
+  }
+  // Nothing hidden or gone is in focus: its square, its plate and its chain
+  // have all left the canvas.
+  if(selection && selection.landmarkId){
+    var focused = findLandmark(selection.landmarkId);
+    if(!focused || !landmarkShows(focused)) selection = null;
+  }
+}
 
 /* ======================================================================
    CONNECTIVITY — everything below reads adjacency from shared points,
@@ -511,6 +661,7 @@ function cleanupOutline(){
         var prevInfo = neighborAt(w,'from'), nextInfo = neighborAt(w,'to');
         if(prevInfo) { prevInfo.wall[prevInfo.end].x = w.to.x; prevInfo.wall[prevInfo.end].y = w.to.y; }
         else if(nextInfo) { nextInfo.wall[nextInfo.end].x = w.from.x; nextInfo.wall[nextInfo.end].y = w.from.y; }
+        model.landmarks = withoutWall(model.landmarks || [], w.id);
         model.walls.splice(i,1);
         changed = true; break;
       }
@@ -524,9 +675,13 @@ function cleanupOutline(){
       if(!nInfo || nInfo.end !== 'from') continue;
       var b = nInfo.wall;
       if(headingOf(a) !== headingOf(b)) continue;
+      // b is read from->to here, so everything on it moves along by exactly
+      // the run a already holds — its landmarks included.
+      var seamCm = segTotal(a);
       var mergedSegs = a.segments.concat(b.segments.map(function(s){
-        var c = JSON.parse(JSON.stringify(s)); c.offsetFromStart += segTotal(a); return c;
+        var c = JSON.parse(JSON.stringify(s)); c.offsetFromStart += seamCm; return c;
       }));
+      model.landmarks = reassignOnMerge(model.landmarks || [], b.id, a.id, seamCm);
       a.to.x = b.to.x; a.to.y = b.to.y;
       a.segments = mergedSegs;
       a.lengthSource = 'computed';
@@ -770,6 +925,16 @@ function removeSegmentToWall(wallId, segId){
 // between them moves. A wall's only piece takes the whole wall with it.
 function deleteSelection(){
   if(!selection) return;
+  if(selection.landmarkId){
+    var mark = findLandmark(selection.landmarkId);
+    if(!mark) return;
+    pushHistory();
+    model.landmarks = (model.landmarks || []).filter(function(m){ return m.id !== mark.id; });
+    selection = null;
+    justMade = null;
+    render();
+    return;
+  }
   var f = findSegAnywhere(selection.segId); if(!f) return;
   var w = f.wall, seg = f.seg;
   pushHistory();
@@ -970,6 +1135,45 @@ function applyOpeningSlide(ds, curCm){
   selection = { segId: segId };
   ds.liveSegId = segId;
   ds.pastFreeEnd = place.extendCm > 0;
+}
+
+/* One move of a landmark drag, on the model the drag began from. It travels
+   the same run an opening does — along the wall and round a joined corner as
+   its middle passes it — but never past a free end: a landmark has to fit
+   inside its wall. Along the way it stops against a landmark on its own face,
+   and it turns onto the other face the moment the finger crosses the wall. */
+function applyLandmarkSlide(ds, curCm){
+  var m = findLandmark(ds.landmarkId);
+  if(!m || !ds.run) return;
+  var arc = arcOnRun(ds.runPoints, curCm, ds.lastArc, ds.run.closed);
+  ds.lastArc = arc;
+  var run = { walls: ds.run.walls, startFree: false, endFree: false, closed: ds.run.closed };
+  var place = placeAlongRun(run, LANDMARK_SIZE_CM, ds.centreArc0 + (arc - ds.grabArc));
+  if(!place) return;
+  var entry = entryFor(run, place.wallId);
+  var w = findWall(place.wallId);
+  if(!entry || !w) return;
+  var len = markWallLengthCm(w);
+  // A run may carry a wall too short to hold the square. Placing already
+  // refuses one; travelling onto it would put the landmark somewhere it cannot
+  // be seen or reported, so the drag stops at the wall it is on instead.
+  if(!showsOnWall({ lengthCm: len, isOpen: !!w.isOpen })) return;
+  var want = clampToWall(ownOffsetOf(entry, place, LANDMARK_SIZE_CM), len);
+  // Coming round a corner it enters at one of the wall's ends, and that end is
+  // where the free stretch it may travel is measured from.
+  var from = (w.id === m.wallId) ? m.offsetFromStartCm
+    : entryOffsetCm(place.offsetCm + LANDMARK_SIZE_CM/2, len, entry.forward);
+  var n = wallNormal(w);
+  var across = (curCm.x - w.from.x)*n.x + (curCm.y - w.from.y)*n.y;
+  var wanted = faceOfSide(across);
+  var face = m.face;
+  if(wanted !== face && fitsAt(want, len, blockersFor(w, wanted, m.id))) face = wanted;
+  m.wallId = w.id;
+  m.face = face;
+  m.offsetFromStartCm = r(slideOnWall({
+    wantOffsetCm: want, fromOffsetCm: from, wallLengthCm: len,
+    blockers: blockersFor(w, face, m.id)
+  }));
 }
 
 function setSegSill(wallId, segId, value, source){ var f=findSeg(wallId,segId); if(f) f.seg.sill={value:r(value), source:source}; }
@@ -1284,6 +1488,8 @@ function splitWallAtPoint(wallId, point){
   var wTail = { id:uid('wall'), from:{x:mid.x,y:mid.y}, to:{x:w.to.x,y:w.to.y}, lengthSource:'computed', isOpen:w.isOpen, segments:tailSegs };
   var idx = model.walls.indexOf(w);
   model.walls.splice(idx, 1, wLead, wTail);
+  model.landmarks = reassignOnSplit(model.landmarks || [], w.id, offset,
+    { id: wLead.id, lengthCm: offset }, { id: wTail.id, lengthCm: total - offset });
   return { point: mid, leadId: wLead.id, tailId: wTail.id };
 }
 // Squares a weld onto an existing vertex that sits off the drawn
@@ -1549,6 +1755,17 @@ function buildRoomSnapshot(){
       }
     });
   });
+  // Each landmark its wall can still hold, with the gaps already measured, so
+  // a reader prints the distances the client saw without redoing the geometry.
+  var landmarks = snapshotLandmarks(model.landmarks || [], function(m){
+    var w = findWall(m.wallId);
+    if(!w) return null;
+    return {
+      lengthCm: markWallLengthCm(w),
+      isOpen: !!w.isOpen,
+      obstacles: landmarkObstacles(w, m.id)
+    };
+  });
   var unanswered = computeUnanswered();
   // The ceiling height belongs to the saved drawing, not to the plan the
   // editor holds; whoever saves fills it in.
@@ -1559,6 +1776,7 @@ function buildRoomSnapshot(){
     outline: outline,
     walls: walls,
     openings: openings,
+    landmarks: landmarks,
     unanswered: unanswered,
     finished: unanswered.length === 0
   };
@@ -1708,11 +1926,12 @@ var focusPlateEl = null;
    ====================================================================== */
 function render(){
   if(destroyed) return;
+  syncLandmarks();
   // The piece that was in focus as of the last render, if it no longer
   // is, has just become eligible to merge into a collinear same-kind
   // neighbour: re-check its own wall now, whichever of the many paths
   // moved the focus this time.
-  var curSelSegId = selection ? selection.segId : null;
+  var curSelSegId = (selection && selection.segId) || null;
   if(lastSettledSegId !== null && lastSettledSegId !== curSelSegId){
     var settleF = findSegAnywhere(lastSettledSegId);
     if(settleF) mergeAdjacentPlain(settleF.wall);
@@ -1850,6 +2069,65 @@ function washMarkup(w, p0, p1){
 }
 
 /* ======================================================================
+   THE MARKS — a landmark is a square of LANDMARK_SIZE_CM against its wall's
+   band, on the face it is on, so it grows and shrinks with the plan at every
+   zoom. Its name rides in the HTML layer beside it, where it keeps its own
+   size. Colour is the one place the product has any: the square, its name
+   chip, and the square that stands for the landmark in the tool plate.
+   ====================================================================== */
+/** where a landmark's square sits, in the world the plan is drawn in */
+function landmarkGeom(m){
+  var w = findWall(m.wallId);
+  if(!w) return null;
+  var d = wallDir(w), n = wallNormal(w);
+  var sign = m.face === 'out' ? -1 : 1;
+  var half = LANDMARK_SIZE_CM/2;
+  var on = pointAlong(w, m.offsetFromStartCm + half);
+  var out = WALL_THICKNESS_CM/2 + half;
+  return {
+    wall: w, dir: d, normal: n, sign: sign, half: half,
+    centre: { x: on.x + n.x*sign*out, y: on.y + n.y*sign*out }
+  };
+}
+function landmarkLabel(kind){
+  var entry = landmarkKindOf(kind);
+  return entry ? entry.label : kind;
+}
+function landmarkSquarePoints(g, grow){
+  var e = g.half + (grow || 0);
+  return [
+    { x: g.centre.x - g.dir.x*e - g.normal.x*e, y: g.centre.y - g.dir.y*e - g.normal.y*e },
+    { x: g.centre.x + g.dir.x*e - g.normal.x*e, y: g.centre.y + g.dir.y*e - g.normal.y*e },
+    { x: g.centre.x + g.dir.x*e + g.normal.x*e, y: g.centre.y + g.dir.y*e + g.normal.y*e },
+    { x: g.centre.x - g.dir.x*e + g.normal.x*e, y: g.centre.y - g.dir.y*e + g.normal.y*e }
+  ].map(function(p){ return p.x+','+p.y; }).join(' ');
+}
+/** the squares themselves: last, so a mark is never buried under its own hit target */
+function landmarkMarkup(t, hitParts){
+  var parts = [];
+  (model.landmarks || []).forEach(function(m){
+    if(!landmarkShows(m)) return;
+    var g = landmarkGeom(m);
+    if(!g) return;
+    var sel = !!(selection && selection.landmarkId === m.id);
+    var colour = markColour(m.kind);
+    if(sel){
+      parts.push('<polygon class="fp-wash" points="'+landmarkSquarePoints(g, g.half*0.7)+'"></polygon>');
+    }
+    if(mode === 'landmarks'){
+      var reach = Math.max(g.half, 24/t.scale);
+      hitParts.push('<rect class="fp-grab" data-testid="landmark-'+m.id+'-hit" data-landmark-id="'+m.id+'"'
+        + ' x="'+(g.centre.x-reach)+'" y="'+(g.centre.y-reach)+'" width="'+(reach*2)+'" height="'+(reach*2)+'"></rect>');
+    }
+    parts.push('<polygon class="fp-mark'+(sel?' on':'')+'" data-testid="landmark-'+m.id+'"'
+      + ' data-landmark-id="'+m.id+'" data-kind="'+esc(m.kind)+'" data-face="'+m.face+'"'
+      + ' style="fill:'+colour+'" stroke-width="'+Math.max(1, 1.5/t.scale)+'"'
+      + ' points="'+landmarkSquarePoints(g, 0)+'"></polygon>');
+  });
+  return parts.join('');
+}
+
+/* ======================================================================
    ALL DIMENSIONS — one lane just outside each wall's own ink band. At
    rest it holds one number per wall, that wall's own length; while a
    window or a door on it is in focus or dragged, that number stands down
@@ -1939,36 +2217,29 @@ function pointAlong(w, cm){
 // reshapes the wall and holds every piece on it where it is.
 function wallDim(w, focused, t){
   var wn = wallNormal(w);
+  // On a later step the plan is what earlier steps made: its numbers are
+  // stated, not asked, so the chip neither edits nor takes the pointer away
+  // from the wall under it.
+  var editable = mode !== 'landmarks';
   return {
-    testid: 'dim-'+w.id, tone: focused ? 'primary' : 'side',
+    testid: 'dim-'+w.id, tone: focused ? 'primary' : 'side', readOnly: !editable,
     a: w.from, b: w.to, normal: {x:-wn.x, y:-wn.y},
     outCm: WALL_THICKNESS_CM/2 + DIM_LINE_OUT_PX/t.scale,
     chipOutCm: WALL_THICKNESS_CM/2 + (CHAIN_LANE_PX + chipHalfCrossPx(w))/t.scale,
     value: r(wallLen(w)), source: w.lengthSource, label: RO.fieldLength,
-    commit: function(cm){
+    commit: editable ? function(cm){
       var anySeg = w.segments[0].id;
       var res = commitWallTotal(anySeg, cm, 'typed');
       if(!res.ok) offerClamp(res, function(v){ commitWallTotal(anySeg, v, 'computed'); });
-    }
+    } : null
   };
 }
 // The chain in place of that wall's own length: gap | piece | gap, each
 // with its own run and ticks, adding up to the wall. The gaps are
 // read-only — the drawing is what says them — and the piece's number is
 // the same value as the first field of its plate.
-function chainDims(w, seg, t){
+function chainFrom(w, items, t, piece){
   var wn = wallNormal(w), normal = {x:-wn.x, y:-wn.y};
-  var obstacles = [];
-  w.segments.forEach(function(s){
-    if(s.id === seg.id || s.kind === 'wall') return;
-    obstacles.push({ startCm: s.offsetFromStart, endCm: s.offsetFromStart + s.length.value });
-  });
-  var items = chainOfPiece({
-    wallLengthCm: segTotal(w),
-    pieceStartCm: seg.offsetFromStart,
-    pieceEndCm: seg.offsetFromStart + seg.length.value,
-    obstacles: obstacles
-  });
   var alongPx = chipAlongPx(w), halfCrossPx = chipHalfCrossPx(w);
   var places = placeChainChips(items.map(function(it){
     return { startPx: it.startCm*t.scale, endPx: it.endCm*t.scale, chipLengthPx: alongPx };
@@ -1977,28 +2248,63 @@ function chainDims(w, seg, t){
     var p = places[i];
     var isPiece = it.kind === 'piece';
     return {
-      testid: 'chain-'+it.kind, inChain: true, readOnly: !isPiece,
+      testid: 'chain-'+it.kind, inChain: true, readOnly: !isPiece || !piece.commit,
       tone: isPiece ? 'primary' : 'side',
       a: pointAlong(w, it.startCm), b: pointAlong(w, it.endCm), normal: normal,
       outCm: WALL_THICKNESS_CM/2 + DIM_LINE_OUT_PX/t.scale,
       chipOutCm: WALL_THICKNESS_CM/2 + (p.outPx + halfCrossPx)/t.scale,
       chipShiftCm: (p.alongPx - p.spanMidPx)/t.scale,
       leader: p.steppedOut,
-      value: r(it.lengthCm),
-      source: isPiece ? seg.length.source : 'computed',
-      label: isPiece ? segDimLabel(seg) : RO.fieldLength,
-      commit: isPiece ? segDimCommit(w, seg) : null
+      // A piece with no size to state is a break in the line and nothing more.
+      value: it.showsNumber ? r(it.lengthCm) : null,
+      source: isPiece ? piece.source : 'computed',
+      label: isPiece ? piece.label : RO.fieldLength,
+      commit: isPiece ? piece.commit : null
     };
   });
 }
+function chainDims(w, seg, t){
+  var obstacles = [];
+  w.segments.forEach(function(s){
+    if(s.id === seg.id || s.kind === 'wall') return;
+    obstacles.push({ startCm: s.offsetFromStart, endCm: s.offsetFromStart + s.length.value });
+  });
+  landmarksOn(w.id).forEach(function(m){
+    obstacles.push({ startCm: m.offsetFromStartCm, endCm: m.offsetFromStartCm + LANDMARK_SIZE_CM });
+  });
+  var items = chainOfPiece({
+    wallLengthCm: segTotal(w),
+    pieceStartCm: seg.offsetFromStart,
+    pieceEndCm: seg.offsetFromStart + seg.length.value,
+    obstacles: obstacles
+  });
+  return chainFrom(w, items, t, {
+    source: seg.length.source, label: segDimLabel(seg), commit: segDimCommit(w, seg)
+  });
+}
+/** The same chain for a landmark: gap | square | gap, with no number on the square. */
+function landmarkChainDims(w, m, t){
+  var items = chainOfPiece({
+    wallLengthCm: markWallLengthCm(w),
+    pieceStartCm: m.offsetFromStartCm,
+    pieceEndCm: m.offsetFromStartCm + LANDMARK_SIZE_CM,
+    obstacles: landmarkObstacles(w, m.id),
+    pieceShowsNumber: false
+  });
+  return chainFrom(w, items, t, { source: 'computed', label: RO.fieldLength, commit: null });
+}
 function allDims(t){
   var out = [];
-  var focus = focusedOpening();
-  var focusWallId = focus ? focus.wall.id : null;
+  var mark = focusedLandmark();
+  var focus = mark ? null : focusedOpening();
+  var focusWallId = mark ? mark.wallId : (focus ? focus.wall.id : null);
   var selSeg = selection ? findSegAnywhere(selection.segId) : null;
   model.walls.forEach(function(w){
     if(!wallOnScreen(w, t)) return;
-    if(w.id === focusWallId){ out = out.concat(chainDims(w, focus.seg, t)); return; }
+    if(w.id === focusWallId){
+      out = out.concat(mark ? landmarkChainDims(w, mark, t) : chainDims(w, focus.seg, t));
+      return;
+    }
     out.push(wallDim(w, !!(selSeg && selSeg.wall.id === w.id), t));
   });
   return out;
@@ -2099,6 +2405,9 @@ function renderSvg(t){
         parts.push(doorSvg(w, s, pts.p0, pts.p1, sel));
       }
       parts.push('</g>');
+      // On the landmark step the plan is drawn but takes no pointer: walls,
+      // windows and doors are changed back on the plan step.
+      if(mode === 'landmarks') return;
       var hr = hitRectAttrs(pts.p0, pts.p1, hitCm);
       var isOpeningKind = (s.kind==='window' || s.kind==='door');
       (isOpeningKind ? openingSegHitParts : plainSegHitParts).push('<rect class="fp-hit'+(sel?' on':'')+'" data-testid="seg-'+s.id+'-hit" data-wall-id="'+w.id+'" data-seg-id="'+s.id+'" data-kind="'+s.kind+'"'
@@ -2130,7 +2439,7 @@ function renderSvg(t){
   // Corner and free-end hit targets exist only while Selectează is on:
   // with a making tool on, the canvas is for making, and a press near a
   // free end is a stroke that welds onto it.
-  var selecting = !toolNow || toolNow.gesture === 'none';
+  var selecting = (!toolNow || toolNow.gesture === 'none') && mode !== 'landmarks';
   if(selecting){
     collectVertices().forEach(function(v){
       if(v.refs.length < 2) return;
@@ -2222,7 +2531,12 @@ function renderSvg(t){
   // opening's hit rect, so an opening slid flush against a corner still
   // wins over the corner it sits inside; and highest an opening's jamb
   // handles, so resizing one jamb wins over sliding the whole opening.
-  parts.push('<g class="fp-hits">' + plainSegHitParts.join('') + cornerHitParts.join('') + freeEndHitParts.join('') + openingSegHitParts.join('') + openingEdgeHitParts.join('') + '</g>');
+  var landmarkHitParts = [];
+  var marksGroup = landmarkMarkup(t, landmarkHitParts);
+  parts.push('<g class="fp-hits">' + plainSegHitParts.join('') + cornerHitParts.join('') + freeEndHitParts.join('') + openingSegHitParts.join('') + openingEdgeHitParts.join('') + landmarkHitParts.join('') + '</g>');
+  // The marks last of all, so a square is never buried under the target that
+  // makes it easy to grab with a finger.
+  if(marksGroup) parts.push('<g class="fp-marks">' + marksGroup + '</g>');
   svgEl.innerHTML = parts.join('');
 }
 
@@ -2244,7 +2558,12 @@ function plateButton(testid, label, glyphName, opts){
   // eye agree; the key goes in the tooltip, which only a mouse ever opens.
   btn.setAttribute('aria-label', label);
   btn.title = (o.key && !touchWords) ? label + ' (' + o.key.toUpperCase() + ')' : label;
-  if(glyphName) btn.innerHTML = glyph(glyphName);
+  // The tool that places a mark has no glyph: it is a small square in the
+  // mark's own colour.
+  if(o.swatch){
+    btn.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">'
+      + '<rect x="4.5" y="4.5" width="11" height="11" rx="1" style="fill:'+o.swatch+';stroke:none"></rect></svg>';
+  } else if(glyphName) btn.innerHTML = glyph(glyphName);
   if(!o.iconOnly){
     var span = doc.createElement('span');
     span.textContent = label;
@@ -2270,14 +2589,18 @@ function renderToolPlate(){
   toolPlateEl.innerHTML = '';
   var empty = model.walls.length === 0;
   tools.forEach(function(tool){
-    toolPlateEl.appendChild(plateButton('tool-' + tool.id, tool.label, tool.id, {
+    var isMark = tool.id === LANDMARK_TOOL;
+    var btn = plateButton('tool-' + tool.id, tool.label, tool.id, {
       on: activeTool === tool.id,
       pressed: activeTool === tool.id,
       key: tool.key,
+      swatch: isMark ? markColour(landmarkKind) : null,
       // The drawn outline breathes round Perete until it has been used.
       breath: empty && tool.makes === 'wall',
       onClick: function(){ pickTool(tool.id); }
-    }));
+    });
+    if(isMark && landmarkKind) btn.setAttribute('data-kind', landmarkKind);
+    toolPlateEl.appendChild(btn);
   });
   if(!isNarrow()){
     toolPlateEl.appendChild(divider());
@@ -2328,6 +2651,20 @@ function hintFor(){
   }
   // The zoom line, the first time in this browser, for four seconds.
   if(Date.now() < zoomHintUntil) return { state: 'zoom', text: RO.hint.zoom(touchWords) };
+  if(mode === 'landmarks'){
+    if(activeTool === LANDMARK_TOOL){
+      return { state: 'landmark-on', text: RO.hint.landmarkOn(touchWords, landmarkKind) };
+    }
+    if(selection && selection.landmarkId){
+      return { state: 'landmark-focus', text: RO.hint.landmarkFocus() };
+    }
+    // With the tool down and nothing on the canvas there is nothing to say: a
+    // line pointing at squares would point at none.
+    if((model.landmarks || []).some(landmarkShows)){
+      return { state: 'landmark-idle', text: RO.hint.landmarkIdle(touchWords) };
+    }
+    return { state: 'idle', text: '' };
+  }
   var tool = toolById(tools, activeTool);
   if(tool && tool.gesture !== 'none'){
     var byTool = { wall: 'wallOn', open: 'openOn', window: 'windowOn', door: 'doorOn' };
@@ -2401,15 +2738,15 @@ function freeEndObstacles(stageRect, t, radius){
   });
   return obstacles;
 }
-// A second, narrower obstacle source, for the focus plate: every chip
-// already on screen. A number on the drawing stays out of this on
-// purpose — its lane and the chain's own placement keep it clear of the
-// numbers beside it, and pushing it would move it off the stretch of
+// A second, narrower obstacle source, for the focus plate: every chip and
+// every mark's name already on screen. A number on the drawing stays out of
+// this on purpose — its lane and the chain's own placement keep it clear of
+// the numbers beside it, and pushing it would move it off the stretch of
 // wall it measures.
 function chipObstacles(stageRect, skipEl){
   var obstacles = [];
   var gap = 4;
-  ctrlLayerEl.querySelectorAll('.fp-chip, #focusPlate').forEach(function(c){
+  ctrlLayerEl.querySelectorAll('.fp-chip, .fp-mark-name, #focusPlate').forEach(function(c){
     if(c === skipEl) return;
     var r = c.getBoundingClientRect();
     obstacles.push({ l:r.left-stageRect.left-gap, t:r.top-stageRect.top-gap, r:r.right-stageRect.left+gap, b:r.bottom-stageRect.top+gap });
@@ -2563,16 +2900,17 @@ function buildChip(testid, value, source, anchor, t, onCommit, label, focused, a
   placeInStage(chip, anchor, t, avoidChips, null, parent);
   return input;
 }
-// A number the drawing states and the client does not write: a gap in the
-// chain. The same chip, grey italic, with a span where the editable one
-// has its field — the one part that would take an editor if gaps ever
-// become typed.
-function buildGapChip(testid, value, anchor, t, parent){
+// A number the client cannot write here: a gap in the chain, or a wall's own
+// length on a step that does not change the plan. The same chip, with a span
+// where the editable one has its field — the one part that would take an
+// editor if gaps ever become typed. A length the client typed is still ink:
+// read-only says who may change it, not who said it.
+function buildGapChip(testid, value, source, anchor, t, parent){
   var chip = doc.createElement('div');
   chip.className = 'fp-chip fp-read';
   chip.setAttribute('data-testid', testid);
   var num = doc.createElement('span');
-  num.className = 'fp-gapnum fp-derived';
+  num.className = 'fp-gapnum' + (source === 'typed' ? '' : ' fp-derived');
   num.textContent = String(value);
   chip.appendChild(num);
   var unit = doc.createElement('span'); unit.className='fp-unit'; unit.textContent='cm';
@@ -2641,6 +2979,9 @@ function renderCtrlLayer(t){
   // own, so a chip inside it sits exactly where it was placed.
   var chainGroup = null;
   allDims(t).forEach(function(d){
+    // A landmark's own place in the chain carries no number: its square is a
+    // break in the line and nothing more.
+    if(d.value == null) return;
     if(d.inChain && !chainGroup){
       chainGroup = doc.createElement('div');
       chainGroup.className = 'fp-chain';
@@ -2648,9 +2989,14 @@ function renderCtrlLayer(t){
       ctrlLayerEl.appendChild(chainGroup);
     }
     var parent = d.inChain ? chainGroup : null;
-    if(d.readOnly) buildGapChip(d.testid, d.value, chipAnchor(d), t, parent);
+    if(d.readOnly) buildGapChip(d.testid, d.value, d.source, chipAnchor(d), t, parent);
     else buildChip(d.testid, d.value, d.source, chipAnchor(d), t, d.commit, d.label, d.tone === 'primary', false, parent);
   });
+
+  // A mark's name, so a plan full of squares reads without a legend. It keeps
+  // its screen size whatever the zoom, which is why it lives here and not in
+  // the SVG with the square it names.
+  renderMarkNames(t);
 
   // The live length riding the pointer while a stroke or a resize is
   // lengthening a wall. Read-only: mid-gesture there is nothing to commit.
@@ -2659,6 +3005,33 @@ function renderCtrlLayer(t){
 
   // Last, so it can avoid every chip this pass has already placed.
   renderFocusPlate(t);
+}
+
+/* How far out of the square a name chip's centre sits: clear of the square,
+   plus half the chip's own extent across the wall, so the chip's near edge is
+   what lands beside the square rather than its middle. */
+var MARK_NAME_HALF_W_PX = 52;
+var MARK_NAME_HALF_H_PX = 14;
+function markNameHalfCrossPx(w){
+  return wallAxis(w) === 'horizontal' ? MARK_NAME_HALF_H_PX : MARK_NAME_HALF_W_PX;
+}
+function renderMarkNames(t){
+  (model.landmarks || []).forEach(function(m){
+    if(!landmarkShows(m)) return;
+    var g = landmarkGeom(m);
+    if(!g || !wallOnScreen(g.wall, t)) return;
+    var chip = doc.createElement('div');
+    chip.className = 'fp-mark-name';
+    chip.setAttribute('data-testid', 'landmark-name-' + m.id);
+    chip.textContent = landmarkLabel(m.kind);
+    chip.style.color = markColour(m.kind);
+    chip.style.borderColor = markColour(m.kind);
+    var outCm = g.half + (8 + markNameHalfCrossPx(g.wall))/t.scale;
+    placeInStage(chip, {
+      x: g.centre.x + g.normal.x*g.sign*outCm,
+      y: g.centre.y + g.normal.y*g.sign*outCm
+    }, t);
+  });
 }
 
 /* ======================================================================
@@ -2705,19 +3078,50 @@ function focusPlateAnchor(w, seg, t, side){
   var outCm = (segHitWidthCm(t)/2 + 44/t.scale) * side;
   return { x: mid.x + n.x*outCm, y: mid.y + n.y*outCm };
 }
+function newFocusPlate(){
+  var plate = doc.createElement('div');
+  plate.className = 'fp-plate fp-focus';
+  plate.id = 'focusPlate';
+  plate.setAttribute('data-testid', 'focus-plate');
+  return plate;
+}
+/** A landmark's own plate: it has nothing to state, so only "Șterge". */
+function renderLandmarkPlate(m, t){
+  var g = landmarkGeom(m);
+  if(!g) return;
+  var plate = newFocusPlate();
+  var row = doc.createElement('div');
+  row.className = 'fp-row';
+  plate.appendChild(row);
+  plateAction(row, 'plate-delete', RO.del, 'del', function(){ deleteSelection(); });
+  stopChipPointer(plate);
+  focusPlateEl = plate;
+  if(isNarrow()){
+    plate.classList.add('fp-docked');
+    ctrlLayerEl.appendChild(plate);
+    return;
+  }
+  var outCm = g.half + 44/t.scale;
+  placeInStage(plate, {
+    x: g.centre.x + g.normal.x*g.sign*outCm,
+    y: g.centre.y + g.normal.y*g.sign*outCm
+  }, t, true);
+}
 function renderFocusPlate(t){
   // Hidden while a drag is running: it would ride along with the piece
   // and end up on top of wherever the gesture is about to land.
   if(dragState && dragState.committed) return;
   if(!selection) return;
+  if(selection.landmarkId){
+    var mark = findLandmark(selection.landmarkId);
+    if(mark) renderLandmarkPlate(mark, t);
+    return;
+  }
   var f = findSegAnywhere(selection.segId);
   if(!f) return;
   var w = f.wall, seg = f.seg;
 
-  var plate = doc.createElement('div');
-  plate.className = 'fp-plate fp-focus';
-  plate.id = 'focusPlate';
-  plate.setAttribute('data-testid', 'focus-plate');
+  var plate = newFocusPlate();
 
   var row = doc.createElement('div');
   row.className = 'fp-row';
@@ -2846,6 +3250,7 @@ function cancelStroke(){
     // An opening that travelled to another wall was re-made there, so the
     // focus has to come back to the piece the model holds again.
     if(dragState.kind === 'opening' && dragState.segId) selection = { segId: dragState.segId };
+    if(dragState.kind === 'landmark' && dragState.landmarkId) selection = { landmarkId: dragState.landmarkId };
   }
   dragState = null;
   stopEdgePan();
@@ -2883,6 +3288,21 @@ function onSvgPointerDown(e){
       kind:'draw', tool: toolMakes(), startPt: startSnap.point, startSnap: startSnap
     });
     capture(e);
+    return;
+  }
+
+  // A landmark is the one thing the landmark step can take hold of, and it
+  // wins over the armed tool: the tool is armed on arrival, so a press on a
+  // square already there would otherwise always try to place another one.
+  var markEl = e.target.closest ? e.target.closest('[data-landmark-id]') : null;
+  if(mode === 'landmarks' && markEl){
+    // Taking hold of one puts the tool down, so the plate, the hint and the
+    // focus all say the same thing: this square is what the client is on.
+    activeTool = restingTool(tools);
+    justMade = null;
+    dragState = Object.assign(base, { kind:'landmark', landmarkId: markEl.getAttribute('data-landmark-id') });
+    capture(e);
+    render();
     return;
   }
 
@@ -2948,6 +3368,20 @@ function beginCommittedDrag(ds){
       // position.
       ds.touches = wallsAtPoint(ds.vertexPt, null).map(function(x){ return { wallId:x.wall.id, end:x.end }; });
     }
+  } else if(ds.kind==='landmark'){
+    pushHistory(); ds.base = snapshotModel();
+    var mk = findLandmark(ds.landmarkId);
+    var mw = mk ? findWall(mk.wallId) : null;
+    if(mk && mw){
+      // The run and where on it the drag began, both fixed now, exactly as an
+      // opening's are.
+      ds.run = buildRun(mw.id, runWallInputs());
+      ds.runPoints = ds.run ? runPoints(ds.run) : [];
+      var mClosed = !!(ds.run && ds.run.closed);
+      ds.grabArc = arcOnRun(ds.runPoints, ds.startCm, null, mClosed);
+      ds.centreArc0 = arcOnRun(ds.runPoints, pointAlong(mw, mk.offsetFromStartCm + LANDMARK_SIZE_CM/2), null, mClosed);
+      ds.lastArc = ds.grabArc;
+    }
   } else if(ds.kind==='opening' || ds.kind==='openingEdge'){
     pushHistory(); ds.base = snapshotModel();
     var f = findSeg(ds.wallId, ds.segId);
@@ -2997,6 +3431,10 @@ function applyDragMove(ds, curCm, t){
     if(cornerSnap){ dx = cornerSnap.x - ds.vertexPt.x; dy = cornerSnap.y - ds.vertexPt.y; ds.snapAt = cornerSnap; }
     else { ds.snapAt = null; }
     dragCornerAtPoint(ds.vertexPt, dx, dy);
+  } else if(ds.kind==='landmark'){
+    restoreSnapshot(ds.base);
+    selection = { landmarkId: ds.landmarkId };
+    applyLandmarkSlide(ds, curCm);
   } else if(ds.kind==='opening'){
     restoreSnapshot(ds.base);
     // The model is the one the drag began on again, so the piece in focus
@@ -3160,7 +3598,10 @@ function onSvgPointerMove(e){
 }
 
 function handleTap(ds){
-  if(ds.kind==='push' || ds.kind==='opening' || ds.kind==='openingEdge'){
+  if(ds.kind==='landmark'){
+    selection = { landmarkId: ds.landmarkId };
+    justMade = null;
+  } else if(ds.kind==='push' || ds.kind==='opening' || ds.kind==='openingEdge'){
     selection = { segId: ds.segId };
     justMade = null;
   } else if(ds.kind==='freeEnd'){
@@ -3204,13 +3645,77 @@ function placeOpening(ds, clientX, clientY){
   toolUsed(true, kind);
 }
 
+/**
+ * The wall a tap landed on, found from the geometry rather than from what is
+ * under the pointer: on the landmark step the plan carries no hit targets of
+ * its own. A Fără perete side is never one of them.
+ */
+function wallUnderPoint(pt, t){
+  var reach = segHitWidthCm(t)/2;
+  var best = null, bestAcross = Infinity;
+  model.walls.forEach(function(w){
+    if(w.isOpen) return;
+    var d = wallDir(w), n = wallNormal(w), len = wallLen(w);
+    var along = (pt.x - w.from.x)*d.x + (pt.y - w.from.y)*d.y;
+    if(along < -reach || along > len + reach) return;
+    var across = Math.abs((pt.x - w.from.x)*n.x + (pt.y - w.from.y)*n.y);
+    if(across > reach || across >= bestAcross) return;
+    bestAcross = across;
+    best = { wall: w, alongCm: clamp(along, 0, len) };
+  });
+  return best;
+}
+
+/** One tap with the landmark tool on: a 30 cm square against the wall touched. */
+function placeLandmark(ds, clientX, clientY){
+  var t = viewTransform();
+  var found = wallUnderPoint(clientToCm(clientX, clientY, t), t);
+  if(!found){ toolUsed(false, null); return; }
+  var w = found.wall;
+  // A new landmark goes on the room side, the same side a new door opens
+  // into — the wall normal's own positive side.
+  var face = 'in';
+  var offset = placeOnWall({
+    wallLengthCm: markWallLengthCm(w),
+    isOpen: !!w.isOpen,
+    wantCentreCm: found.alongCm,
+    blockers: blockersFor(w, face, null)
+  });
+  if(offset == null){ toolUsed(false, null); return; }
+  pushHistory();
+  var mark = {
+    id: uid('mark'), kind: landmarkKind, wallId: w.id,
+    offsetFromStartCm: r(offset), face: face
+  };
+  model.landmarks.push(mark);
+  selection = { landmarkId: mark.id };
+  toolUsed(true, LANDMARK_TOOL);
+}
+
+/** What the focus is on right now, whatever kind of thing it is. */
+function focusKey(){
+  if(!selection) return null;
+  return selection.landmarkId ? 'mark:' + selection.landmarkId : 'seg:' + selection.segId;
+}
+
 /** When the piece in focus would sit under a plate, pan just enough to show it. */
 function revealFocused(){
   if(!selection || !view) return;
+  var box;
+  if(selection.landmarkId){
+    var mk = findLandmark(selection.landmarkId);
+    var g = mk ? landmarkGeom(mk) : null;
+    if(!g) return;
+    var pad = g.half + WALL_THICKNESS_CM;
+    box = { minX: g.centre.x - pad, minY: g.centre.y - pad, maxX: g.centre.x + pad, maxY: g.centre.y + pad };
+    stopFitEase();
+    view = panToReveal(view, box, stageSize(), plateBands());
+    return;
+  }
   var f = findSegAnywhere(selection.segId);
   if(!f) return;
   var pts = segPoints(f.wall, f.seg);
-  var box = {
+  box = {
     minX: Math.min(pts.p0.x, pts.p1.x) - WALL_THICKNESS_CM,
     minY: Math.min(pts.p0.y, pts.p1.y) - WALL_THICKNESS_CM,
     maxX: Math.max(pts.p0.x, pts.p1.x) + WALL_THICKNESS_CM,
@@ -3261,10 +3766,11 @@ function onSvgPointerUp(e){
   }
   if(!dragState) return;
   var ds = dragState;
-  var focusBefore = selection ? selection.segId : null;
+  var focusBefore = focusKey();
   stopEdgePan();
   if(!ds.committed && ds.kind === 'place'){
-    placeOpening(ds, e.clientX, e.clientY);
+    if(toolMakes() === LANDMARK_TOOL) placeLandmark(ds, e.clientX, e.clientY);
+    else placeOpening(ds, e.clientX, e.clientY);
   } else if(!ds.committed){
     if(ds.kind === 'draw'){
       // A tool use that drew nothing keeps the tool on, and the hint
@@ -3275,6 +3781,10 @@ function onSvgPointerUp(e){
     }
   } else if(ds.kind==='pan'){
     /* the view has already followed the finger */
+  } else if(ds.kind==='landmark'){
+    // The drag has already put the square where it goes, wall by wall and face
+    // by face; release only settles the focus on it.
+    selection = { landmarkId: ds.landmarkId };
   } else if(ds.kind==='openingEdge'){
     selection = { segId: ds.segId };
   } else if(ds.kind==='opening'){
@@ -3317,7 +3827,7 @@ function onSvgPointerUp(e){
   }
   // Whatever moved the focus this time, a piece that would land under a
   // plate is brought out from under it once, here.
-  if((selection ? selection.segId : null) !== focusBefore) revealFocused();
+  if(focusKey() !== focusBefore) revealFocused();
   try{ svgEl.releasePointerCapture && svgEl.releasePointerCapture(e.pointerId); }catch(err){}
   dragState = null;
   render();
@@ -3517,19 +4027,23 @@ function bumpIdCounter(){
       if(m) max = Math.max(max, parseInt(m[1], 10));
     });
   });
+  (model.landmarks || []).forEach(function(mk){
+    var m = /(\d+)$/.exec(String(mk.id || ''));
+    if(m) max = Math.max(max, parseInt(m[1], 10));
+  });
   if(_idCounter <= max) _idCounter = max + 1;
 }
 
 /* A model saved by an earlier editor still carries the ceiling height;
    it is accepted and ignored, because the height now lives on the saved
-   drawing's own snapshot. */
+   drawing's own snapshot. One saved before landmarks existed simply has none. */
 function setModel(m){
   if(!m || typeof m !== 'object' || !Array.isArray(m.walls)) throw new Error('setModel: expected { walls }');
-  restoreSnapshot({ walls: m.walls });
+  restoreSnapshot({ walls: m.walls, landmarks: landmarksOfModel(m) });
   undoStack = []; redoStack = [];
   selection = null; dragState = null; toastState = null; confirmState = null;
   lastSettledSegId = null;
-  activeTool = restingTool(tools); justMade = null; refusedTool = false;
+  activeTool = armedTool(); justMade = null; refusedTool = false;
   stopFitEase();
   view = null;
   bumpIdCounter();
@@ -3552,6 +4066,7 @@ function destroy(){
   }
   root.innerHTML = '';
   root.classList.remove('fp');
+  root.classList.remove('fp-placing');
 }
 
 function globalReset(){ resetAll(); }

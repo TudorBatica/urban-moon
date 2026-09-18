@@ -2,16 +2,29 @@
 	import { onMount, tick } from 'svelte';
 	import SlideStage from './SlideStage.svelte';
 	import type { Device } from './device';
-	import { BACK_LABEL, SKIP_LABEL, slideView, type SlideDef } from './tutorialSlides';
+	import { BACK_LABEL, LAST_LABEL, SKIP_LABEL, slideView, type SlideDef } from './tutorialSlides';
 
 	interface Props {
 		slides: SlideDef[];
 		device: Device;
+		/** what the button on the last slide says: it names what happens next */
+		lastLabel?: string;
+		/** what stands where the position does, when a name says more than "1 / 1" */
+		position?: string;
+		/** the colour of the mark a landmark slide is about */
+		markColour?: string;
 		/** skipped, closed with Escape, or walked to the end — all one way out */
 		onclose: () => void;
 	}
 
-	let { slides, device, onclose }: Props = $props();
+	let {
+		slides,
+		device,
+		lastLabel = LAST_LABEL,
+		position,
+		markColour,
+		onclose
+	}: Props = $props();
 
 	let step = $state(0);
 	let anchor = $state<HTMLDivElement | null>(null);
@@ -21,7 +34,7 @@
 	   bottom of the screen; the element it is mounted in says where that is. */
 	let sheetTop = $state(0);
 
-	const view = $derived(slideView(slides, step, device));
+	const view = $derived(slideView(slides, step, device, lastLabel));
 
 	function measure(): void {
 		if (anchor) sheetTop = Math.max(0, anchor.getBoundingClientRect().top);
@@ -90,13 +103,13 @@
 		bind:this={sheet}
 	>
 		<div class="ot">
-			<span class="ct" data-testid="slides-position">{view.position}</span>
+			<span class="ct" data-testid="slides-position">{position ?? view.position}</span>
 			<button type="button" class="lnk" data-testid="slides-skip" onclick={onclose}>
 				{SKIP_LABEL}
 			</button>
 		</div>
 
-		<SlideStage slideId={view.slide.id} {device} />
+		<SlideStage slideId={view.slide.id} {device} {markColour} />
 
 		<h2 class="q2" id="slides-title">{view.slide.title}</h2>
 		<p class="para">{view.paragraph}</p>

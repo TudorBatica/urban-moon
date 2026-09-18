@@ -237,6 +237,30 @@
 .fp .fp-leaf { stroke: var(--ink); stroke-width: 1.6px; fill: none; pointer-events: none; vector-effect: non-scaling-stroke; }
 .fp .fp-arc { stroke: var(--ink); stroke-width: 1px; stroke-dasharray: 4 4; fill: none; pointer-events: none; vector-effect: non-scaling-stroke; }
 .fp .fp-wash { fill: var(--wash); stroke: none; pointer-events: none; }
+
+/* A landmark: the one place the product carries colour. The square is filled
+   with the mark's own colour from the element's style; in focus it takes an
+   ink edge, so state is still told in ink. */
+.fp .fp-mark { stroke: none; pointer-events: none; }
+.fp .fp-mark.on { stroke: var(--ink); }
+/* On the landmark step the square is the thing the client takes hold of; on
+   the plan step landmarks are drawn but inert. */
+.fp.fp-placing .fp-mark { pointer-events: all; cursor: grab; touch-action: none; }
+/* Its name keeps its screen size at every zoom, which is why it is an ordinary
+   element over the canvas rather than part of the drawing. */
+.fp .fp-mark-name {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+  background: var(--white);
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 2px 7px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  z-index: 14;
+}
 .fp .fp-handle { fill: var(--white); stroke: var(--ink); pointer-events: none; }
 .fp .fp-free-end { fill: var(--white); stroke: var(--ink); pointer-events: none; }
 

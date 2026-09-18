@@ -3,12 +3,18 @@
 	import { glyphSvg } from './glyphs';
 
 	interface Props {
-		/** the tool the slide is about */
+		/** the tool, or the mechanic, the slide is about */
 		slideId: string;
 		device: Device;
+		/** the colour of the mark the landmark slide places */
+		markColour?: string;
 	}
 
-	let { slideId, device }: Props = $props();
+	let { slideId, device, markColour }: Props = $props();
+
+	/* The landmark step has no tool glyph: the tool that places a mark is the
+	   mark's own colour square. */
+	const isMark = $derived(slideId === 'landmark');
 </script>
 
 <div
@@ -18,7 +24,11 @@
 	data-device={device}
 	aria-hidden="true"
 >
-	<span class="glyph">{@html glyphSvg(slideId)}</span>
+	{#if isMark}
+		<span class="mark" data-testid="slide-stage-mark" style:background={markColour}></span>
+	{:else}
+		<span class="glyph">{@html glyphSvg(slideId)}</span>
+	{/if}
 </div>
 
 <style>
@@ -47,6 +57,13 @@
 		width: 48px;
 		height: 48px;
 		color: var(--ink);
+	}
+	.mark {
+		display: block;
+		width: 48px;
+		height: 48px;
+		border-radius: 2px;
+		background: var(--ink);
 	}
 	.glyph :global(svg) {
 		width: 100%;

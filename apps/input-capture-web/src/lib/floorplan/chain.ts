@@ -6,7 +6,11 @@
  * model and the view transform.
  */
 
-/** Anything a gap stops at, as the span it covers, in cm from the wall's start. */
+/**
+ * Anything a gap stops at, as the span it covers, in cm from the wall's
+ * start: an opening's jamb, a landmark's edge on either face, or a stretch
+ * with nothing built.
+ */
 export interface ChainObstacle {
   startCm: number;
   endCm: number;
@@ -19,6 +23,12 @@ export interface ChainInput {
   pieceEndCm: number;
   /** everything else along this wall a gap stops at, the piece excluded */
   obstacles: ChainObstacle[];
+  /**
+   * Whether the piece states its own size. A landmark has none to state, so
+   * its square is a break in the line with no number; an opening's width is
+   * the number in the middle. Absent means it does.
+   */
+  pieceShowsNumber?: boolean;
 }
 
 export type ChainItemKind = 'gap-before' | 'piece' | 'gap-after';
@@ -29,6 +39,8 @@ export interface ChainItem {
   startCm: number;
   endCm: number;
   lengthCm: number;
+  /** a number rides on this item; a piece with no size to state carries none */
+  showsNumber: boolean;
 }
 
 export type WallAxis = 'horizontal' | 'vertical';
@@ -53,6 +65,12 @@ export const CHAIN_STEP_OUT_PX: Record<WallAxis, number> = {
  * corner the piece can still slide round, at a free end, and where the wall
  * meets a Fără perete side. A gap of zero is dropped: the chain simply
  * starts (or ends) with the piece.
+ *
+ * A piece may share its stretch of wall with an obstacle — a landmark under a
+ * window — and then that obstacle bounds the gap too, at whichever of its own
+ * edges lies beyond the piece: the number a client can hold a tape to is the
+ * one that reaches the jamb, and no run is ever drawn across a jamb it does
+ * not stop at. An obstacle wholly inside the piece bounds nothing.
  */
 export function chainOfPiece(input: ChainInput): ChainItem[] {
   const pieceStart = input.pieceStartCm;
@@ -60,16 +78,38 @@ export function chainOfPiece(input: ChainInput): ChainItem[] {
   let before = 0;
   let after = input.wallLengthCm;
   for (const o of input.obstacles) {
-    if (o.endCm <= pieceStart && o.endCm > before) before = o.endCm;
-    if (o.startCm >= pieceEnd && o.startCm < after) after = o.startCm;
+    // Wholly before the piece: its far edge. Overlapping it and reaching
+    // further back: its near edge, the jamb the gap stops at.
+    const bound = o.endCm <= pieceStart ? o.endCm : o.startCm <= pieceStart ? o.startCm : null;
+    if (bound !== null && bound > before) before = bound;
+    const beyond = o.startCm >= pieceEnd ? o.startCm : o.endCm >= pieceEnd ? o.endCm : null;
+    if (beyond !== null && beyond < after) after = beyond;
   }
   const items: ChainItem[] = [];
   if (pieceStart - before > 0) {
-    items.push({ kind: 'gap-before', startCm: before, endCm: pieceStart, lengthCm: pieceStart - before });
+    items.push({
+      kind: 'gap-before',
+      startCm: before,
+      endCm: pieceStart,
+      lengthCm: pieceStart - before,
+      showsNumber: true
+    });
   }
-  items.push({ kind: 'piece', startCm: pieceStart, endCm: pieceEnd, lengthCm: pieceEnd - pieceStart });
+  items.push({
+    kind: 'piece',
+    startCm: pieceStart,
+    endCm: pieceEnd,
+    lengthCm: pieceEnd - pieceStart,
+    showsNumber: input.pieceShowsNumber !== false
+  });
   if (after - pieceEnd > 0) {
-    items.push({ kind: 'gap-after', startCm: pieceEnd, endCm: after, lengthCm: after - pieceEnd });
+    items.push({
+      kind: 'gap-after',
+      startCm: pieceEnd,
+      endCm: after,
+      lengthCm: after - pieceEnd,
+      showsNumber: true
+    });
   }
   return items;
 }
