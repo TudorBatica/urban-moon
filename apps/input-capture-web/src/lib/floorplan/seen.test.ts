@@ -25,10 +25,21 @@ describe('the seen-once flags', () => {
 		expect(hasSeen(s, 'zoomHint')).toBe(true);
 	});
 
-	it('keep flags this version does not know about', () => {
-		const s = fakeStorage({ [SEEN_KEY]: JSON.stringify({ slides: true }) });
+	it('remember the slides apart from the zoom hint', () => {
+		const s = fakeStorage();
+		expect(hasSeen(s, 'slides')).toBe(false);
+		markSeen(s, 'slides');
+		expect(JSON.parse(s.data[SEEN_KEY])).toEqual({ slides: true });
+		expect(hasSeen(s, 'slides')).toBe(true);
+		expect(hasSeen(s, 'zoomHint')).toBe(false);
 		markSeen(s, 'zoomHint');
-		expect(JSON.parse(s.data[SEEN_KEY])).toEqual({ slides: true, zoomHint: true });
+		expect(readSeen(s)).toEqual({ slides: true, zoomHint: true });
+	});
+
+	it('keep flags this version does not know about', () => {
+		const s = fakeStorage({ [SEEN_KEY]: JSON.stringify({ somethingElse: true }) });
+		markSeen(s, 'zoomHint');
+		expect(JSON.parse(s.data[SEEN_KEY])).toEqual({ somethingElse: true, zoomHint: true });
 	});
 
 	it('survive corrupt or foreign contents', () => {

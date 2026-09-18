@@ -9,16 +9,19 @@
 		/** An engine model from a previous session — restored with setModel. */
 		initialModel?: unknown;
 		onchange?: (room: RoomSnapshot) => void;
+		/** the client asked how to draw: the hint's link, or the ? key */
+		onhelp?: () => void;
 	}
 
-	let { initialModel, onchange }: Props = $props();
+	let { initialModel, onchange, onhelp }: Props = $props();
 
 	let host: HTMLDivElement;
 	let api: FloorplanHandle | null = null;
 
 	onMount(() => {
 		api = mountFloorplan(host, {
-			onChange: (r: RoomSnapshot) => onchange?.(r)
+			onChange: (r: RoomSnapshot) => onchange?.(r),
+			onHelp: onhelp ? () => onhelp?.() : undefined
 		});
 		if (initialModel) api.setModel(initialModel as FloorplanModel);
 		return () => {

@@ -19,6 +19,8 @@ export interface FloorplanModel {
 export interface MountFloorplanOptions {
 	/** Called after every render in which the model actually changed. */
 	onChange?: (room: RoomSnapshot) => void;
+	/** Asked for the help: the link at the end of the hint, or the ? key. Without it neither exists. */
+	onHelp?: () => void;
 	/** The tools the plate offers; the first is the resting one. */
 	tools?: ToolDef[];
 	/** Where the seen-once flags are kept; defaults to the browser's localStorage. */

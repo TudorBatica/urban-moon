@@ -5,11 +5,20 @@
 
 export const SEEN_KEY = 'um.draw.seen';
 
-export type SeenFlag = 'zoomHint';
+export type SeenFlag = 'zoomHint' | 'slides';
 
 export interface SeenStorage {
 	getItem(key: string): string | null;
 	setItem(key: string, value: string): void;
+}
+
+/** The browser's own storage, or null: a private window throws on the first read. */
+export function localSeenStorage(): SeenStorage | null {
+	try {
+		return window.localStorage;
+	} catch {
+		return null;
+	}
 }
 
 export type SeenFlags = Partial<Record<SeenFlag, boolean>>;

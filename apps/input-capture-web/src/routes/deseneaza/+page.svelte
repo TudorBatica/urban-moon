@@ -2,6 +2,10 @@
 	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import FloorplanEditor from '$lib/floorplan/FloorplanEditor.svelte';
+	import Slides from '$lib/floorplan/Slides.svelte';
+	import { DRAWING_SLIDES } from '$lib/floorplan/tutorialSlides';
+	import { initialDevice, watchDevice, type Device } from '$lib/floorplan/device';
+	import { hasSeen, localSeenStorage, markSeen } from '$lib/floorplan/seen';
 	import { roomToSvg, svgToPngDataUrl } from '$lib/floorplan/export';
 	import { saveEditedDrawing } from '$lib/floorplan/drawing';
 	import { roomCount } from '$lib/state/answers.svelte';
@@ -15,6 +19,8 @@
 	let empty = $state(true);
 	let ask = $state<'done' | 'discard' | 'save-failed' | null>(null);
 	let saving = $state(false);
+	let slidesOpen = $state(false);
+	let device = $state<Device>('desktop');
 
 	/** The model as it was when the editor opened — "changed?" compares against it. */
 	let baseline: string | null = null;
@@ -26,18 +32,29 @@
 			void goto('/?s=c_rooms');
 			return;
 		}
+		device = initialDevice(window);
+		const stopWatching = watchDevice(window, (d) => (device = d));
+		/* The only help there is, shown by itself once per browser — over an
+		   empty canvas and a restored drawing alike, since it changes neither. */
+		slidesOpen = !hasSeen(localSeenStorage(), 'slides');
 		/* After the flush: the editor's own onMount has run and any saved model
 		   has been restored, so this is the state "Înapoi" compares against. */
 		void tick().then(() => {
 			baseline = JSON.stringify(editor?.getModel() ?? null);
 			empty = editor?.isEmpty() ?? true;
 		});
+		return stopWatching;
 	});
 
-	/* The editor's keys stand down while a note is open. */
+	/* The editor's keys stand down while a note or the slides are open. */
 	$effect(() => {
-		editor?.setKeysEnabled(ask === null);
+		editor?.setKeysEnabled(ask === null && !slidesOpen);
 	});
+
+	function closeSlides(): void {
+		slidesOpen = false;
+		markSeen(localSeenStorage(), 'slides');
+	}
 
 	function onchange(): void {
 		empty = editor?.isEmpty() ?? true;
@@ -90,7 +107,16 @@
 	</header>
 
 	<div class="canvas">
-		<FloorplanEditor bind:this={editor} {initialModel} {onchange} />
+		<FloorplanEditor
+			bind:this={editor}
+			{initialModel}
+			{onchange}
+			onhelp={() => (slidesOpen = true)}
+		/>
+
+		{#if slidesOpen}
+			<Slides slides={DRAWING_SLIDES} {device} onclose={closeSlides} />
+		{/if}
 
 		{#if ask === 'done'}
 			<Note

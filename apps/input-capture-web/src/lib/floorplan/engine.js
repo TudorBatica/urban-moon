@@ -22,7 +22,8 @@ import {
 } from './view';
 import { CHAIN_LANE_PX, chainOfPiece, placeChainChips } from './chain';
 import { buildRun, extendEndOf, ownOffsetOf, placeAlongRun } from './slide';
-import { hasSeen, markSeen } from './seen';
+import { hasSeen, localSeenStorage, markSeen } from './seen';
+import { glyphSvg as glyph } from './glyphs';
 import { BASE, ease, ms } from '$lib/ui/motion';
 
 /* ----------------------------------------------------------------------
@@ -43,6 +44,7 @@ const RO = {
   rotate: 'Rotește',
   del: 'Șterge',
   gotIt: 'Am înțeles',
+  help: 'Cum desenez',
   letMeFix: 'Mai schimb eu',
   /* the field names that appear inside the metres question, mid-sentence */
   fieldLength: 'lungime',
@@ -137,31 +139,6 @@ const RO = {
   slidesPastEnd: function(subject){ return subject + ' poate trece de capătul liber. Apoi continuă peretele din capătul ei.'; }
 };
 
-/* Tool glyphs and the two view glyphs: 20x20, 1.5px, round caps, no fill. */
-const GLYPH = {
-  select: '<path d="M5 3.5l10 5.8-4.4 1.1L8.4 15z"/>',
-  wall: '<path d="M3 16.5V3.5h13.5"/><path d="M7 16.5V7.5h9.5"/>',
-  open: '<path d="M3.5 10h13" stroke-dasharray="2 2.6"/><path d="M3 6.5v7M17 6.5v7"/>',
-  window: '<path d="M2.5 7.5h15M2.5 10h15M2.5 12.5h15M2.5 7.5v5M17.5 7.5v5"/>',
-  door: '<path d="M4 16.5h3.5M4 16.5V5.5"/><path d="M4 5.5a11 11 0 0111 11" stroke-dasharray="2 2"/>',
-  undo: '<path d="M7.5 4.5L4 8l3.5 3.5"/><path d="M4 8h8a4 4 0 010 8H9"/>',
-  redo: '<path d="M12.5 4.5L16 8l-3.5 3.5"/><path d="M16 8H8a4 4 0 000 8h3"/>',
-  zoomIn: '<path d="M10 4.5v11M4.5 10h11"/>',
-  zoomOut: '<path d="M4.5 10h11"/>',
-  fit: '<path d="M3.5 7.5v-4h4M12.5 3.5h4v4M16.5 12.5v4h-4M7.5 16.5h-4v-4"/>',
-  rotate: '<path d="M15.5 9a5.5 5.5 0 10-1.6 4.4"/><path d="M15.8 4.5V9h-4.5"/>',
-  del: '<path d="M4.5 6h11M8 6V4h4v2M6 6l.8 10h6.4L14 6"/>'
-};
-function glyph(name){
-  if(!GLYPH[name]) return '';
-  return '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">' + GLYPH[name] + '</svg>';
-}
-
-/* A browser in private mode throws on the very first read of localStorage. */
-function safeLocalStorage(){
-  try{ return window.localStorage; }catch(e){ return null; }
-}
-
 /* The editor's own markup, injected into the root; every lookup below
    goes through root.querySelector, so the ids are per-instance. */
 export const TEMPLATE = `
@@ -195,7 +172,7 @@ export const TEMPLATE = `
  * Mount the floorplan editor into `root`.
  *
  * @param {HTMLElement} root
- * @param {{ onChange?: (room:any)=>void, exposeGlobals?: boolean }} [opts]
+ * @param {{ onChange?: (room:any)=>void, onHelp?: ()=>void, exposeGlobals?: boolean }} [opts]
  * @returns {{ room():any, getModel():any, setModel(m:any):void, reset():void, destroy():void }}
  */
 export function mountFloorplan(root, opts){
@@ -206,6 +183,9 @@ if(!root || !root.nodeType) throw new Error('mountFloorplan: a root element is r
 var doc = root.ownerDocument || document;
 var win = doc.defaultView || window;
 var onChangeCb = typeof opts.onChange === 'function' ? opts.onChange : null;
+/* The help the hint offers lives outside the engine; without a host to show
+   it the line carries no link and ? does nothing. */
+var onHelpCb = typeof opts.onHelp === 'function' ? opts.onHelp : null;
 var exposeGlobals = !!opts.exposeGlobals;
 var destroyed = false;
 
@@ -312,7 +292,7 @@ var zoomHintUntil = 0;
 /* The hint speaks in touch words or mouse words, starting from what the
    device says it is and following whatever the client last used. */
 var touchWords = !!(win.matchMedia && win.matchMedia('(pointer: coarse)').matches);
-var seenStorage = opts.seenStorage !== undefined ? opts.seenStorage : safeLocalStorage();
+var seenStorage = opts.seenStorage !== undefined ? opts.seenStorage : localSeenStorage();
 var carried = { windowWidth: DEFAULT_WINDOW_W, sill: DEFAULT_SILL };
 
 function snapshotModel(){
@@ -2373,9 +2353,12 @@ function hintFor(){
 }
 function renderHint(){
   var h = hintFor();
+  var help = onHelpCb
+    ? '<button type="button" class="fp-help" data-testid="hint-help">' + RO.help + '</button>'
+    : '';
   hintEl.setAttribute('data-state', h.state);
-  hintEl.innerHTML = h.text;
-  hintEl.classList.toggle('fp-off', !h.text);
+  hintEl.innerHTML = h.text + (h.text && help ? ' · ' : '') + help;
+  hintEl.classList.toggle('fp-off', !h.text && !help);
 }
 function renderToastDom(){
   if(!toastState){ toastEl.classList.add('fp-off'); return; }
@@ -3429,6 +3412,13 @@ function init(){
     e.preventDefault();
   }, true);
 
+  hintEl.addEventListener('click', function(e){
+    var link = e.target && e.target.closest ? e.target.closest('.fp-help') : null;
+    if(!link || !onHelpCb) return;
+    e.preventDefault();
+    onHelpCb();
+  });
+
   toastDismissEl.addEventListener('click', function(){ hideToast(); render(); });
 
   confirmYesBtn.addEventListener('click', function(){ var cs=confirmState; hideConfirm(); if(cs && cs.onYes) cs.onYes(); render(); });
@@ -3488,6 +3478,12 @@ function onKeyDown(e){
     return;
   }
   if(typingInField(e)) return;
+  if(e.key === '?'){
+    if(!onHelpCb) return;
+    e.preventDefault();
+    onHelpCb();
+    return;
+  }
   if((e.key==='Delete' || e.key==='Backspace') && selection){
     e.preventDefault();
     deleteSelection();

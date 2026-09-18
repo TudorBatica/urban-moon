@@ -109,6 +109,19 @@
   z-index: 9;
 }
 .fp .fp-hint b { color: var(--ink); font-weight: 500; }
+/* the one thing in the line that can be pressed, so it takes the pointer back */
+.fp .fp-hint .fp-help {
+  pointer-events: auto;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--grey);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+.fp .fp-hint .fp-help:hover { color: var(--ink); }
 @media (min-width: 861px) { .fp .fp-hint { top: 74px; } }
 
 /* ---------------- the focus plate ---------------- */

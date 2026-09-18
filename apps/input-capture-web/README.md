@@ -53,7 +53,10 @@ src/lib/floorplan/            engine.js (the editor: geometry, rendering, pointe
                               tools.ts (which tool is on) · view.ts (fit, zoom, pan, the limits)
                               chain.ts (the chain of numbers on a wall, and where each one sits)
                               slide.ts (how far a window or a door travels while it is dragged)
+                              glyphs.ts (the 20x20 tool and view glyphs, as markup)
                               drawing.ts (builds and saves the Drawing) · seen.ts ("um.draw.seen")
+                              device.ts (touch words or mouse words) · tutorialSlides.ts (the help)
+                              Slides.svelte · SlideStage.svelte (the stage, a placeholder)
                               export.ts (svg/png) · FloorplanEditor.svelte
 src/lib/submit/               submit.ts (uploads + commit) · resumable.ts (chunked PUTs) · SubmitPanel.svelte
 src/lib/server/               config.ts (env) · uploads.ts (session start) · commit.ts (checks + manifest)
@@ -108,8 +111,19 @@ limits live in `../../packages/domain-data`.
   saved as they are. `setDrawing` throws when the browser refuses the write, which is what the
   save-failed note is for; deleting the drawing on `/planuri` reports a refused write in that
   screen's own rejection line.
+- **The slides are the editor's only help.** Five, one per tool, defined as data in
+  `tutorialSlides.ts` with a paragraph for each device; `Slides.svelte` shows a set of them and
+  `slideView` says what one step looks like (position, paragraph, whether "Înapoi" is there, what
+  the button says). They are mounted by `/deseneaza`, not by the engine, so opening and closing
+  them touches neither the model nor the view; while they are open the engine's keys stand down.
+  The engine's `onHelp` is what the "Cum desenez" link at the end of the hint line and the `?` key
+  call; without it the engine renders no link and `?` does nothing. `SlideStage.svelte` is a
+  placeholder: a still box with the tool's glyph, marked `data-placeholder="true"`.
+- **Touch words or mouse words** (`device.ts`): a screen starts from `(pointer: coarse)` and then
+  follows whatever pointer was last used, the same rule the engine's hint line follows.
 - **Seen once per browser**: `um.draw.seen`, one JSON object, read and written through `seen.ts`
-  with storage injected. Starting the questionnaire again does not clear it.
+  with storage injected — `zoomHint` and `slides` (written whenever the slides close, however they
+  close). Starting the questionnaire again does not clear it.
 - **Sending is pure and injectable** (`submit.ts`): fetch, blob lookup, storage, ids and sleeps all
   arrive as options, so the tests drive a whole send without a browser or a bucket.
 - **The server only handles small JSON.** File bytes go from the browser straight to the bucket.
