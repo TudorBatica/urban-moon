@@ -167,6 +167,15 @@
 }
 /* Framed in ink: the number of the thing in focus. */
 .fp .fp-chip.on { border-color: var(--ink); border-width: 1.5px; }
+/* The chain: the numbers along a wall while a piece on it is in focus.
+   The group covers the stage and takes no pointer of its own — its chips
+   still take theirs — and is positioned like the control layer it sits
+   in, so each chip lands exactly where it was placed. */
+.fp .fp-chain { position: absolute; inset: 0; pointer-events: none; }
+/* A gap: what the drawing says, not what the client writes. */
+.fp .fp-chip.fp-read { pointer-events: none; padding: 3px 7px; }
+.fp .fp-chip.fp-read::before { content: none; }
+.fp .fp-gapnum { padding: 0 2px; }
 /* An invisible halo, so the target is finger-sized without the chip
    being drawn finger-sized. */
 .fp .fp-chip::before { content: ''; position: absolute; inset: -7px; }

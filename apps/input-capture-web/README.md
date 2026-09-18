@@ -51,6 +51,8 @@ src/lib/ui/                   Frame (photo + side shell) · GoBar · Note · Key
 src/lib/plans/                Dropzone · FileTile · DrawingCard · PhotoField · Thumb · Rejections
 src/lib/floorplan/            engine.js (the editor: geometry, rendering, pointers) · engine.css
                               tools.ts (which tool is on) · view.ts (fit, zoom, pan, the limits)
+                              chain.ts (the chain of numbers on a wall, and where each one sits)
+                              slide.ts (how far a window or a door travels while it is dragged)
                               drawing.ts (builds and saves the Drawing) · seen.ts ("um.draw.seen")
                               export.ts (svg/png) · FloorplanEditor.svelte
 src/lib/submit/               submit.ts (uploads + commit) · resumable.ts (chunked PUTs) · SubmitPanel.svelte
@@ -81,9 +83,24 @@ limits live in `../../packages/domain-data`.
   component. It draws only while a making tool is on (Perete, Fără perete, Fereastră, Ușă); the
   resting tool selects, moves and pans. What is decidable without a browser lives in TypeScript
   beside it and is unit-tested: `tools.ts` (one use, then back to Selectează), `view.ts` (the fit
-  into the canvas minus the plate bands, zoom around a point, both limits, the edge auto-pan) and
-  `drawing.ts` (the only writer of `um.plans.drawing`). The editor's classes are all scoped under
-  `.fp` and share no name with a global rule of `app.css`.
+  into the canvas minus the plate bands, zoom around a point, both limits, the edge auto-pan),
+  `chain.ts`, `slide.ts` (below) and `drawing.ts` (the only writer of `um.plans.drawing`). The
+  editor's classes are all scoped under `.fp` and share no name with a global rule of `app.css`.
+- **Numbers sit in one lane per wall**, 34px outside its band — the distance to the chip's near
+  edge, so a number never covers the hit target of the wall it measures. At rest the lane holds that wall's
+  own length (`dim-<wallId>`, editable); while a window or a door on it is in focus or dragged
+  that number stands down and the same lane holds the chain (`chain`, with `chain-gap-before`,
+  `chain-piece`, `chain-gap-after`) instead. `chain.ts` decides what the chain is — each gap runs
+  to the first obstacle on its side, the wall's own ends included, and a gap of zero is dropped —
+  and where each number goes: one too narrow for its span steps out one lane on a leader, and two
+  such in a row are pushed apart. The gaps are read-only. A wall off screen shows no number.
+- **An opening slides along a run of walls.** `slide.ts` builds the run — the walls that carry on
+  into one another from the one it sits on, a ring coming back as one closed run that travel wraps
+  round — and says which wall of it the opening lands on (always wholly one, changing over as its
+  middle passes the corner), how far the wall has to grow when it goes past a free end, and which
+  of that wall's own ends that is. The run is taken when the drag commits, and each move reads the
+  pointer against the leg of it the drag was on or one either side, so travel stays continuous.
+  The whole drag is one undo step: every move re-applies from the model as it was when it began.
 - **The ceiling height** is asked on `/deseneaza/tavan` and lives on the saved drawing's own
   snapshot (`drawing.room.ceilingHeightCm`), not in the engine's model; a model saved by an
   earlier editor still carries it, and `setModel` accepts and ignores it.

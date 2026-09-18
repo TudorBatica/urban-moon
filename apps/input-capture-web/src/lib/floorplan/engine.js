@@ -20,6 +20,8 @@ import {
   viewBoxOf,
   zoomAround
 } from './view';
+import { CHAIN_LANE_PX, chainOfPiece, placeChainChips } from './chain';
+import { buildRun, extendEndOf, ownOffsetOf, placeAlongRun } from './slide';
 import { hasSeen, markSeen } from './seen';
 import { BASE, ease, ms } from '$lib/ui/motion';
 
@@ -128,7 +130,11 @@ const RO = {
   metresYes: function(cm){ return cm + ' cm — da'; },
   clamp: function(max){ return 'Nu e destul perete acolo — încape cel mult ' + max + ' cm.'; },
   clampYes: function(max){ return 'Folosește ' + max + ' cm'; },
-  openingStayed: 'Nu e destul perete liber acolo pentru golul ăsta — a rămas pe peretele lui.'
+  /* the subject of the two sliding lines, by the kind being dragged */
+  windowSubject: 'Fereastra',
+  doorSubject: 'Ușa',
+  slidesOnWall: function(subject){ return subject + ' merge pe perete și după colț, cât timp peretele continuă.'; },
+  slidesPastEnd: function(subject){ return subject + ' poate trece de capătul liber. Apoi continuă peretele din capătul ei.'; }
 };
 
 /* Tool glyphs and the two view glyphs: 20x20, 1.5px, round caps, no fill. */
@@ -260,10 +266,6 @@ var MIN_STROKE_PX = 12;         // screen px — a drawn stroke shorter than thi
                                  // mis-click, not a deliberate wall; TAP_PX only gates tap-vs-drag
                                  // at press, this is the second gate at commit (screen px, not cm,
                                  // so it behaves identically at every zoom level).
-var MIN_GAP_SHOWN = 2;          // cm — a flanking segment shorter than this, shown as an
-                                 // opening's left/right gap, is a sliver nobody asked for, not a
-                                 // measurement (MIN_WALL's own floor is 1cm, so this still lets an
-                                 // ordinary short wall segment through and only hides a genuine one)
 
 function r(n){ return Math.round(n); }
 function clamp(v,lo,hi){ return Math.min(hi, Math.max(lo, v)); }
@@ -861,6 +863,135 @@ function moveOpeningToWall(fromWallId, segId, toWallId, dropOffsetCm){
   reflow(toWall);
   return { ok:true, newId: opening.id };
 }
+/* ======================================================================
+   SLIDING AN OPENING — how far a window or a door travels while it is
+   dragged. slide.ts builds the run out of the walls handed to it, and
+   says where along it the opening lands and which way round that is on
+   the wall itself; what is here is the world geometry that goes with it
+   — the run's corners, how far along it a pointer is asking for — and
+   writing the answer into the model. The run is taken once, when the
+   drag commits.
+   ====================================================================== */
+/** every wall as slide.ts reads it: two ends that match exactly when the points do */
+function runWallInputs(){
+  return model.walls.map(function(w){
+    return { id:w.id, lengthCm:r(wallLen(w)), open:!!w.isOpen, fromKey:pointKey(w.from), toKey:pointKey(w.to) };
+  });
+}
+/** the run's corners in run order; a closed run ends back at its first point */
+function runPoints(run){
+  var pts = [];
+  run.walls.forEach(function(e, i){
+    var w = findWall(e.id);
+    if(!w) return;
+    var a = e.forward ? w.from : w.to, b = e.forward ? w.to : w.from;
+    if(i === 0) pts.push({ x:a.x, y:a.y });
+    pts.push({ x:b.x, y:b.y });
+  });
+  return pts;
+}
+/** which leg of the run's polyline an arc falls on */
+function legAtArc(pts, arc){
+  var acc = 0;
+  for(var i=0;i<pts.length-2;i++){
+    acc += dist(pts[i], pts[i+1]);
+    if(arc < acc) return i;
+  }
+  return Math.max(0, pts.length-2);
+}
+// How far along the run the pointer is asking for, in cm from its start.
+// An opening travels continuously, so the answer is looked for on the leg
+// the drag was on and the one either side of it only: in a room the whole
+// ring is one run, and a finger straying toward the far side would
+// otherwise re-match to the wall over there and take the opening with it.
+function arcOnRun(pts, pt, nearArc, closed){
+  var legs = pts.length-1;
+  if(legs < 1) return 0;
+  // No previous answer (the drag has just begun): the whole run is open
+  // to the search, since what is being read off it is already on it.
+  var near = (nearArc == null) ? null : legAtArc(pts, nearArc);
+  var best = null, arc = 0;
+  for(var i=0;i<legs;i++){
+    var a = pts[i], b = pts[i+1], len = dist(a,b);
+    var step = (near == null) ? 0 : Math.abs(i - near);
+    if(closed && near != null) step = Math.min(step, legs - step);
+    if(step <= 1 && len > 1e-9){
+      var raw = ((pt.x-a.x)*(b.x-a.x) + (pt.y-a.y)*(b.y-a.y)) / (len*len);
+      var tc = clamp(raw, 0, 1);
+      var on = { x:a.x + (b.x-a.x)*tc, y:a.y + (b.y-a.y)*tc };
+      var d = dist(pt, on);
+      // Past either outer end of an open run the pointer is still asking
+      // for a place on it — which is how an opening gets to travel past a
+      // free end at all.
+      if(!closed && i === 0 && raw < 0) tc = raw;
+      if(!closed && i === legs-1 && raw > 1) tc = raw;
+      if(best === null || d < best.d) best = { d:d, arc: arc + tc*len };
+    }
+    arc += len;
+  }
+  return best ? best.arc : (nearArc || 0);
+}
+function entryFor(run, wallId){
+  for(var i=0;i<run.walls.length;i++) if(run.walls[i].id === wallId) return run.walls[i];
+  return null;
+}
+// A wall grows at its own free end so the opening slid past it can be the
+// last piece of the run; the far jamb becomes the wall's end, which is
+// the free end a new stroke welds onto.
+function extendWallAtEnd(w, end, byCm){
+  if(byCm <= 0) return;
+  var d = wallDir(w);
+  if(end === 'to'){ w.to.x = r(w.to.x + d.x*byCm); w.to.y = r(w.to.y + d.y*byCm); }
+  else { w.from.x = r(w.from.x - d.x*byCm); w.from.y = r(w.from.y - d.y*byCm); }
+  w.lengthSource = 'drawn';
+}
+// One move of an opening drag, applied to the model the drag started
+// from (the caller restores it first), so nothing ever compounds and
+// sliding back undoes the wall it grew.
+function applyOpeningSlide(ds, curCm){
+  var f = findSeg(ds.wallId, ds.segId);
+  if(!ds.run || !f) return;
+  var width = f.seg.length.value;
+  var arc = arcOnRun(ds.runPoints, curCm, ds.lastArc, ds.run.closed);
+  ds.lastArc = arc;
+  var place = placeAlongRun(ds.run, width, ds.centreArc0 + (arc - ds.grabArc));
+  if(!place) return;
+  var entry = entryFor(ds.run, place.wallId);
+  if(!entry) return;
+  var wallId = place.wallId, segId = ds.segId;
+  if(wallId !== ds.wallId){
+    var centreOwn = ownOffsetOf(entry, place, width) + width/2;
+    var moved = moveOpeningToWall(ds.wallId, ds.segId, wallId, centreOwn);
+    if(moved.ok){
+      segId = moved.newId;
+    } else {
+      // No room for it on the neighbour: it stays on its own wall, as far
+      // along it as it can go.
+      entry = entryFor(ds.run, ds.wallId);
+      if(!entry) return;
+      wallId = ds.wallId;
+      place = placeAlongRun({ walls:[entry], startFree:false, endFree:false, closed:false }, width, ds.centreArc0 + (arc - ds.grabArc));
+      if(!place) return;
+    }
+  }
+  var w = findWall(wallId);
+  if(!w) return;
+  // Whole cm, so the wall's own ends stay on the grid every other gesture
+  // reads them off; ownOffsetOf counts the growth in, so both agree.
+  place.extendCm = r(place.extendCm);
+  var extendEnd = extendEndOf(entry, place);
+  if(extendEnd){
+    extendWallAtEnd(w, extendEnd, place.extendCm);
+    syncSegmentsForAllWalls();
+  }
+  slideSegment(wallId, segId, ownOffsetOf(entry, place, width), 'drawn');
+  // The chain and the wash follow the piece while it travels, so the
+  // focus moves with it rather than pointing at the piece it used to be.
+  selection = { segId: segId };
+  ds.liveSegId = segId;
+  ds.pastFreeEnd = place.extendCm > 0;
+}
+
 function setSegSill(wallId, segId, value, source){ var f=findSeg(wallId,segId); if(f) f.seg.sill={value:r(value), source:source}; }
 // source defaults to 'typed' — Rotate (cycleDoorSwing, below) calls
 // these with just a side/dir and gets that default unchanged; the
@@ -1739,46 +1870,30 @@ function washMarkup(w, p0, p1){
 }
 
 /* ======================================================================
-   ALL DIMENSIONS (ported from src/draw's dims.ts/DimLines/Dimensions,
-   then generalised) — every segment shows its own length, always: the
-   old defect was never "a number is visible", it was TWO numbers per
-   segment (its own length AND its wall's total, both live at once) plus
-   a resolver that slid a label off the very thing it measured once they
-   collided. Fix those two things and always-on stops being a problem:
-   one number per segment (tone alone carries selection), a wall's own
-   total kept OFF except while one of its pieces is selected (it is the
-   one number that duplicates what is already on screen), and crowding
-   solved by fixed lanes instead of a search — see DIM_LANE_STEP_PX
-   below. One function, called once from renderSvg (the dimension LINE
-   under each number, always in the one consistent lane just outside the
-   wall's own band) and once from renderCtrlLayer (the chip riding on
-   it) — same a/b/normal/outCm feed both, so a number can never end up
-   describing a different stretch of wall than the line drawn under it
-   (dims.ts's own words: "one source for both halves").
+   ALL DIMENSIONS — one lane just outside each wall's own ink band. At
+   rest it holds one number per wall, that wall's own length; while a
+   window or a door on it is in focus or dragged, that number stands down
+   and the same lane holds the chain (gap | piece | gap, chain.ts), so the
+   numbers never stack up in two places. One function, called once from
+   renderSvg (the dimension LINE and its ticks) and once from
+   renderCtrlLayer (the chip riding on it) — the same a/b/normal/outCm
+   feed both, so a number can never end up describing a different stretch
+   of wall than the line drawn under it.
    ====================================================================== */
-// Lane geometry for the dimension chain along the OUTSIDE of a wall's
-// own ink band (WALL_THICKNESS_CM), so a number never sits over the
-// wall it measures at any zoom. Every segment's LINE sits in lane 0,
-// always: a plain chain of dimensions the whole length of the wall,
-// same as a real drawing.
-// Only a CHIP can be bumped further out, and only when it would
-// otherwise collide with a neighbour's (see assignChipLane below) — the
-// line under it never moves, so a leader is drawn back to it.
-var DIM_LANE0_GAP_PX = 10;   // screen px, band's outer face to lane 0
-var DIM_CHIP_HALF_W_PX = 46; // screen px, half a chip's own width  -- how far a chip
-var DIM_CHIP_HALF_H_PX = 19; // screen px, half a chip's own height -- must clear lane 0
-                              // so that no part of it sits back over its own wall
-var DIM_LANE_STEP_PX = 84;   // screen px between lanes -- must clear a
-                              // chip's full footprint on EITHER axis, since a
-                              // wall can run either way (see DIM_CHIP_FOOTPRINT_PX);
-                              // kept tight so an outer lane still lands inside the
-                              // stage instead of hitting placeInStage's edge clamp
-// A conservative, FIXED estimate of a chip's own on-screen footprint —
-// not a real getBoundingClientRect, because the lane a chip lands in
-// has to already be decided when renderSvg draws its line, before any
-// chip exists in the DOM to measure. The chip's input has a fixed width
-// whatever the digits inside it, so this is stable across renders.
-var DIM_CHIP_FOOTPRINT_PX = 84;
+var DIM_LINE_OUT_PX = 14;    // screen px, band's outer face to the dimension line
+// A chip's own footprint on screen, in px: a FIXED estimate rather than a
+// real getBoundingClientRect, because a chip's place has to be decided
+// while renderSvg draws its line, before any chip exists in the DOM to
+// measure; the chip's input has a fixed width whatever the digits inside
+// it, so this is stable across renders. Its width counts its 7px halo
+// and its height the 44px hit box its input overflows to, since both take
+// pointers. Along a wall the chip's extent is its width where the wall
+// runs horizontally and its height where it runs vertically; across the
+// wall it is the other way round.
+var CHIP_ALONG_W_PX = 80;
+var CHIP_ALONG_H_PX = 32;
+var CHIP_HALF_W_PX = 46;
+var CHIP_HALF_H_PX = 22;
 // One commit for a segment's number, whether it is read on the drawing
 // or in the focus plate: the two are the same value.
 function segDimCommit(w, s){
@@ -1796,89 +1911,116 @@ function segDimCommit(w, s){
   };
 }
 function segDimLabel(s){ return (s.kind==='window' || s.kind==='door') ? RO.fieldWidth : RO.fieldLength; }
-function segDim(w, s, tone, outCm){
-  var pts = segPoints(w, s);
-  var n = wallNormal(w);
-  return { testid:'dim-'+s.id, tone:tone, a:pts.p0, b:pts.p1, normal:{x:-n.x,y:-n.y}, outCm:outCm,
-    value:s.length.value, source:s.length.source, label:segDimLabel(s), commit:segDimCommit(w, s) };
+function isOpeningKind(s){ return s.kind==='window' || s.kind==='door'; }
+/** the opening is the last piece of its wall, and that end of the wall is joined to nothing */
+function openingAtFreeEnd(w, seg){
+  var idx = w.segments.indexOf(seg);
+  if(idx === 0 && isFreeEnd(w, 'from')) return true;
+  return idx === w.segments.length-1 && isFreeEnd(w, 'to');
 }
-// Which outer lane a SEGMENT'S CHIP (not its line, which always stays
-// in lane 0) lands in on its own wall: walk the wall's segments in
-// their own order (offsetFromStart is monotonic, see segPoints) and
-// keep, per lane, the along-wall pixel position of the last chip this
-// wall already placed there; a new chip stays in lane 0 unless that
-// would put it within DIM_CHIP_FOOTPRINT_PX of what's already there,
-// in which case it steps out one lane and checks again. Deterministic
-// and stable render to render — the only inputs are the model and the
-// zoom, never anything a resolver guessed at — and a chip only ever
-// moves ACROSS the wall, never ALONG it, so it can't drift away from
-// the stretch it measures the way the old collision resolver's slide did.
-function assignChipLane(w, mid, laneLastPx, t){
-  var alongPx = dist(w.from, mid) * t.scale;
-  var lane = 0;
-  while(laneLastPx[lane] != null && Math.abs(alongPx - laneLastPx[lane]) < DIM_CHIP_FOOTPRINT_PX) lane++;
-  laneLastPx[lane] = alongPx;
-  return lane;
+/** the window or door in focus (or being dragged), whose wall shows the chain */
+function focusedOpening(){
+  if(!selection) return null;
+  var f = findSegAnywhere(selection.segId);
+  return (f && isOpeningKind(f.seg)) ? f : null;
+}
+// The area actually on screen, in cm: the SVG meets its viewBox, so one
+// axis shows MORE than the viewBox asks for, and a wall out there is
+// still on screen.
+function visibleBox(t){
+  var halfW = (t.rect.width / t.scale)/2, halfH = (t.rect.height / t.scale)/2;
+  var cx = t.vb.x + t.vb.w/2, cy = t.vb.y + t.vb.h/2;
+  return { minX:cx-halfW, maxX:cx+halfW, minY:cy-halfH, maxY:cy+halfH };
+}
+// A number whose wall is off screen is not drawn: placeInStage would
+// otherwise pin it to the edge of the stage, where it names a wall the
+// client cannot see.
+function wallOnScreen(w, t){
+  var box = visibleBox(t);
+  var pad = WALL_THICKNESS_CM;
+  return Math.min(w.from.x, w.to.x) - pad <= box.maxX && Math.max(w.from.x, w.to.x) + pad >= box.minX
+    && Math.min(w.from.y, w.to.y) - pad <= box.maxY && Math.max(w.from.y, w.to.y) + pad >= box.minY;
+}
+function wallAxis(w){ var h = headingOf(w); return (h==='E' || h==='W') ? 'horizontal' : 'vertical'; }
+/** how much room a chip takes ALONG the wall it measures */
+function chipAlongPx(w){ return wallAxis(w)==='horizontal' ? CHIP_ALONG_W_PX : CHIP_ALONG_H_PX; }
+// Half a chip's extent ACROSS the wall. A chip is centred on its anchor
+// and takes pointers, so the lane is the distance to the chip's near
+// EDGE: anchored on the lane itself, the half of it facing the wall would
+// cover the wall's own hit target — on a vertical wall that half is the
+// chip's width, wider than the lane, so the wall could not be touched at
+// the row its number sits on.
+function chipHalfCrossPx(w){ return wallAxis(w)==='horizontal' ? CHIP_HALF_H_PX : CHIP_HALF_W_PX; }
+function pointAlong(w, cm){
+  var d = wallDir(w);
+  return { x: w.from.x + d.x*cm, y: w.from.y + d.y*cm };
+}
+// A wall's own length, the one number it shows at rest. Typing it
+// reshapes the wall and holds every piece on it where it is.
+function wallDim(w, focused, t){
+  var wn = wallNormal(w);
+  return {
+    testid: 'dim-'+w.id, tone: focused ? 'primary' : 'side',
+    a: w.from, b: w.to, normal: {x:-wn.x, y:-wn.y},
+    outCm: WALL_THICKNESS_CM/2 + DIM_LINE_OUT_PX/t.scale,
+    chipOutCm: WALL_THICKNESS_CM/2 + (CHAIN_LANE_PX + chipHalfCrossPx(w))/t.scale,
+    value: r(wallLen(w)), source: w.lengthSource, label: RO.fieldLength,
+    commit: function(cm){
+      var anySeg = w.segments[0].id;
+      var res = commitWallTotal(anySeg, cm, 'typed');
+      if(!res.ok) offerClamp(res, function(v){ commitWallTotal(anySeg, v, 'computed'); });
+    }
+  };
+}
+// The chain in place of that wall's own length: gap | piece | gap, each
+// with its own run and ticks, adding up to the wall. The gaps are
+// read-only — the drawing is what says them — and the piece's number is
+// the same value as the first field of its plate.
+function chainDims(w, seg, t){
+  var wn = wallNormal(w), normal = {x:-wn.x, y:-wn.y};
+  var obstacles = [];
+  w.segments.forEach(function(s){
+    if(s.id === seg.id || s.kind === 'wall') return;
+    obstacles.push({ startCm: s.offsetFromStart, endCm: s.offsetFromStart + s.length.value });
+  });
+  var items = chainOfPiece({
+    wallLengthCm: segTotal(w),
+    pieceStartCm: seg.offsetFromStart,
+    pieceEndCm: seg.offsetFromStart + seg.length.value,
+    obstacles: obstacles
+  });
+  var alongPx = chipAlongPx(w), halfCrossPx = chipHalfCrossPx(w);
+  var places = placeChainChips(items.map(function(it){
+    return { startPx: it.startCm*t.scale, endPx: it.endCm*t.scale, chipLengthPx: alongPx };
+  }), wallAxis(w));
+  return items.map(function(it, i){
+    var p = places[i];
+    var isPiece = it.kind === 'piece';
+    return {
+      testid: 'chain-'+it.kind, inChain: true, readOnly: !isPiece,
+      tone: isPiece ? 'primary' : 'side',
+      a: pointAlong(w, it.startCm), b: pointAlong(w, it.endCm), normal: normal,
+      outCm: WALL_THICKNESS_CM/2 + DIM_LINE_OUT_PX/t.scale,
+      chipOutCm: WALL_THICKNESS_CM/2 + (p.outPx + halfCrossPx)/t.scale,
+      chipShiftCm: (p.alongPx - p.spanMidPx)/t.scale,
+      leader: p.steppedOut,
+      value: r(it.lengthCm),
+      source: isPiece ? seg.length.source : 'computed',
+      label: isPiece ? segDimLabel(seg) : RO.fieldLength,
+      commit: isPiece ? segDimCommit(w, seg) : null
+    };
+  });
 }
 function allDims(t){
   var out = [];
-  var selSegId = selection ? selection.segId : null;
-  var lane0Cm = WALL_THICKNESS_CM/2 + DIM_LANE0_GAP_PX/t.scale;
-  var laneStepCm = DIM_LANE_STEP_PX/t.scale;
-
+  var focus = focusedOpening();
+  var focusWallId = focus ? focus.wall.id : null;
+  var selSeg = selection ? findSegAnywhere(selection.segId) : null;
   model.walls.forEach(function(w){
-    var laneLastPx = []; // this wall's own bookkeeping only -- lanes never leak across walls
-    w.segments.forEach(function(s){
-      // A sliver nobody asked for is not a measurement (MIN_GAP_SHOWN's
-      // own comment) — UNLESS it's the piece someone actually selected,
-      // which still needs its own editable number regardless of size
-      // (spec item 6: every number stays directly editable).
-      if(s.length.value < MIN_GAP_SHOWN && s.id !== selSegId) return;
-      var tone = (s.id === selSegId) ? 'primary' : 'side';
-      var d = segDim(w, s, tone, lane0Cm);
-      var mid = { x:(d.a.x+d.b.x)/2, y:(d.a.y+d.b.y)/2 };
-      d.wallId = w.id;
-      // A chip is CENTRED on wherever it's anchored, so anchoring it on
-      // lane 0 straddles the dimension line: half the chip sits back
-      // over the wall it measures. On a vertical wall that half is the
-      // chip's own WIDTH (~46px), which reached all the way to the
-      // wall's centreline — measured: a tap aimed at a wall at the row
-      // where its number sits landed on the number instead, so the wall
-      // could not be selected there at all. Push the chip out by its own
-      // half-extent across the wall: its width on a wall whose normal
-      // runs horizontally, its (much smaller) height on one whose normal
-      // runs vertically. The LINE stays exactly on lane 0 — only the
-      // chip clears it, so a plain chain of dimensions still reads
-      // straight down the wall.
-      var crossPx = Math.abs(d.normal.x) > 0.5 ? DIM_CHIP_HALF_W_PX : DIM_CHIP_HALF_H_PX;
-      d.chipOutCm = lane0Cm + crossPx/t.scale + assignChipLane(w, mid, laneLastPx, t)*laneStepCm;
-      out.push(d);
-    });
+    if(!wallOnScreen(w, t)) return;
+    if(w.id === focusWallId){ out = out.concat(chainDims(w, focus.seg, t)); return; }
+    out.push(wallDim(w, !!(selSeg && selSeg.wall.id === w.id), t));
   });
-
-  // A wall's own total appears only while a piece on that wall is in
-  // focus — showing it beside its own parts at all times duplicates what
-  // is already on screen — and sits one lane past whichever chip lane
-  // this render used on that wall, so it never lands on one.
-  if(selection){
-    var f = findSegAnywhere(selection.segId);
-    if(f && f.wall.segments.length > 1){
-      var w = f.wall, wn = wallNormal(w);
-      var maxChipCm = lane0Cm;
-      out.forEach(function(d){ if(d.wallId===w.id) maxChipCm = Math.max(maxChipCm, d.chipOutCm); });
-      var totalLaneCm = maxChipCm + laneStepCm;
-      out.push({
-        testid:'wall-total-'+w.id, tone:'side', a:w.from, b:w.to, normal:{x:-wn.x,y:-wn.y},
-        outCm:totalLaneCm, chipOutCm:totalLaneCm, isTotal:true,
-        value:r(wallLen(w)), source:w.lengthSource, label:RO.fieldLength,
-        commit:function(cm){
-          var anySeg = w.segments[0].id;
-          var res = commitWallTotal(anySeg, cm, 'typed');
-          if(!res.ok) offerClamp(res, function(v){ commitWallTotal(anySeg, v, 'computed'); });
-        }
-      });
-    }
-  }
   return out;
 }
 // The live in-progress dimension riding the pointer for whichever
@@ -1906,14 +2048,20 @@ function dimAnchor(d){
   var mid = { x:(d.a.x+d.b.x)/2, y:(d.a.y+d.b.y)/2 };
   return { x: mid.x + d.normal.x*d.outCm, y: mid.y + d.normal.y*d.outCm };
 }
-/** where the CHIP sits — usually the same spot as dimAnchor, but bumped
- * to an outer lane (chipOutCm) when assignChipLane pushed it there to
- * clear a neighbour; renderSvg draws the leader that ties the two back
- * together. Falls back to outCm for anything (the live dimension, the
- * wall total) that never set chipOutCm apart from it. */
+/** where the CHIP sits: in the lane, over the middle of what it measures,
+ * unless it was too narrow for its span and stepped out — then it is one
+ * lane further out (chipOutCm) and possibly pushed along the wall
+ * (chipShiftCm) to clear the number beside it, with a leader from
+ * renderSvg tying it back. Falls back to outCm for anything (the live
+ * dimension) that never set chipOutCm apart from it. */
 function chipAnchor(d){
   var mid = { x:(d.a.x+d.b.x)/2, y:(d.a.y+d.b.y)/2 };
   var out = (d.chipOutCm != null) ? d.chipOutCm : d.outCm;
+  var shift = d.chipShiftCm || 0;
+  if(shift){
+    var dx=d.b.x-d.a.x, dy=d.b.y-d.a.y, L=Math.hypot(dx,dy)||1;
+    mid = { x: mid.x + (dx/L)*shift, y: mid.y + (dy/L)*shift };
+  }
   return { x: mid.x + d.normal.x*out, y: mid.y + d.normal.y*out };
 }
 // Extension lines off the wall, the run between them, and a 45-degree
@@ -2078,10 +2226,9 @@ function renderSvg(t){
       parts.push('<path class="fp-dim-ext" d="'+g.ext+'" stroke-width="'+dimHairW+'"></path>');
       parts.push('<path class="fp-dim-run" d="'+g.line+'" stroke-width="'+dimHairW+'"></path>');
       parts.push('<path class="fp-dim-tick" d="'+g.ticks+'" stroke-width="'+dimHairW+'"></path>');
-      // The crowding rule (assignChipLane) only ever moves the CHIP, never
-      // this line — when it moved the chip out, this short leader is the
-      // only thing tying the two back together.
-      if(d.chipOutCm != null && Math.abs(d.chipOutCm - d.outCm) > 0.01){
+      // A number that stepped out of the lane left its own run behind:
+      // this thin leader is the only thing tying the two back together.
+      if(d.leader){
         var innerA = dimAnchor(d), outerA = chipAnchor(d);
         parts.push('<line class="fp-dim-ext" x1="'+innerA.x+'" y1="'+innerA.y+'" x2="'+outerA.x+'" y2="'+outerA.y+'" stroke-width="'+dimHairW+'"></line>');
       }
@@ -2192,6 +2339,13 @@ function hintFor(){
   if(dragState && dragState.committed && dragState.kind === 'draw'){
     return { state: 'drawing', text: RO.hint.drawing(touchWords) };
   }
+  if(dragState && dragState.committed && dragState.kind === 'opening'){
+    var sliding = findSegAnywhere(dragState.liveSegId || dragState.segId);
+    var subject = (sliding && sliding.seg.kind === 'door') ? RO.doorSubject : RO.windowSubject;
+    return dragState.pastFreeEnd
+      ? { state: 'opening-past-end', text: RO.slidesPastEnd(subject) }
+      : { state: 'opening-slides', text: RO.slidesOnWall(subject) };
+  }
   // The zoom line, the first time in this browser, for four seconds.
   if(Date.now() < zoomHintUntil) return { state: 'zoom', text: RO.hint.zoom(touchWords) };
   var tool = toolById(tools, activeTool);
@@ -2202,6 +2356,12 @@ function hintFor(){
   }
   var f = selection ? findSegAnywhere(selection.segId) : null;
   if(f){
+    // An opening that ended up past a free end IS the end of the run now,
+    // so what to do next is that a wall drawn from its far jamb joins it.
+    if(isOpeningKind(f.seg) && openingAtFreeEnd(f.wall, f.seg)){
+      var atEnd = f.seg.kind === 'door' ? RO.doorSubject : RO.windowSubject;
+      return { state: 'opening-past-end', text: RO.slidesPastEnd(atEnd) };
+    }
     if(f.seg.kind === 'window') return { state: 'window-focus', text: RO.hint.windowFocus(touchWords) };
     if(f.seg.kind === 'door') return { state: 'door-focus', text: RO.hint.doorFocus(touchWords) };
     if(f.seg.kind === 'open') return { state: 'open-focus', text: RO.hint.openFocus(touchWords) };
@@ -2258,10 +2418,11 @@ function freeEndObstacles(stageRect, t, radius){
   });
   return obstacles;
 }
-// A second, narrower obstacle source, for the wall total and the focus
-// plate: every chip already on screen. A per-segment chip stays out of
-// this on purpose — its own lane keeps it clear of its neighbours, and
-// pushing it would move a number off the stretch it measures.
+// A second, narrower obstacle source, for the focus plate: every chip
+// already on screen. A number on the drawing stays out of this on
+// purpose — its lane and the chain's own placement keep it clear of the
+// numbers beside it, and pushing it would move it off the stretch of
+// wall it measures.
 function chipObstacles(stageRect, skipEl){
   var obstacles = [];
   var gap = 4;
@@ -2277,13 +2438,15 @@ function chipObstacles(stageRect, skipEl){
 // partway off-screen with nothing to tap. Place it, then measure and
 // pull its centre back in just enough that the whole element stays
 // within the stage — the anchor is only a starting point, not a promise.
-// `avoidChips` opts into chipObstacles above; a per-segment chip and a
+// `avoidChips` opts into chipObstacles above; a chip on the drawing and a
 // label leave it off. `extraObstacles` is concatenated onto the same
-// list — the focus plate's own escape from the piece it acts on.
-function placeInStage(el, anchor, t, avoidChips, extraObstacles){
+// list — the focus plate's own escape from the piece it acts on. `parent`
+// is where the element lands, the control layer itself unless the caller
+// has a group of its own (the chain) to keep it in.
+function placeInStage(el, anchor, t, avoidChips, extraObstacles, parent){
   var pos = cmToStage(anchor, t);
   el.style.left = pos.x+'px'; el.style.top = pos.y+'px';
-  ctrlLayerEl.appendChild(el);
+  (parent || ctrlLayerEl).appendChild(el);
   var stageRect = stageEl.getBoundingClientRect();
   var w = el.offsetWidth;
   // A chip's own VISIBLE box is a fixed 30px tall, but its input's real
@@ -2391,7 +2554,7 @@ function addLabel(text, anchor, t, testid){
 // drawn or prefilled is grey italic; the one belonging to the piece in
 // focus is framed in ink. Tapping it edits it in place — the chip is
 // the field, so the keyboard never opens on its own.
-function buildChip(testid, value, source, anchor, t, onCommit, label, focused, avoidChips){
+function buildChip(testid, value, source, anchor, t, onCommit, label, focused, avoidChips, parent){
   var input = doc.createElement('input');
   input.type = 'text'; input.inputMode = 'decimal';
   input.setAttribute('data-testid', testid);
@@ -2414,8 +2577,25 @@ function buildChip(testid, value, source, anchor, t, onCommit, label, focused, a
     input.focus();
     input.select();
   });
-  placeInStage(chip, anchor, t, avoidChips);
+  placeInStage(chip, anchor, t, avoidChips, null, parent);
   return input;
+}
+// A number the drawing states and the client does not write: a gap in the
+// chain. The same chip, grey italic, with a span where the editable one
+// has its field — the one part that would take an editor if gaps ever
+// become typed.
+function buildGapChip(testid, value, anchor, t, parent){
+  var chip = doc.createElement('div');
+  chip.className = 'fp-chip fp-read';
+  chip.setAttribute('data-testid', testid);
+  var num = doc.createElement('span');
+  num.className = 'fp-gapnum fp-derived';
+  num.textContent = String(value);
+  chip.appendChild(num);
+  var unit = doc.createElement('span'); unit.className='fp-unit'; unit.textContent='cm';
+  chip.appendChild(unit);
+  placeInStage(chip, anchor, t, false, null, parent);
+  return chip;
 }
 // Whole-cm parsing with the metres-shorthand trap, and the pointerdown/
 // capture-phase commit fix for "the button press does nothing the first
@@ -2473,8 +2653,20 @@ function renderCtrlLayer(t){
   ctrlLayerEl.innerHTML = '';
   focusPlateEl = null;
 
+  // The chain's numbers go in a group of their own, there only while the
+  // chain is up; it lies over the whole stage and takes no pointer of its
+  // own, so a chip inside it sits exactly where it was placed.
+  var chainGroup = null;
   allDims(t).forEach(function(d){
-    buildChip(d.testid, d.value, d.source, chipAnchor(d), t, d.commit, d.label, d.tone === 'primary', d.isTotal);
+    if(d.inChain && !chainGroup){
+      chainGroup = doc.createElement('div');
+      chainGroup.className = 'fp-chain';
+      chainGroup.setAttribute('data-testid', 'chain');
+      ctrlLayerEl.appendChild(chainGroup);
+    }
+    var parent = d.inChain ? chainGroup : null;
+    if(d.readOnly) buildGapChip(d.testid, d.value, chipAnchor(d), t, parent);
+    else buildChip(d.testid, d.value, d.source, chipAnchor(d), t, d.commit, d.label, d.tone === 'primary', false, parent);
   });
 
   // The live length riding the pointer while a stroke or a resize is
@@ -2668,6 +2860,9 @@ function cancelStroke(){
     // The drag took its undo step the moment it committed; abandoned, it
     // would leave a step that undoes to the very same drawing.
     undoStack.pop();
+    // An opening that travelled to another wall was re-made there, so the
+    // focus has to come back to the piece the model holds again.
+    if(dragState.kind === 'opening' && dragState.segId) selection = { segId: dragState.segId };
   }
   dragState = null;
   stopEdgePan();
@@ -2773,12 +2968,28 @@ function beginCommittedDrag(ds){
   } else if(ds.kind==='opening' || ds.kind==='openingEdge'){
     pushHistory(); ds.base = snapshotModel();
     var f = findSeg(ds.wallId, ds.segId);
-    ds.segOffsetStart = f ? f.seg.offsetFromStart : 0;
     var w = findWall(ds.wallId);
-    ds.wallDirVec = w ? wallDir(w) : {x:1,y:0};
-    // 'openingEdge' also needs the segment's own starting length, to
-    // compute the pinned edge's offset fresh on every move below.
-    if(ds.kind==='openingEdge') ds.segLengthStart = f ? f.seg.length.value : 0;
+    if(ds.kind==='openingEdge'){
+      // One jamb moves and the other stays: both are measured off where
+      // the segment was when the drag began.
+      ds.segOffsetStart = f ? f.seg.offsetFromStart : 0;
+      ds.segLengthStart = f ? f.seg.length.value : 0;
+      ds.wallDirVec = w ? wallDir(w) : {x:1,y:0};
+    } else if(w && f){
+      // The run the opening may travel, and where on it the drag began:
+      // both fixed now, so a wall growing past a free end mid-drag cannot
+      // move the ground under the gesture.
+      ds.run = buildRun(w.id, runWallInputs());
+      ds.runPoints = ds.run ? runPoints(ds.run) : [];
+      var closed = !!(ds.run && ds.run.closed);
+      // Both seeds are read off the whole run: the press and the piece's
+      // own middle are on it already, so there is no previous answer to
+      // stay continuous with yet.
+      ds.grabArc = arcOnRun(ds.runPoints, ds.startCm, null, closed);
+      ds.centreArc0 = arcOnRun(ds.runPoints, pointAlong(w, f.seg.offsetFromStart + f.seg.length.value/2), null, closed);
+      ds.lastArc = ds.grabArc;
+      ds.liveSegId = ds.segId;
+    }
   }
   // 'draw' needs no snapshot: it only adds a piece at pointerup. 'resize'
   // takes the same base-snapshot discipline as push and corner, because
@@ -2805,8 +3016,11 @@ function applyDragMove(ds, curCm, t){
     dragCornerAtPoint(ds.vertexPt, dx, dy);
   } else if(ds.kind==='opening'){
     restoreSnapshot(ds.base);
-    var along = dx*ds.wallDirVec.x + dy*ds.wallDirVec.y;
-    slideSegment(ds.wallId, ds.segId, ds.segOffsetStart + along, 'drawn');
+    // The model is the one the drag began on again, so the piece in focus
+    // is the one it began on until this move says otherwise.
+    selection = { segId: ds.segId };
+    ds.liveSegId = ds.segId;
+    applyOpeningSlide(ds, curCm);
   } else if(ds.kind==='openingEdge'){
     // Reapply fresh from the untouched base on every move, same as
     // push/corner/resize above — this is a conserving edit (unlike
@@ -3081,24 +3295,9 @@ function onSvgPointerUp(e){
   } else if(ds.kind==='openingEdge'){
     selection = { segId: ds.segId };
   } else if(ds.kind==='opening'){
-    var under = doc.elementFromPoint(e.clientX, e.clientY);
-    var hitEl2 = under && under.closest ? under.closest('.fp-hit') : null;
-    var targetWallId = hitEl2 ? hitEl2.getAttribute('data-wall-id') : null;
-    if(targetWallId && targetWallId !== ds.wallId){
-      var t2 = viewTransform();
-      var dropCm = clientToCm(e.clientX, e.clientY, t2);
-      var targetWall = findWall(targetWallId);
-      if(targetWall){
-        var dvec2 = wallDir(targetWall);
-        var alongCm2 = (dropCm.x-targetWall.from.x)*dvec2.x + (dropCm.y-targetWall.from.y)*dvec2.y;
-        restoreSnapshot(ds.base);
-        var moveRes = moveOpeningToWall(ds.wallId, ds.segId, targetWallId, alongCm2);
-        if(moveRes.ok){ selection = { segId: moveRes.newId }; }
-        else { showConfirm(RO.openingStayed, RO.gotIt, function(){}, function(){}); }
-      }
-    } else {
-      selection = { segId: ds.segId };
-    }
+    // The drag has already put the opening where it goes, wall by wall;
+    // release only settles the focus on wherever it ended up.
+    selection = { segId: ds.liveSegId || ds.segId };
   } else if(ds.kind==='push'){
     finalizeDragWeld(ds);
     selection = { segId: ds.segId };
