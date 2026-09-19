@@ -189,33 +189,34 @@ describe('splitWallAtPoint', () => {
 describe('setWallLengthExact', () => {
 	it('extends a free end on its own, changing nothing else', () => {
 		const m = modelOf([wall('a', [0, 0], [300, 0])]);
-		expect(setWallLengthExact(new Ids(), m, 'a', 400, 'typed', NEVER_FRESH)).toBe(false);
+		setWallLengthExact(new Ids(), m, 'a', 400, 'typed', NEVER_FRESH);
 		expect(m.walls[0].to).toEqual({ x: 400, y: 0 });
 		expect(m.walls[0].segments[0].length.value).toBe(400);
 	});
 
-	it('pushes the neighbour one hop where the far end is welded, and says it reshaped', () => {
+	it('pushes the neighbour one hop where the far end is welded', () => {
 		const m = room();
-		expect(setWallLengthExact(new Ids(), m, 'w1', 500, 'typed', NEVER_FRESH)).toBe(true);
+		setWallLengthExact(new Ids(), m, 'w1', 500, 'typed', NEVER_FRESH);
 		expect(m.walls[0].to).toEqual({ x: 500, y: 0 });
 		expect(m.walls[1].from).toEqual({ x: 500, y: 0 });
 		expect(m.walls[1].to).toEqual({ x: 500, y: 300 });
 		expect(Math.round(wallLen(m.walls[2]))).toBe(500);
 	});
 
-	it('says nothing changed for the length it already has', () => {
+	it('leaves the outline alone for the length it already has', () => {
 		const m = room();
-		expect(setWallLengthExact(new Ids(), m, 'w1', 400, 'typed', NEVER_FRESH)).toBe(false);
+		setWallLengthExact(new Ids(), m, 'w1', 400, 'typed', NEVER_FRESH);
+		expect(m.walls[0].to).toEqual({ x: 400, y: 0 });
 		expect(m.walls[0].lengthSource).toBe('typed');
 	});
 });
 
 describe('commitWallPieceLength and commitWallTotal', () => {
-	it('a piece´s own number grows the wall, and reports the new total', () => {
+	it('a piece´s own number grows the wall', () => {
 		const m = room();
 		const pieceId = m.walls[0].segments[0].id;
 		const res = commitWallPieceLength(new Ids(), m, pieceId, 500, 'typed', NEVER_FRESH, () => {});
-		expect(res).toEqual({ ok: true, reshapedTo: 500 });
+		expect(res).toEqual({ ok: true });
 		expect(Math.round(wallLen(m.walls[0]))).toBe(500);
 	});
 

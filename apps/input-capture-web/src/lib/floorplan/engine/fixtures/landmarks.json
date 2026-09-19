@@ -7,6 +7,7 @@
   },
   "toolGesture": "none",
   "scale": 2.13,
+  "labelScale": 1,
   "visibleBox": {
     "minX": -11.267605633802816,
     "maxX": 411.2676056338028,
@@ -303,8 +304,6 @@
     "seg-seg3",
     "seg-seg4",
     "stage",
-    "toast",
-    "toast-dismiss",
     "tool-landmark",
     "tool-select",
     "undo",

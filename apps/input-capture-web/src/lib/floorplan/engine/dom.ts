@@ -19,9 +19,6 @@ export interface Dom {
 	hint: HTMLElement;
 	histPlate: HTMLElement;
 	viewPlate: HTMLElement;
-	toast: HTMLElement;
-	toastText: HTMLElement;
-	toastDismiss: HTMLElement;
 	confirmDialog: HTMLElement;
 	confirmDialogText: HTMLElement;
 	confirmYes: HTMLElement;
@@ -65,9 +62,6 @@ export function bindDom(root: HTMLElement, mode: 'plan' | 'landmarks'): Dom {
 		hint: htmlById(root, win, 'hintLine'),
 		histPlate: htmlById(root, win, 'histPlate'),
 		viewPlate: htmlById(root, win, 'viewPlate'),
-		toast: htmlById(root, win, 'toastEl'),
-		toastText: htmlById(root, win, 'toastText'),
-		toastDismiss: htmlById(root, win, 'toastDismiss'),
 		confirmDialog: htmlById(root, win, 'confirmDialog'),
 		confirmDialogText: htmlById(root, win, 'confirmDialogText'),
 		confirmYes: htmlById(root, win, 'confirmYesBtn'),

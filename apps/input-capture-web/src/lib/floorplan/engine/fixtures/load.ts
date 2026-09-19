@@ -19,6 +19,8 @@ export interface Fixture {
 	toolGesture: 'none' | 'stroke' | 'tap';
 	/** screen px per cm, as the editor measured it when the case was recorded */
 	scale: number;
+	/** how much of its designed size a label was drawn at, at that zoom */
+	labelScale: number;
 	visibleBox: Box;
 	model: Model;
 	room: RoomSnapshot;

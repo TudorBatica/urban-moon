@@ -68,6 +68,13 @@ export interface Viewport {
 	isNarrow(): boolean;
 	/** the stretch of plan actually on screen, in cm */
 	visibleBox(t: ViewTransform): Box;
+	/**
+	 * The scale of the last fit actually performed — when the editor opened, or
+	 * when the client asked for one. It is what a label is sized against, so
+	 * drawing a wall that widens the plan never resizes the numbers under a view
+	 * the client has not touched.
+	 */
+	lastFitScale(): number;
 	hasView(): boolean;
 	/** how far the view should follow a drag that has reached the canvas edge */
 	edgeStep(stagePoint: Point): { dx: number; dy: number };
@@ -84,6 +91,7 @@ export interface Viewport {
 export function createViewport(dom: Dom, deps: ViewportDeps): Viewport {
 	const win = dom.win;
 	let view: View | null = null;
+	let fittedScale: number | null = null;
 	let fitFrame: number | null = null;
 	let destroyed = false;
 
@@ -166,6 +174,13 @@ export function createViewport(dom: Dom, deps: ViewportDeps): Viewport {
 		return fitView(deps.planBox(), stageSize(), bands());
 	}
 
+	/** A fit is being performed: this is the scale the plan is measured against now. */
+	function adoptFit(): View {
+		const target = fitTarget();
+		fittedScale = target.scale;
+		return target;
+	}
+
 	function stopFitEase(): void {
 		if (fitFrame != null && typeof win.cancelAnimationFrame === 'function') win.cancelAnimationFrame(fitFrame);
 		fitFrame = null;
@@ -177,7 +192,7 @@ export function createViewport(dom: Dom, deps: ViewportDeps): Viewport {
 	 * scale is a ratio, not a distance.
 	 */
 	function fitNow(onFrame: () => void): void {
-		const target = fitTarget();
+		const target = adoptFit();
 		stopFitEase();
 		const from = view;
 		const dur = ms(BASE);
@@ -207,7 +222,7 @@ export function createViewport(dom: Dom, deps: ViewportDeps): Viewport {
 		   it stands down whatever ease was running, exactly as a fit always does. */
 		if (!view) {
 			stopFitEase();
-			view = fitTarget();
+			view = adoptFit();
 		}
 		const vb = viewBoxOf(view, stageSize());
 		dom.svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h);
@@ -218,7 +233,7 @@ export function createViewport(dom: Dom, deps: ViewportDeps): Viewport {
 		const size = stageSize();
 		const at = atPx || { x: size.width / 2, y: size.height / 2 };
 		const box = deps.planBox();
-		view = zoomAround(view || fitView(box, size, bands()), factor, at, size, box);
+		view = zoomAround(view || adoptFit(), factor, at, size, box);
 		deps.onZoomed();
 	}
 
@@ -227,7 +242,7 @@ export function createViewport(dom: Dom, deps: ViewportDeps): Viewport {
 	   a client drives, not here. */
 	function panBy(dxPx: number, dyPx: number): void {
 		stopFitEase();
-		if (!view) view = fitTarget();
+		if (!view) view = adoptFit();
 		view = panByPx(view, dxPx, dyPx);
 	}
 
@@ -248,6 +263,7 @@ export function createViewport(dom: Dom, deps: ViewportDeps): Viewport {
 		bands,
 		isNarrow,
 		visibleBox,
+		lastFitScale: () => fittedScale ?? fitTarget().scale,
 		hasView: () => view !== null,
 		edgeStep: (stagePoint) => edgePanStep(stagePoint, stageSize()),
 		fitNow,
@@ -258,6 +274,7 @@ export function createViewport(dom: Dom, deps: ViewportDeps): Viewport {
 		revealBox,
 		reset: () => {
 			view = null;
+			fittedScale = null;
 		},
 		destroy: () => {
 			destroyed = true;

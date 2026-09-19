@@ -5,6 +5,7 @@
   "selection": null,
   "toolGesture": "none",
   "scale": 1.63,
+  "labelScale": 1,
   "visibleBox": {
     "minX": -276.07361963190186,
     "maxX": 276.07361963190186,
@@ -37,8 +38,6 @@
     "hint",
     "redo",
     "stage",
-    "toast",
-    "toast-dismiss",
     "tool-door",
     "tool-open",
     "tool-select",

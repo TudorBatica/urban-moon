@@ -26,6 +26,7 @@ import {
 	chipAnchor,
 	dimAnchor,
 	dimLineParts,
+	labelPxPerCm,
 	segHitWidthCm,
 	type Dim,
 	type LiveDim
@@ -43,6 +44,8 @@ export interface Scene {
 	/** the gesture of the tool that is on: what the canvas offers the pointer */
 	toolGesture: ToolGesture | null;
 	scale: number;
+	/** how much of its designed size a label is drawn at, at this zoom */
+	labelScale: number;
 	visibleBox: Box;
 	dims: Dim[];
 	liveDim: LiveDim | null;
@@ -411,9 +414,10 @@ export function planMarkup(scene: Scene): string {
 	if (scene.liveDim) dimsNow = dimsNow.concat([scene.liveDim]);
 	if (dimsNow.length) {
 		const dimHairW = Math.max(1, 1 / scale);
+		const labelPx = labelPxPerCm(scale, scene.labelScale);
 		parts.push('<g class="fp-dims">');
 		dimsNow.forEach((d) => {
-			const g = dimLineParts(d, scale);
+			const g = dimLineParts(d, labelPx);
 			parts.push('<path class="fp-dim-ext" d="' + g.ext + '" stroke-width="' + dimHairW + '"></path>');
 			parts.push('<path class="fp-dim-run" d="' + g.line + '" stroke-width="' + dimHairW + '"></path>');
 			parts.push('<path class="fp-dim-tick" d="' + g.ticks + '" stroke-width="' + dimHairW + '"></path>');

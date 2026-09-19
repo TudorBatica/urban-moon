@@ -15,7 +15,7 @@ import { toolById } from './tools';
 import type { Box } from './view';
 
 /** The plan, the numbers on it and whatever the live gesture adds, as one scene. */
-export function planScene(s: Session, visibleBox: Box, scale: number): Scene {
+export function planScene(s: Session, visibleBox: Box, scale: number, labelScale: number): Scene {
 	const toolNow = toolById(s.tools, s.activeTool);
 	return {
 		model: s.model,
@@ -24,9 +24,10 @@ export function planScene(s: Session, visibleBox: Box, scale: number): Scene {
 		mode: s.mode,
 		toolGesture: toolNow ? toolNow.gesture : null,
 		scale,
+		labelScale,
 		visibleBox,
-		dims: allDims(s.model, s.selection, s.mode, scale, visibleBox),
-		liveDim: liveDim(s.model, s.drag, scale)
+		dims: allDims(s.model, s.selection, s.mode, scale, visibleBox, labelScale),
+		liveDim: liveDim(s.model, s.drag, scale, labelScale)
 	};
 }
 

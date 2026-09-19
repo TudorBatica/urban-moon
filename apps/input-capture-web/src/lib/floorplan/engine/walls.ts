@@ -3,11 +3,11 @@
  * committing a drawn stroke, typing a length, deleting a piece, and the
  * rounding that makes a weld bit-exact at release.
  *
- * Nothing here shows anything. What the client would be told — the walls a
- * squaring changed, the wall a typed length reshaped, the most that fits — is
- * returned; the caller says it. The one side effect that arrives as a parameter
- * is `beforeChange`: the history step, taken at the moment the model is about
- * to change and not before, so a gesture that comes to nothing leaves no step.
+ * Nothing here shows anything. What the client would be asked — the most that
+ * fits, where a typed number did not — is returned; the caller asks it. The one
+ * side effect that arrives as a parameter is `beforeChange`: the history step,
+ * taken at the moment the model is about to change and not before, so a gesture
+ * that comes to nothing leaves no step.
  */
 
 import {
@@ -42,13 +42,11 @@ import { reassignOnMerge, reassignOnSplit, withoutWall } from './landmarks';
 /** Taken just before the model changes: the caller's own history step. */
 export type BeforeChange = () => void;
 
-/** The answer to a typed length: what was refused, and what had to be reshaped to take it. */
+/** The answer to a typed length: whether it was taken, and what was refused. */
 export interface LengthCommit {
 	ok: boolean;
 	/** the most that fits, where the number asked for did not */
 	max?: number;
-	/** the wall's new total, where taking the number moved the corner beyond it */
-	reshapedTo?: number;
 	/** there was no such piece to change */
 	missing?: boolean;
 }
@@ -229,8 +227,7 @@ export function splitWallAtPoint(
 /**
  * Typing a wall's own length holds every piece on it where it is and lets the
  * wall's far corner absorb the difference — one hop past the wall actually
- * touched, the same as a push. A free end just extends. The answer is whether
- * the room's shape had to change.
+ * touched, the same as a push. A free end just extends.
  */
 export function setWallLengthExact(
 	ids: Ids,
@@ -239,14 +236,14 @@ export function setWallLengthExact(
 	newLength: number,
 	source: LengthSource,
 	isFresh: IsFresh
-): boolean {
+): void {
 	const w = findWall(model, wallId);
-	if (!w) return false;
+	if (!w) return;
 	const delta = newLength - wallLen(w);
 	w.lengthSource = source || 'typed';
 	if (Math.abs(delta) < 1e-9) {
 		syncSegments(ids, model, isFresh);
-		return false;
+		return;
 	}
 	const d = wallDir(w);
 	const nextInfo = neighborAt(model, w, 'to');
@@ -254,7 +251,7 @@ export function setWallLengthExact(
 		w.to.x = w.from.x + d.x * newLength; w.to.y = w.from.y + d.y * newLength;
 		cleanupOutline(ids, model, isFresh);
 		syncSegments(ids, model, isFresh);
-		return false;
+		return;
 	}
 	const next = nextInfo.wall;
 	const nn = wallNormal(next);
@@ -268,7 +265,6 @@ export function setWallLengthExact(
 	}
 	cleanupOutline(ids, model, isFresh);
 	syncSegments(ids, model, isFresh);
-	return true;
 }
 
 /** A piece's own typed length: the wall grows or shrinks by the difference. */
@@ -295,15 +291,8 @@ export function commitWallPieceLength(
 	seg.length.value = newLen;
 	seg.length.source = source;
 	reflow(w);
-	const reshaped = setWallLengthExact(
-		ids,
-		model,
-		w.id,
-		newWallTotal,
-		otherTotal === 0 ? source : 'computed',
-		isFresh
-	);
-	return reshaped ? { ok: true, reshapedTo: newWallTotal } : { ok: true };
+	setWallLengthExact(ids, model, w.id, newWallTotal, otherTotal === 0 ? source : 'computed', isFresh);
+	return { ok: true };
 }
 
 /** The wall's own aggregate number: refused below what the openings on it need. */
@@ -323,8 +312,8 @@ export function commitWallTotal(
 	const newTotal = r(newTotalRaw);
 	if (newTotal < floor) return { ok: false, max: floor };
 	beforeChange();
-	const reshaped = setWallLengthExact(ids, model, w.id, newTotal, source, isFresh);
-	return reshaped ? { ok: true, reshapedTo: newTotal } : { ok: true };
+	setWallLengthExact(ids, model, w.id, newTotal, source, isFresh);
+	return { ok: true };
 }
 
 /**

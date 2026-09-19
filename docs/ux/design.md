@@ -204,7 +204,17 @@ For any screen where the client makes something by hand:
 - **Numbers live on the work.** A measure is a chip on the drawing, not a field in a plate. Each
   line of the drawing has one lane for its numbers; when the thing in focus needs more detail,
   that detail replaces the resting number in the same lane rather than stacking beside it. A
-  number too narrow for its place steps out on a thin leader; it never shrinks or overlaps.
+  number too narrow for its place steps out on a thin leader instead of shrinking into its span or
+  overlapping its neighbours. Within one view all the numbers are the same size as each other.
+- **Labels are sized against the fit.** A label — a number with its lane and leader, a mark's name,
+  the length that rides the pointer while drawing — is drawn at its full designed size when the work
+  fills the canvas, and at every zoom closer in. Zoomed further out than the fit it shrinks with the
+  work, down to half its designed size and no further: a plan the size of a stamp would otherwise
+  disappear under its own numbers. The floor has a price, and it is accepted: a chip's touch target
+  is 44px by design, so at half size it is 22px, under the phone minimum. The far end of zooming out
+  is for seeing the whole plan, not for typing into it; the client zooms back in to change a number.
+  A control is not a label and does not shrink: the plate of the thing in focus stays full size at
+  every zoom.
 - **Steps narrow the tools.** When a later step works on the same canvas, its plate holds only the
   resting tool and that step's tool; what earlier steps made is drawn but cannot be changed there.
 - **The view is the client's.** It never zooms or pans by itself while the client works. It fits

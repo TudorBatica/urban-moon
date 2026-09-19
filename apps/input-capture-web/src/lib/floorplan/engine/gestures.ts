@@ -30,7 +30,6 @@ export interface GestureDeps {
 	render: () => void;
 	pushHistory: () => void;
 	restoreSnapshot: (snap: Model) => void;
-	showToast: (text: string) => void;
 	/** a field commits on every press, not just on a button: blur re-renders */
 	commitActiveField: () => void;
 	/** the client zoomed or panned by their own hand */

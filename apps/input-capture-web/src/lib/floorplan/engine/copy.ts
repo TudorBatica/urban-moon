@@ -114,7 +114,6 @@ export const RO = {
 	sill: 'Înălțime pervaz',
 	rotate: 'Rotește',
 	del: 'Șterge',
-	gotIt: 'Am înțeles',
 	help: 'Cum desenez',
 	letMeFix: 'Mai schimb eu',
 	/* the field names that appear inside the metres question, mid-sentence */
@@ -139,28 +138,6 @@ export const RO = {
 			: n + ' capete de perete nu sunt legate de nimic încă.';
 	},
 	notClosed: 'Pereții nu formează încă un contur închis.',
-	squarePart(heading: string, before: number, after: number): string {
-		return 'peretele ' + heading + ' măsura ' + before + ', așa că acum are ' + after + ' cm';
-	},
-	squareToast(parts: string): string {
-		return 'Ca să închid camera în unghi drept, ' + parts + '.';
-	},
-	reshapedFar(total: number): string {
-		return (
-			'Peretele are acum ' +
-			total +
-			' cm. Nu mai era nimic în apropiere de unde să iau ' +
-			'diferența, așa că forma camerei s-a schimbat aici — colțul următor s-a mutat ca să se potrivească.'
-		);
-	},
-	reshaped(total: number): string {
-		return (
-			'Peretele are acum ' +
-			total +
-			' cm. Forma camerei s-a schimbat aici — colțul ' +
-			'următor s-a mutat ca să se potrivească.'
-		);
-	},
 	metresQuestion(raw: string, label: string, cm: number): string {
 		return (
 			'Ai scris „' +

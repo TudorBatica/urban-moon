@@ -45,7 +45,7 @@ describe('squareWeldToVertex', () => {
 		const sq = squareWeldToVertex(m, { x: 400, y: 6 }, { x: 0, y: 0 }, 'E');
 		expect(sq.ok).toBe(true);
 		expect(m.walls[0].from).toEqual({ x: 400, y: 0 });
-		expect(sq.ok && sq.changed.map((c) => [c.wall.id, c.before, c.after])).toEqual([['a', 294, 300]]);
+		expect(sq.ok && sq.changed.map((c) => c.id)).toEqual(['a']);
 	});
 
 	it('refuses where a wall at the vertex runs the wrong way', () => {
@@ -89,7 +89,7 @@ describe('commitDrawStroke', () => {
 		const m = modelOf([]);
 		const before = vi.fn();
 		const res = commitDrawStroke(new Ids(), m, stroke({ endPt: { x: 0.5, y: 0 } }), NEVER_FRESH, before);
-		expect(res).toEqual({ made: false, squareChanges: [] });
+		expect(res).toEqual({ made: false });
 		expect(before).not.toHaveBeenCalled();
 		expect(m.walls).toEqual([]);
 	});
@@ -141,10 +141,9 @@ describe('commitDrawStroke', () => {
 		const made = m.walls[m.walls.length - 1];
 		expect(made.from).toEqual({ x: 0, y: 6 });
 		expect(made.to).toEqual({ x: 400, y: 6 });
-		expect(res.squareChanges).toEqual([]);
 	});
 
-	it('squares the target when both ends are welded, and says what it changed', () => {
+	it('squares the target when both ends are welded, marking what it changed computed', () => {
 		const m = modelOf([wall('a', [0, 0], [0, 300]), wall('b', [400, 6], [400, 300])]);
 		const res = commitDrawStroke(
 			new Ids(),
@@ -153,7 +152,6 @@ describe('commitDrawStroke', () => {
 			NEVER_FRESH,
 			() => {}
 		);
-		expect(res.squareChanges).toEqual([{ wallId: 'b', heading: 'S', before: 294, after: 300 }]);
 		expect(findWall(m, 'b')?.from).toEqual({ x: 400, y: 0 });
 		expect(findWall(m, 'b')?.lengthSource).toBe('computed');
 	});
@@ -169,7 +167,6 @@ describe('commitDrawStroke', () => {
 			NEVER_FRESH,
 			() => {}
 		);
-		expect(res.squareChanges).toEqual([]);
 		const made = m.walls[m.walls.length - 1];
 		expect(made.from).toEqual({ x: 0, y: 0 });
 		expect(made.to).toEqual({ x: 400, y: 0 });

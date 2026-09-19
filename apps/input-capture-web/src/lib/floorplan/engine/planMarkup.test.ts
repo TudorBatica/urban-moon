@@ -13,9 +13,10 @@ function sceneOf(f: Fixture): Scene {
 		mode: f.mode,
 		toolGesture: f.toolGesture,
 		scale: f.scale,
+		labelScale: f.labelScale,
 		visibleBox: f.visibleBox,
-		dims: allDims(f.model, f.selection, f.mode, f.scale, f.visibleBox),
-		liveDim: liveDim(f.model, null, f.scale)
+		dims: allDims(f.model, f.selection, f.mode, f.scale, f.visibleBox, f.labelScale),
+		liveDim: liveDim(f.model, null, f.scale, f.labelScale)
 	};
 }
 
@@ -63,6 +64,7 @@ function scene(model: Model, over: Partial<Scene> = {}): Scene {
 		mode: 'plan',
 		toolGesture: 'none',
 		scale: 1,
+		labelScale: 1,
 		visibleBox: BOX,
 		dims: [],
 		liveDim: null,

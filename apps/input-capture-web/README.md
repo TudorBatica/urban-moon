@@ -60,7 +60,7 @@ src/lib/floorplan/engine/     index.ts (mountFloorplan, the handle and its optio
                               editor.ts (the composition root: the render, the wiring, the handle)
                               session.ts (the editing session and the tools glue)
                               dom.ts (the template's elements) · viewport.ts (the view, cm <-> px)
-                              plates.ts (tools, undo, view, hint, toast, confirm)
+                              plates.ts (tools, undo, view, hint, confirm)
                               ctrlLayer.ts (the numbers and names over the plan) · chips.ts (the fields)
                               focusPlate.ts (the plate of the piece in focus)
                               placement.ts (where a chip lands, clear of everything)
@@ -82,6 +82,7 @@ src/lib/floorplan/engine/     index.ts (mountFloorplan, the handle and its optio
                               planMarkup.ts (the plan as SVG)
                               tools.ts (which tool is on) · view.ts (fit, zoom, pan, the limits)
                               chain.ts (the chain of numbers on a wall, and where each one sits)
+                              lanes.ts (keeping two walls´ numbers out of each other´s lane)
                               slide.ts (how far a window or a door travels while it is dragged)
                               landmarks.ts (where a landmark may sit, and how it follows its wall)
                               fixtures/ (recorded editors: model, room, svg and test ids per case)
@@ -124,8 +125,9 @@ limits live in `../../packages/domain-data`.
   `drawing.ts` beside it is the only writer of `um.plans.drawing`. The editor's classes are all
   scoped under `.fp` and share no name with a global rule of `app.css`.
 - **The engine's behaviour is pinned by fixtures** under `engine/fixtures/`: one JSON per recorded
-  case, each holding the model, the room snapshot, the plan markup and the test ids the editor
-  produced for it. `snapshot.ts` and `planMarkup.ts` are held to reproducing them exactly.
+  case, each holding the model, the zoom it was recorded at (`scale` and `labelScale`), the room
+  snapshot, the plan markup and the test ids the editor produced for it. `snapshot.ts` and
+  `planMarkup.ts` are held to reproducing them exactly.
 - **Numbers sit in one lane per wall**, 34px outside its band — the distance to the chip's near
   edge, so a number never covers the hit target of the wall it measures. At rest the lane holds that wall's
   own length (`dim-<wallId>`, editable); while a window or a door on it is in focus or dragged
@@ -136,6 +138,26 @@ limits live in `../../packages/domain-data`.
   such in a row are pushed apart. An obstacle the piece shares its stretch of wall with bounds the
   gap too, at whichever of its own edges lies beyond the piece, so no run is ever drawn across a
   jamb it does not stop at. The gaps are read-only. A wall off screen shows no number.
+- **A label is sized against the fit, not against the zoom.** Every number, every mark's name and
+  the live length riding the pointer are HTML over the SVG, so they are set in screen px rather
+  than in the plan's own centimetres. `labelScaleFor` (`dims.ts`) says how much of that designed
+  size they are drawn at: their full size at the fit and at every zoom closer in, and shrinking
+  with the plan once the client zooms further out than the fit, down to `MIN_LABEL_SCALE` — a plan
+  zoomed out to a quarter of the canvas would otherwise disappear under its own numbers. The lane,
+  the dimension line's overshoot and ticks, the step-out and the leader all shrink with it
+  (`labelPxPerCm` is the px-per-cm those px constants are read at), and the element itself is
+  scaled about its own centre, so a shrunken chip is still measured and kept clear at its real
+  size. The wall's own hit target and the plan's ink are unaffected: they are drawn in cm.
+  The fit it is measured against is `viewport.lastFitScale()` — the scale of the last fit actually
+  **performed**, when the editor opened or when the client asked for one, never one recomputed per
+  render: drawing a wall that widens the plan would otherwise resize every number under a view the
+  client has not touched.
+- **Two numbers never share a lane.** Once labels stop shrinking with the plan at
+  `MIN_LABEL_SCALE`, the inside of a reentrant corner puts the lanes of its two short walls in the
+  same place. `lanes.ts` is the pure rule: whichever number comes second steps out one lane and
+  then slides along its own wall until it clears, and `dims.ts` marks it `leader` so the plan
+  markup ties it back to its own run. The chain's numbers are obstacles there but never move —
+  gap | piece | gap only reads in order.
 - **An opening slides along a run of walls.** `slide.ts` builds the run — the walls that carry on
   into one another from the one it sits on, a ring coming back as one closed run that travel wraps
   round — and says which wall of it the opening lands on (always wholly one, changing over as its
@@ -177,7 +199,8 @@ limits live in `../../packages/domain-data`.
   them.
 - **A mark is drawn in cm and named in px**: the square is `LANDMARK_SIZE_CM` against its wall's
   band on its face, so it scales with the plan (`landmark-<id>`, with `data-kind` and
-  `data-face`), while its name rides in the HTML layer beside it and keeps its screen size. Colour
+  `data-face`), while its name rides in the HTML layer beside it, sized like every other label.
+  Colour
   is the one place the product has any: it comes from the custom properties `app.css` defines,
   through the single kind-to-colour map in `marks.ts`, and reaches only the square, its name chip
   and the square that stands for the landmark in the tool plate. The exported plan draws the same

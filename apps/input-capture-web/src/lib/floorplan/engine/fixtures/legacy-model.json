@@ -5,6 +5,7 @@
   "selection": null,
   "toolGesture": "none",
   "scale": 3.4080000000000004,
+  "labelScale": 1,
   "visibleBox": {
     "minX": -7.042253521126753,
     "maxX": 257.0422535211268,
@@ -185,8 +186,6 @@
     "seg-seg2",
     "seg-seg2-hit",
     "stage",
-    "toast",
-    "toast-dismiss",
     "tool-door",
     "tool-open",
     "tool-select",

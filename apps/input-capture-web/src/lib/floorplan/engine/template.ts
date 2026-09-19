@@ -15,10 +15,6 @@ export const TEMPLATE = `
     <div class="fp-hint" id="hintLine" data-testid="hint"></div>
     <div class="fp-plate fp-hist" id="histPlate"></div>
     <div class="fp-plate fp-view" id="viewPlate"></div>
-    <div class="fp-toast fp-off" id="toastEl" data-testid="toast">
-      <span id="toastText"></span>
-      <button type="button" data-testid="toast-dismiss" id="toastDismiss">${RO.gotIt}</button>
-    </div>
   </main>
 </div>
 

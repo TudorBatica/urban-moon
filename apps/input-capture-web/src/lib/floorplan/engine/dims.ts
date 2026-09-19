@@ -9,9 +9,14 @@
  * chips over it, so a number can never end up describing a different stretch of
  * wall than the line drawn under it. A dim carries a commit descriptor, not a
  * closure: what typing it does is the caller's.
+ *
+ * Every size here is in screen px at the zoom the labels were designed for, and
+ * `labelScale` says how much of that size they are actually drawn at now, so a
+ * lane, a leader and the chip that rides on them shrink together.
  */
 
-import { CHAIN_LANE_PX, chainOfPiece, placeChainChips, type ChainObstacle } from './chain';
+import { CHAIN_LANE_PX, CHAIN_STEP_OUT_PX, chainOfPiece, placeChainChips, type ChainObstacle } from './chain';
+import { clearLane, type LaneBox, type LaneDir } from './lanes';
 import { LANDMARK_SIZE_CM } from '@urban-moon/domain-data';
 import {
 	WALL_THICKNESS_CM,
@@ -47,6 +52,33 @@ export const CHIP_ALONG_W_PX = 80;
 export const CHIP_ALONG_H_PX = 32;
 export const CHIP_HALF_W_PX = 46;
 export const CHIP_HALF_H_PX = 22;
+
+/**
+ * How small a label may be drawn, as a fraction of the size it was designed
+ * at. Below this a chip is a smudge rather than a number, and its input can no
+ * longer be typed into.
+ */
+export const MIN_LABEL_SCALE = 0.5;
+
+/**
+ * How much of its designed size a label is drawn at. A number keeps that size
+ * while the plan fills the canvas or more; zoomed further out than the fit it
+ * shrinks with the plan instead, because a chip is sized in screen px and a
+ * plan the size of a stamp would otherwise disappear under its own numbers.
+ */
+export function labelScaleFor(scale: number, fitScale: number): number {
+	if (!(scale > 0) || !(fitScale > 0)) return 1;
+	return Math.min(1, Math.max(MIN_LABEL_SCALE, scale / fitScale));
+}
+
+/**
+ * The px per cm a label's own px constants are read at. A shrunken label takes
+ * proportionally less room on the plan, so its lane and its footprint are
+ * measured against this rather than against the view's own scale.
+ */
+export function labelPxPerCm(scale: number, labelScale: number): number {
+	return labelScale > 0 ? scale / labelScale : scale;
+}
 
 /** What typing a number does, for the caller to carry out. */
 export type DimCommit =
@@ -146,7 +178,7 @@ function isOpeningKind(s: Segment): boolean {
  * plan is what earlier steps made: its numbers are stated, not asked, so the
  * chip neither edits nor takes the pointer away from the wall under it.
  */
-function wallDim(w: Wall, focused: boolean, mode: string, scale: number): Dim {
+function wallDim(w: Wall, focused: boolean, mode: string, labelPx: number): Dim {
 	const wn = wallNormal(w);
 	const editable = mode !== 'landmarks';
 	return {
@@ -156,8 +188,8 @@ function wallDim(w: Wall, focused: boolean, mode: string, scale: number): Dim {
 		a: w.from,
 		b: w.to,
 		normal: { x: -wn.x, y: -wn.y },
-		outCm: WALL_THICKNESS_CM / 2 + DIM_LINE_OUT_PX / scale,
-		chipOutCm: WALL_THICKNESS_CM / 2 + (CHAIN_LANE_PX + chipHalfCrossPx(w)) / scale,
+		outCm: WALL_THICKNESS_CM / 2 + DIM_LINE_OUT_PX / labelPx,
+		chipOutCm: WALL_THICKNESS_CM / 2 + (CHAIN_LANE_PX + chipHalfCrossPx(w)) / labelPx,
 		value: r(wallLen(w)),
 		source: w.lengthSource,
 		label: RO.fieldLength,
@@ -177,15 +209,15 @@ interface ChainPiece {
  * drawing is what says them — and the piece's number is the same value as the
  * first field of its plate.
  */
-function chainFrom(w: Wall, items: ReturnType<typeof chainOfPiece>, scale: number, piece: ChainPiece): Dim[] {
+function chainFrom(w: Wall, items: ReturnType<typeof chainOfPiece>, labelPx: number, piece: ChainPiece): Dim[] {
 	const wn = wallNormal(w);
 	const normal = { x: -wn.x, y: -wn.y };
 	const alongPx = chipAlongPx(w);
 	const halfCrossPx = chipHalfCrossPx(w);
 	const places = placeChainChips(
 		items.map((it) => ({
-			startPx: it.startCm * scale,
-			endPx: it.endCm * scale,
+			startPx: it.startCm * labelPx,
+			endPx: it.endCm * labelPx,
 			chipLengthPx: alongPx
 		})),
 		wallAxis(w)
@@ -201,9 +233,9 @@ function chainFrom(w: Wall, items: ReturnType<typeof chainOfPiece>, scale: numbe
 			a: pointAlong(w, it.startCm),
 			b: pointAlong(w, it.endCm),
 			normal,
-			outCm: WALL_THICKNESS_CM / 2 + DIM_LINE_OUT_PX / scale,
-			chipOutCm: WALL_THICKNESS_CM / 2 + (p.outPx + halfCrossPx) / scale,
-			chipShiftCm: (p.alongPx - p.spanMidPx) / scale,
+			outCm: WALL_THICKNESS_CM / 2 + DIM_LINE_OUT_PX / labelPx,
+			chipOutCm: WALL_THICKNESS_CM / 2 + (p.outPx + halfCrossPx) / labelPx,
+			chipShiftCm: (p.alongPx - p.spanMidPx) / labelPx,
 			leader: p.steppedOut,
 			value: it.showsNumber ? r(it.lengthCm) : null,
 			source: isPiece ? piece.source : ('computed' as const),
@@ -213,7 +245,7 @@ function chainFrom(w: Wall, items: ReturnType<typeof chainOfPiece>, scale: numbe
 	});
 }
 
-function chainDims(model: Model, w: Wall, seg: Segment, scale: number): Dim[] {
+function chainDims(model: Model, w: Wall, seg: Segment, labelPx: number): Dim[] {
 	const obstacles: ChainObstacle[] = [];
 	w.segments.forEach((s) => {
 		if (s.id === seg.id || s.kind === 'wall') return;
@@ -231,7 +263,7 @@ function chainDims(model: Model, w: Wall, seg: Segment, scale: number): Dim[] {
 		pieceEndCm: seg.offsetFromStart + seg.length.value,
 		obstacles
 	});
-	return chainFrom(w, items, scale, {
+	return chainFrom(w, items, labelPx, {
 		source: seg.length.source,
 		label: segDimLabel(seg),
 		commit: { kind: 'segment', wallId: w.id, segId: seg.id }
@@ -239,7 +271,7 @@ function chainDims(model: Model, w: Wall, seg: Segment, scale: number): Dim[] {
 }
 
 /** The same chain for a landmark: gap | square | gap, with no number on the square. */
-function landmarkChainDims(model: Model, w: Wall, offsetFromStartCm: number, markId: string, scale: number): Dim[] {
+function landmarkChainDims(model: Model, w: Wall, offsetFromStartCm: number, markId: string, labelPx: number): Dim[] {
 	const items = chainOfPiece({
 		wallLengthCm: markWallLengthCm(w),
 		pieceStartCm: offsetFromStartCm,
@@ -247,14 +279,65 @@ function landmarkChainDims(model: Model, w: Wall, offsetFromStartCm: number, mar
 		obstacles: landmarkObstacles(model, w, markId),
 		pieceShowsNumber: false
 	});
-	return chainFrom(w, items, scale, {
+	return chainFrom(w, items, labelPx, {
 		source: 'computed',
 		label: RO.fieldLength,
 		commit: null
 	});
 }
 
-export function allDims(model: Model, selection: Selection, mode: string, scale: number, visibleBox: Box): Dim[] {
+/** The way a dimension's own run lies, read off its two ends. */
+function dimAxis(d: Dim): WallAxis {
+	return Math.abs(d.b.x - d.a.x) >= Math.abs(d.b.y - d.a.y) ? 'horizontal' : 'vertical';
+}
+
+/** A chip's footprint where it would land, in label px. */
+function chipBox(d: Dim, labelPx: number): LaneBox {
+	const c = chipAnchor(d);
+	return { cx: c.x * labelPx, cy: c.y * labelPx, hw: CHIP_HALF_W_PX, hh: CHIP_HALF_H_PX };
+}
+
+/**
+ * The chain places its own numbers along the one wall they measure; a wall's
+ * own number only ever had its lane, which two short walls meeting at a
+ * reentrant corner share. Whichever comes second steps out onto a leader and
+ * slides until it clears — the chain's numbers are obstacles here but never
+ * move, because gap | piece | gap only reads in order.
+ */
+function spreadWallNumbers(dims: Dim[], labelPx: number): void {
+	const placed: LaneBox[] = [];
+	dims.forEach((d) => {
+		if (d.value != null && d.inChain) placed.push(chipBox(d, labelPx));
+	});
+	dims.forEach((d) => {
+		if (d.value == null || d.inChain) return;
+		const axis = dimAxis(d);
+		const along: LaneDir = axis === 'horizontal' ? { x: 1, y: 0 } : { x: 0, y: 1 };
+		const move = clearLane(
+			chipBox(d, labelPx),
+			d.normal,
+			along,
+			CHAIN_STEP_OUT_PX[axis] - CHAIN_LANE_PX,
+			placed
+		);
+		if (move.outPx !== 0 || move.alongPx !== 0) {
+			d.chipOutCm = (d.chipOutCm ?? d.outCm) + move.outPx / labelPx;
+			d.chipShiftCm = (d.chipShiftCm ?? 0) + move.alongPx / labelPx;
+			d.leader = true;
+		}
+		placed.push(chipBox(d, labelPx));
+	});
+}
+
+export function allDims(
+	model: Model,
+	selection: Selection,
+	mode: string,
+	scale: number,
+	visibleBox: Box,
+	labelScale: number
+): Dim[] {
+	const labelPx = labelPxPerCm(scale, labelScale);
 	let out: Dim[] = [];
 	const markId = selectedLandmarkId(selection);
 	const mark = markId === null ? null : (model.landmarks || []).find((m) => m.id === markId) ?? null;
@@ -266,12 +349,13 @@ export function allDims(model: Model, selection: Selection, mode: string, scale:
 	model.walls.forEach((w) => {
 		if (!wallOnScreen(w, visibleBox)) return;
 		if (w.id === focusWallId) {
-			if (mark) out = out.concat(landmarkChainDims(model, w, mark.offsetFromStartCm, mark.id, scale));
-			else if (focus) out = out.concat(chainDims(model, w, focus.seg, scale));
+			if (mark) out = out.concat(landmarkChainDims(model, w, mark.offsetFromStartCm, mark.id, labelPx));
+			else if (focus) out = out.concat(chainDims(model, w, focus.seg, labelPx));
 			return;
 		}
-		out.push(wallDim(w, !!(selSeg && selSeg.wall.id === w.id), mode, scale));
+		out.push(wallDim(w, !!(selSeg && selSeg.wall.id === w.id), mode, labelPx));
 	});
+	spreadWallNumbers(out, labelPx);
 	return out;
 }
 
@@ -284,7 +368,7 @@ export function allDims(model: Model, selection: Selection, mode: string, scale:
  * from/to are read instead; an opening's jamb drag is narrower still — only
  * that one piece's two edges move.
  */
-export function liveDim(model: Model, drag: DragState | null, scale: number): LiveDim | null {
+export function liveDim(model: Model, drag: DragState | null, scale: number, labelScale: number): LiveDim | null {
 	if (!drag || !drag.committed) return null;
 	let a: Point | null = null;
 	let b: Point | null = null;
@@ -315,7 +399,7 @@ export function liveDim(model: Model, drag: DragState | null, scale: number): Li
 		a,
 		b,
 		normal: { x: -n.x, y: -n.y },
-		outCm: segHitWidthCm(scale) / 2 + 34 / scale,
+		outCm: segHitWidthCm(scale) / 2 + 34 / labelPxPerCm(scale, labelScale),
 		value: r(dist(a, b))
 	};
 }
@@ -347,9 +431,9 @@ export function chipAnchor(d: DimGeometry): Point {
 }
 
 /** Extension lines off the wall, the run between them, and a 45-degree tick at each end. */
-export function dimLineParts(d: DimGeometry, scale: number): { ext: string; line: string; ticks: string } {
-	const overCm = 6 / scale;
-	const tickCm = 5 / scale;
+export function dimLineParts(d: DimGeometry, labelPx: number): { ext: string; line: string; ticks: string } {
+	const overCm = 6 / labelPx;
+	const tickCm = 5 / labelPx;
 	const pA = { x: d.a.x + d.normal.x * d.outCm, y: d.a.y + d.normal.y * d.outCm };
 	const pB = { x: d.b.x + d.normal.x * d.outCm, y: d.b.y + d.normal.y * d.outCm };
 	const eA = {

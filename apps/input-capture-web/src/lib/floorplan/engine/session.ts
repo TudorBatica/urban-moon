@@ -35,10 +35,6 @@ import type { DragState } from './dragState';
 /** The tool of the landmark step, which places one kind of square. */
 export const LANDMARK_TOOL = 'landmark';
 
-export interface ToastState {
-	text: string;
-}
-
 export interface ConfirmState {
 	message: string;
 	yesLabel: string;
@@ -66,7 +62,6 @@ export interface Session {
 	 */
 	lastSettledSegId: string | null;
 	drag: DragState | null;
-	toast: ToastState | null;
 	confirm: ConfirmState | null;
 	/** the step this mounting is for: the plan itself, or one kind of landmark on it */
 	mode: EditorMode;
@@ -134,7 +129,6 @@ export function createSession(opts: SessionOptions): Session {
 		selection: null,
 		lastSettledSegId: null,
 		drag: null,
-		toast: null,
 		confirm: null,
 		mode,
 		landmarkKind,

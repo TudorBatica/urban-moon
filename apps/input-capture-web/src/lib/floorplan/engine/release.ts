@@ -6,7 +6,6 @@
  */
 
 import { landmarkKindOf } from '@urban-moon/domain-data';
-import { RO } from './copy';
 import { segHitWidthCm } from './dims';
 import { closestOf, type Dom } from './dom';
 import type { DragState } from './dragState';
@@ -229,13 +228,6 @@ export function createRelease(s: Session, dom: Dom, viewport: Viewport, deps: Ge
 				deps.pushHistory
 			);
 			if (stroke.made && stroke.newSegId) s.selection = { segId: stroke.newSegId };
-			if (stroke.squareChanges.length) {
-				deps.showToast(
-					RO.squareToast(
-						stroke.squareChanges.map((c) => RO.squarePart(c.heading, c.before, c.after)).join('; ')
-					)
-				);
-			}
 			toolUsed(s, stroke.made, ds.tool);
 		}
 		/* Whatever moved the focus this time, a piece that would land under a plate is

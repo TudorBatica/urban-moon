@@ -15,7 +15,6 @@
 		<img src={drawing.pngDataUrl} alt="Planul desenat de tine" />
 	{/if}
 	<span class="big">Planul desenat de tine</span>
-	<span class="sm">{drawing.room?.closed ? 'Camera e închisă.' : 'Camera nu e închisă încă.'}</span>
 	<span class="acts2">
 		<button type="button" class="lnk" data-testid="drawing-edit" onclick={onedit}>Modifică</button>
 		<button type="button" class="lnk" data-testid="drawing-delete" onclick={ondelete}>Șterge</button>

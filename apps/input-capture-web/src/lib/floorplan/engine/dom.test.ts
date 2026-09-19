@@ -19,9 +19,7 @@ describe('TEMPLATE', () => {
 			'confirm-yes',
 			'editor-svg',
 			'hint',
-			'stage',
-			'toast',
-			'toast-dismiss'
+			'stage'
 		]);
 	});
 
@@ -35,9 +33,6 @@ describe('TEMPLATE', () => {
 			'hintLine',
 			'histPlate',
 			'viewPlate',
-			'toastEl',
-			'toastText',
-			'toastDismiss',
 			'confirmDialog',
 			'confirmDialogText',
 			'confirmYesBtn',

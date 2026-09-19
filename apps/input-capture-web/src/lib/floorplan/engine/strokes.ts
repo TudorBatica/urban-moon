@@ -3,10 +3,9 @@
  * geometry, and squaring a weld onto a vertex that sits off the stroke's own
  * axis, because a wall is never stored diagonal.
  *
- * Nothing here shows anything: the walls a squaring changed are returned and
- * the caller says so. `beforeChange` is the caller's history step, taken at the
- * moment the model is about to change and not before, so a stroke that comes to
- * nothing leaves no step.
+ * Nothing here shows anything. `beforeChange` is the caller's history step,
+ * taken at the moment the model is about to change and not before, so a stroke
+ * that comes to nothing leaves no step.
  */
 
 import {
@@ -33,22 +32,13 @@ export interface StrokeEnd {
 	wallId?: string;
 }
 
-/** One wall a squaring changed, as the toast reads it. */
-export interface SquareChange {
-	wallId: string;
-	heading: Heading;
-	before: number;
-	after: number;
-}
-
 export interface DrawStrokeResult {
 	made: boolean;
 	newSegId?: string;
-	squareChanges: SquareChange[];
 }
 
 export type SquareWeld =
-	| { ok: true; point: Point; changed: { wall: Wall; before: number; after: number }[] }
+	| { ok: true; point: Point; changed: Wall[] }
 	| { ok: false; reason: 'structural' }
 	| { ok: false; reason: 'openings'; wall: Wall; needed: number; got: number };
 
@@ -83,13 +73,12 @@ export function squareWeldToVertex(model: Model, vertexPoint: Point, startPt: Po
 			return { ok: false, reason: 'openings', wall: tw, needed: floor, got: r(newLen) };
 		}
 	}
-	const changed: { wall: Wall; before: number; after: number }[] = [];
+	const changed: Wall[] = [];
 	touches.forEach((t) => {
 		const tw = t.wall;
 		const before = r(wallLen(tw));
 		tw[t.end].x = corrected.x; tw[t.end].y = corrected.y;
-		const after = r(wallLen(tw));
-		if (after !== before) changed.push({ wall: tw, before, after });
+		if (r(wallLen(tw)) !== before) changed.push(tw);
 	});
 	return { ok: true, point: corrected, changed };
 }
@@ -127,7 +116,7 @@ export function commitDrawStroke(
 		dist(startPt, endPt) < MIN_WALL ||
 		(scale !== null && dist(startPt, endPt) * scale < MIN_STROKE_PX)
 	) {
-		return { made: false, squareChanges: [] };
+		return { made: false };
 	}
 	beforeChange();
 	if (startSnap && startSnap.kind === 'tjunction' && startSnap.wallId) {
@@ -139,7 +128,7 @@ export function commitDrawStroke(
 
 	let finalStartPt = startPt;
 	let finalEndPt = endPt;
-	let squared: { wall: Wall; before: number; after: number }[] | null = null;
+	let squared: Wall[] | null = null;
 	if (endSnap && (endSnap.kind === 'end' || endSnap.kind === 'corner') && heading) {
 		const dvec = headingVec(heading);
 		const target = { x: r(endPt.x), y: r(endPt.y) };
@@ -182,18 +171,9 @@ export function commitDrawStroke(
 	/* Downgrade provenance on whatever the squaring actually changed before
 	   cleanup runs: an untouched wall keeps what it said, and only one whose
 	   length changed to make the loop square becomes computed. */
-	if (squared) squared.forEach((c) => (c.wall.lengthSource = 'computed'));
+	if (squared) squared.forEach((sw) => (sw.lengthSource = 'computed'));
 	cleanupOutline(ids, model, isFresh);
 	syncSegments(ids, model, isFresh);
-	return {
-		made: true,
-		newSegId,
-		squareChanges: (squared || []).map((c) => ({
-			wallId: c.wall.id,
-			heading: headingOf(c.wall),
-			before: c.before,
-			after: c.after
-		}))
-	};
+	return { made: true, newSegId };
 }
 

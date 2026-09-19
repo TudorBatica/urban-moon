@@ -1,6 +1,6 @@
 /**
  * The floating plates: the tools at the top of the canvas, undo and redo, the
- * view controls, the hint line, the toast and the confirm dialog. White, a
+ * view controls, the hint line and the confirm dialog. White, a
  * hairline, 44px rows; the active tool is filled ink. On a wide screen undo and
  * redo sit in the tool plate after a divider, on a phone in their own plate
  * bottom left.
@@ -11,7 +11,7 @@ import { markColour } from '../marks';
 import { RO } from './copy';
 import type { Dom } from './dom';
 import type { Hint } from './hint';
-import { LANDMARK_TOOL, type ConfirmState, type Session, type ToastState } from './session';
+import { LANDMARK_TOOL, type ConfirmState, type Session } from './session';
 
 export interface PlateButtonOptions {
 	/** the tool is the one that is on: filled ink */
@@ -176,15 +176,6 @@ export function renderHint(dom: Dom, hint: Hint, hasHelp: boolean): void {
 	dom.hint.setAttribute('data-state', hint.state);
 	dom.hint.innerHTML = hint.text + (hint.text && help ? ' · ' : '') + help;
 	dom.hint.classList.toggle('fp-off', !hint.text && !help);
-}
-
-export function renderToast(dom: Dom, toast: ToastState | null): void {
-	if (!toast) {
-		dom.toast.classList.add('fp-off');
-		return;
-	}
-	dom.toast.classList.remove('fp-off');
-	dom.toastText.textContent = toast.text;
 }
 
 export function renderConfirm(dom: Dom, confirm: ConfirmState | null): void {

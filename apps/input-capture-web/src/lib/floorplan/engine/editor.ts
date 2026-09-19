@@ -10,6 +10,7 @@ import { RO } from './copy';
 import { bindDom, closestOf, unbindDom, viewOf } from './dom';
 import { renderCtrlLayer } from './ctrlLayer';
 import { commitActiveField } from './chips';
+import { labelScaleFor } from './dims';
 import { installGestures } from './gestures';
 import { installKeys, pressingControl, typingInField, type KeyAction, type KeyContext } from './keys';
 import { settleLandmarks } from './landmarkEdits';
@@ -18,7 +19,7 @@ import { cloneModel, findSegAnywhere, selectedSegId, type Model, type Wall } fro
 import { createNumbers } from './numbers';
 import { cycleDoorSwing, mergeAdjacentPlain } from './openings';
 import { planMarkup } from './planMarkup';
-import { renderConfirm, renderHint, renderPlates, renderToast } from './plates';
+import { renderConfirm, renderHint, renderPlates } from './plates';
 import { installRetarget } from './retarget';
 import {
 	armedTool,
@@ -124,7 +125,6 @@ export function createEditor(root: HTMLElement, opts: MountFloorplanOptions = {}
 		s.history.clear();
 		s.selection = null;
 		s.drag = null;
-		s.toast = null;
 		s.confirm = null;
 		s.activeTool = armedTool(s.mode, s.tools);
 		s.justMade = null;
@@ -142,11 +142,8 @@ export function createEditor(root: HTMLElement, opts: MountFloorplanOptions = {}
 		render();
 	}
 
-	/* ----- the toast and the confirm: state here, DOM in the render --------- */
+	/* ----- the confirm: state here, DOM in the render ----------------------- */
 
-	function showToast(text: string): void {
-		s.toast = { text };
-	}
 	function showConfirm(message: string, yesLabel: string, onYes: () => void, onNo: () => void): void {
 		s.confirm = { message, yesLabel, onYes, onNo };
 		render();
@@ -179,7 +176,7 @@ export function createEditor(root: HTMLElement, opts: MountFloorplanOptions = {}
 		s.lastSettledSegId = curSelSegId;
 	}
 
-	const numbers = createNumbers(s, { isFresh, pushHistory, render, showToast, offerClamp });
+	const numbers = createNumbers(s, { isFresh, pushHistory, render, offerClamp });
 
 	function renderHintNow(): void {
 		renderHint(dom, hintNow(s), !!onHelpCb);
@@ -219,12 +216,16 @@ export function createEditor(root: HTMLElement, opts: MountFloorplanOptions = {}
 		renderHintNow();
 		viewport.applyView();
 		const t = viewport.transform();
-		const scene = planScene(s, viewport.visibleBox(t), t.scale);
+		/* Read after applyView, so the fit a first render performs is the one the
+		   labels of that same render are sized against. */
+		const labelScale = labelScaleFor(t.scale, viewport.lastFitScale());
+		const scene = planScene(s, viewport.visibleBox(t), t.scale, labelScale);
 		dom.svg.innerHTML = planMarkup(scene);
 		focusPlateEl = renderCtrlLayer({
 			dom,
 			session: s,
 			scale: t.scale,
+			labelScale,
 			visibleBox: scene.visibleBox,
 			dims: scene.dims,
 			liveDim: scene.liveDim,
@@ -242,7 +243,6 @@ export function createEditor(root: HTMLElement, opts: MountFloorplanOptions = {}
 				render
 			}
 		});
-		renderToast(dom, s.toast);
 		renderConfirm(dom, s.confirm);
 		if (exposeGlobals) win.__lastModel = s.model;
 		notifyChange();
@@ -276,7 +276,6 @@ export function createEditor(root: HTMLElement, opts: MountFloorplanOptions = {}
 		render,
 		pushHistory,
 		restoreSnapshot,
-		showToast,
 		commitActiveField: () => {
 			commitActiveField(doc, win);
 		},
@@ -375,11 +374,6 @@ export function createEditor(root: HTMLElement, opts: MountFloorplanOptions = {}
 		onHelpCb();
 	});
 
-	dom.toastDismiss.addEventListener('click', () => {
-		s.toast = null;
-		render();
-	});
-
 	const answerConfirm = (take: (cs: ConfirmState) => void) => (): void => {
 		const cs = s.confirm;
 		s.confirm = null;
@@ -431,7 +425,6 @@ export function createEditor(root: HTMLElement, opts: MountFloorplanOptions = {}
 		s.history.clear();
 		s.selection = null;
 		s.drag = null;
-		s.toast = null;
 		s.confirm = null;
 		s.lastSettledSegId = null;
 		s.activeTool = armedTool(s.mode, s.tools);
