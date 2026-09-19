@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { RoomSnapshot } from '$lib/types';
-	import type { FloorplanHandle, FloorplanModel } from './engine.js';
-	import { mountFloorplan } from './engine.js';
-	import './engine.css';
+	import type { FloorplanHandle, FloorplanModel } from './engine';
+	import { mountFloorplan } from './engine';
+	import './engine/engine.css';
 
 	interface Props {
 		/** An engine model from a previous session — restored with setModel. */

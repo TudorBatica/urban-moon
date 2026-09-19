@@ -135,7 +135,7 @@ the placing screen is "saving from the editor".
 
 ### New pure module, with unit tests
 
-`src/lib/floorplan/landmarks.ts`:
+`src/lib/floorplan/engine/landmarks.ts`:
 
 - place on a tapped wall: centred on the tap, clamped to fit the wall, refused on an `open` wall,
   moved along to the nearest free stretch when it would overlap a landmark on the same face

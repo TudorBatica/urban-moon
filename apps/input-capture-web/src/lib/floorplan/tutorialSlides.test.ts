@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DRAWING_TOOLS } from './tools';
+import { DRAWING_TOOLS } from './engine/tools';
 import {
 	DRAWING_SLIDES,
 	GOT_IT_LABEL,

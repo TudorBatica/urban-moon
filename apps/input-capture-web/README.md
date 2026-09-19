@@ -49,17 +49,42 @@ src/lib/ui/                   Frame (photo + side shell) · GoBar · Note · Key
                               motion.ts (durations, curves, transitions) · images.ts (Unsplash ids, art per screen)
                               lineIcons.ts (appliance, coffee and landmark drawings) · lineMap.ts
 src/lib/plans/                Dropzone · FileTile · DrawingCard · PhotoField · Thumb · Rejections
-src/lib/floorplan/            engine.js (the editor: geometry, rendering, pointers) · engine.css
-                              tools.ts (which tool is on) · view.ts (fit, zoom, pan, the limits)
-                              chain.ts (the chain of numbers on a wall, and where each one sits)
-                              slide.ts (how far a window or a door travels while it is dragged)
-                              landmarks.ts (where a landmark may sit, and how it follows its wall)
+src/lib/floorplan/            FloorplanEditor.svelte (the wrapper round the editor)
                               marks.ts (the one map from a landmark kind to its colour, token and literal)
                               glyphs.ts (the 20x20 tool and view glyphs, as markup)
                               drawing.ts (builds and saves the Drawing) · seen.ts ("um.draw.seen")
                               device.ts (touch words or mouse words) · tutorialSlides.ts (the help)
                               Slides.svelte · SlideStage.svelte (the stage, a placeholder)
-                              export.ts (svg/png) · FloorplanEditor.svelte
+                              export.ts (svg/png)
+src/lib/floorplan/engine/     index.ts (mountFloorplan, the handle and its options) · engine.css
+                              editor.ts (the composition root: the render, the wiring, the handle)
+                              session.ts (the editing session and the tools glue)
+                              dom.ts (the template's elements) · viewport.ts (the view, cm <-> px)
+                              plates.ts (tools, undo, view, hint, toast, confirm)
+                              ctrlLayer.ts (the numbers and names over the plan) · chips.ts (the fields)
+                              focusPlate.ts (the plate of the piece in focus)
+                              placement.ts (where a chip lands, clear of everything)
+                              gestures.ts (the pointer router) · drags.ts (what a committed drag applies)
+                              release.ts (what a release settles) · retarget.ts (the touch guard)
+                              keys.ts (which action a key is) · numbers.ts (what typing a number does)
+                              scene.ts (the plan and the hint, as one read of the session)
+                              copy.ts (every Romanian word) · template.ts (the editor's markup)
+                              model.ts (the editing model, its constructors and its ids)
+                              topology.ts (read-only geometry and connectivity over the model)
+                              openings.ts (the segment algebra inside one wall)
+                              walls.ts (pushing, corners, cleanup, typed lengths, deleting)
+                              strokes.ts (committing a drawn stroke, and squaring its weld)
+                              landmarkEdits.ts (what blocks a landmark, and the settling pass)
+                              snap.ts (what a gesture catches, in screen px) · dragState.ts
+                              run.ts (a piece travelling along a run) · history.ts (undo/redo)
+                              snapshot.ts (the room the contract carries) · parseLength.ts
+                              hint.ts (the one grey line) · dims.ts (the numbers on the drawing)
+                              planMarkup.ts (the plan as SVG)
+                              tools.ts (which tool is on) · view.ts (fit, zoom, pan, the limits)
+                              chain.ts (the chain of numbers on a wall, and where each one sits)
+                              slide.ts (how far a window or a door travels while it is dragged)
+                              landmarks.ts (where a landmark may sit, and how it follows its wall)
+                              fixtures/ (recorded editors: model, room, svg and test ids per case)
 src/lib/submit/               submit.ts (uploads + commit) · resumable.ts (chunked PUTs) · SubmitPanel.svelte
 src/lib/server/               config.ts (env) · uploads.ts (session start) · commit.ts (checks + manifest)
                               objects.ts (object names) · log.ts · bucket.ts (re-exports @urban-moon/bucket)
@@ -84,13 +109,23 @@ limits live in `../../packages/domain-data`.
   and take photos of the objects, tagged with that screen's room.
 - **"Începe din nou"** clears the answers, the plans, the photos, the IndexedDB blobs and the
   session keys of an in-flight send.
-- **The floorplan editor** is plain JS (`engine.js`), framework-free, wrapped in a Svelte
-  component. It draws only while a making tool is on (Perete, Fără perete, Fereastră, Ușă); the
-  resting tool selects, moves and pans. What is decidable without a browser lives in TypeScript
-  beside it and is unit-tested: `tools.ts` (one use, then back to Selectează), `view.ts` (the fit
-  into the canvas minus the plate bands, zoom around a point, both limits, the edge auto-pan),
-  `chain.ts`, `slide.ts` (below) and `drawing.ts` (the only writer of `um.plans.drawing`). The
-  editor's classes are all scoped under `.fp` and share no name with a global rule of `app.css`.
+- **The floorplan editor** lives in `src/lib/floorplan/engine/`, framework-free TypeScript behind
+  one entry point (`index.ts`), wrapped in a Svelte component (`FloorplanEditor.svelte`, which
+  imports `./engine` and `./engine/engine.css`). It draws only while a making tool is on (Perete,
+  Fără perete, Fereastră, Ușă); the resting tool selects, moves and pans. Everything decidable
+  without a browser is pure and unit-tested — the model and its geometry (`model.ts`,
+  `topology.ts`), every edit (`openings.ts`, `walls.ts`, `strokes.ts`, `landmarkEdits.ts`,
+  `run.ts`), what a gesture catches (`snap.ts`, `dragState.ts`), where a chip lands
+  (`placement.ts`), which action a key is (`keys.ts`), what is shown (`hint.ts`, `dims.ts`,
+  `planMarkup.ts`, `copy.ts`) and what is reported (`snapshot.ts`). What is left touches the DOM:
+  one session (`session.ts`) that `editor.ts` creates and passes to the elements (`dom.ts`), the
+  view (`viewport.ts`), the plates and the HTML layer (`plates.ts`, `ctrlLayer.ts`, `chips.ts`,
+  `focusPlate.ts`), and the pointer (`gestures.ts`, `drags.ts`, `release.ts`, `retarget.ts`).
+  `drawing.ts` beside it is the only writer of `um.plans.drawing`. The editor's classes are all
+  scoped under `.fp` and share no name with a global rule of `app.css`.
+- **The engine's behaviour is pinned by fixtures** under `engine/fixtures/`: one JSON per recorded
+  case, each holding the model, the room snapshot, the plan markup and the test ids the editor
+  produced for it. `snapshot.ts` and `planMarkup.ts` are held to reproducing them exactly.
 - **Numbers sit in one lane per wall**, 34px outside its band — the distance to the chip's near
   edge, so a number never covers the hit target of the wall it measures. At rest the lane holds that wall's
   own length (`dim-<wallId>`, editable); while a window or a door on it is in focus or dragged

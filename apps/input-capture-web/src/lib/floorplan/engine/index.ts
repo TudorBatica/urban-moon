@@ -1,19 +1,23 @@
-/* Types for the framework-free floorplan engine (engine.js).
-   RoomSnapshot and friends live in $lib/types — the app has exactly one
-   copy of the shared contract; this file only re-exports them so engine
-   consumers can import from a single place. */
+/**
+ * The floorplan editor, as a framework-free module: the one thing outside this
+ * directory imports. `mountFloorplan(root, opts)` puts an editor in an element
+ * and hands back the handle its host drives it with.
+ */
 
+import { createEditor } from './editor';
 import type { Provenance, RoomSegment, RoomSnapshot, RoomWall } from '$lib/types';
+import type { SeenStorage } from '../seen';
+import type { EditorLandmark, Wall } from './model';
 import type { ToolDef } from './tools';
-import type { SeenStorage } from './seen';
 
+export { TEMPLATE } from './template';
 export type { Provenance, RoomSegment, RoomSnapshot, RoomWall };
 
-/** The engine's internal, opaque editing model — what getModel/setModel move. */
+/** The engine's own editing model — what getModel and setModel move. */
 export interface FloorplanModel {
-	walls: unknown[];
+	walls: Wall[];
 	/** absent on a model saved before landmarks existed: it has none */
-	landmarks?: unknown[];
+	landmarks?: EditorLandmark[];
 	/** a model saved by an earlier editor still carries it; setModel ignores it */
 	ceilingHeightCm?: number | null;
 }
@@ -25,8 +29,8 @@ export interface MountFloorplanOptions {
 	onHelp?: () => void;
 	/**
 	 * The step this mounting is for. `plan` draws and changes the plan;
-	 * `landmarks` places one kind of landmark on a plan already drawn, leaving
-	 * the walls and the openings drawn but untouchable.
+	 * `landmarks` places one kind of landmark on a plan already drawn, leaving the
+	 * walls and the openings drawn but untouchable.
 	 */
 	mode?: 'plan' | 'landmarks';
 	/** in `landmarks` mode, the kind the tool places, armed at mount */
@@ -50,8 +54,8 @@ export interface FloorplanHandle {
 	destroy(): void;
 }
 
-/** The editor's DOM template, injected into the root by mountFloorplan. */
-export const TEMPLATE: string;
+export function mountFloorplan(root: HTMLElement, opts?: MountFloorplanOptions): FloorplanHandle {
+	return createEditor(root, opts);
+}
 
-export function mountFloorplan(root: HTMLElement, opts?: MountFloorplanOptions): FloorplanHandle;
 export default mountFloorplan;

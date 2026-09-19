@@ -1,0 +1,315 @@
+{
+  "name": "landmarks",
+  "mode": "landmarks",
+  "landmarkKind": "radiator",
+  "selection": {
+    "landmarkId": "mark1"
+  },
+  "toolGesture": "none",
+  "scale": 2.13,
+  "visibleBox": {
+    "minX": -11.267605633802816,
+    "maxX": 411.2676056338028,
+    "minY": -64.3192488262911,
+    "maxY": 264.3192488262911
+  },
+  "model": {
+    "walls": [
+      {
+        "id": "wall1",
+        "from": {
+          "x": 0,
+          "y": 0
+        },
+        "to": {
+          "x": 400,
+          "y": 0
+        },
+        "lengthSource": "drawn",
+        "isOpen": false,
+        "segments": [
+          {
+            "id": "seg1",
+            "kind": "wall",
+            "length": {
+              "value": 100,
+              "source": "computed"
+            },
+            "offsetFromStart": 0,
+            "sill": null,
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          },
+          {
+            "id": "seg2",
+            "kind": "window",
+            "length": {
+              "value": 120,
+              "source": "computed"
+            },
+            "offsetFromStart": 100,
+            "sill": {
+              "value": 90,
+              "source": "computed"
+            },
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          },
+          {
+            "id": "seg3",
+            "kind": "wall",
+            "length": {
+              "value": 180,
+              "source": "computed"
+            },
+            "offsetFromStart": 220,
+            "sill": null,
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          }
+        ]
+      },
+      {
+        "id": "wall2",
+        "from": {
+          "x": 400,
+          "y": 0
+        },
+        "to": {
+          "x": 400,
+          "y": 200
+        },
+        "lengthSource": "drawn",
+        "isOpen": false,
+        "segments": [
+          {
+            "id": "seg4",
+            "kind": "wall",
+            "length": {
+              "value": 200,
+              "source": "computed"
+            },
+            "offsetFromStart": 0,
+            "sill": null,
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          }
+        ]
+      }
+    ],
+    "landmarks": [
+      {
+        "id": "mark1",
+        "kind": "radiator",
+        "wallId": "wall1",
+        "offsetFromStartCm": 110,
+        "face": "in"
+      },
+      {
+        "id": "mark2",
+        "kind": "water",
+        "wallId": "wall1",
+        "offsetFromStartCm": 250,
+        "face": "out"
+      }
+    ]
+  },
+  "room": {
+    "unit": "cm",
+    "ceilingHeightCm": null,
+    "closed": false,
+    "outline": [
+      [
+        0,
+        0
+      ],
+      [
+        400,
+        0
+      ],
+      [
+        400,
+        200
+      ]
+    ],
+    "walls": [
+      {
+        "id": "wall1",
+        "index": 0,
+        "from": [
+          0,
+          0
+        ],
+        "to": [
+          400,
+          0
+        ],
+        "heading": "E",
+        "lengthCm": {
+          "value": 400,
+          "source": "drawn"
+        },
+        "segments": [
+          {
+            "id": "seg1",
+            "kind": "wall",
+            "lengthCm": {
+              "value": 100,
+              "source": "computed"
+            },
+            "offsetFromStartCm": 0,
+            "sillCm": null,
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          },
+          {
+            "id": "seg2",
+            "kind": "window",
+            "lengthCm": {
+              "value": 120,
+              "source": "computed"
+            },
+            "offsetFromStartCm": 100,
+            "sillCm": 90,
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          },
+          {
+            "id": "seg3",
+            "kind": "wall",
+            "lengthCm": {
+              "value": 180,
+              "source": "computed"
+            },
+            "offsetFromStartCm": 220,
+            "sillCm": null,
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          }
+        ]
+      },
+      {
+        "id": "wall2",
+        "index": 1,
+        "from": [
+          400,
+          0
+        ],
+        "to": [
+          400,
+          200
+        ],
+        "heading": "S",
+        "lengthCm": {
+          "value": 200,
+          "source": "drawn"
+        },
+        "segments": [
+          {
+            "id": "seg4",
+            "kind": "wall",
+            "lengthCm": {
+              "value": 200,
+              "source": "computed"
+            },
+            "offsetFromStartCm": 0,
+            "sillCm": null,
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          }
+        ]
+      }
+    ],
+    "openings": [
+      {
+        "wallId": "wall1",
+        "id": "seg2",
+        "kind": "window",
+        "lengthCm": {
+          "value": 120,
+          "source": "computed"
+        },
+        "offsetFromStartCm": 100,
+        "sillCm": 90,
+        "hinge": null,
+        "hingeSource": null,
+        "swing": null,
+        "swingSource": null
+      }
+    ],
+    "landmarks": [
+      {
+        "id": "mark1",
+        "kind": "radiator",
+        "wallId": "wall1",
+        "offsetFromStartCm": 110,
+        "face": "in",
+        "gapBeforeCm": 10,
+        "gapAfterCm": 80
+      },
+      {
+        "id": "mark2",
+        "kind": "water",
+        "wallId": "wall1",
+        "offsetFromStartCm": 250,
+        "face": "out",
+        "gapBeforeCm": 30,
+        "gapAfterCm": 120
+      }
+    ],
+    "unanswered": [
+      "2 capete de perete nu sunt legate de nimic încă."
+    ],
+    "finished": false
+  },
+  "svg": "<g class=\"fp-plan\"><g data-testid=\"seg-seg1\"><polygon class=\"fp-band\" points=\"0,10 0,-10 100,-10 100,10\"></polygon></g><g data-testid=\"seg-seg2\"><polygon class=\"fp-gap\" points=\"100,10 100,-10 220,-10 220,10\"></polygon><line class=\"fp-glass\" x1=\"100\" y1=\"-10\" x2=\"220\" y2=\"-10\"></line><line class=\"fp-glass\" x1=\"100\" y1=\"0\" x2=\"220\" y2=\"0\"></line><line class=\"fp-glass\" x1=\"100\" y1=\"10\" x2=\"220\" y2=\"10\"></line><line class=\"fp-jamb\" x1=\"100\" y1=\"10\" x2=\"100\" y2=\"-10\"></line><line class=\"fp-jamb\" x1=\"220\" y1=\"10\" x2=\"220\" y2=\"-10\"></line></g><g data-testid=\"seg-seg3\"><polygon class=\"fp-band\" points=\"220,10 220,-10 410,-10 410,10\"></polygon></g><g data-testid=\"seg-seg4\"><polygon class=\"fp-band\" points=\"390,-10 410,-10 410,200 390,200\"></polygon></g></g><g class=\"fp-dims\"><path class=\"fp-dim-ext\" d=\"M100 0 L100 -19.389671361502348 M110 0 L110 -19.389671361502348\" stroke-width=\"1\"></path><path class=\"fp-dim-run\" d=\"M100 -16.572769953051644 L110 -16.572769953051644\" stroke-width=\"1\"></path><path class=\"fp-dim-tick\" d=\"M98.34012492679214 -14.912894879843787 L101.65987507320786 -18.2326450262595 M108.34012492679214 -14.912894879843787 L111.65987507320786 -18.2326450262595\" stroke-width=\"1\"></path><line class=\"fp-dim-ext\" x1=\"105\" y1=\"-16.572769953051644\" x2=\"105\" y2=\"-52.25352112676057\" stroke-width=\"1\"></line><path class=\"fp-dim-ext\" d=\"M110 0 L110 -19.389671361502348 M140 0 L140 -19.389671361502348\" stroke-width=\"1\"></path><path class=\"fp-dim-run\" d=\"M110 -16.572769953051644 L140 -16.572769953051644\" stroke-width=\"1\"></path><path class=\"fp-dim-tick\" d=\"M108.34012492679214 -14.912894879843787 L111.65987507320786 -18.2326450262595 M138.34012492679213 -14.912894879843787 L141.65987507320787 -18.2326450262595\" stroke-width=\"1\"></path><line class=\"fp-dim-ext\" x1=\"125\" y1=\"-16.572769953051644\" x2=\"142.55868544600938\" y2=\"-52.25352112676057\" stroke-width=\"1\"></line><path class=\"fp-dim-ext\" d=\"M140 0 L140 -19.389671361502348 M220 0 L220 -19.389671361502348\" stroke-width=\"1\"></path><path class=\"fp-dim-run\" d=\"M140 -16.572769953051644 L220 -16.572769953051644\" stroke-width=\"1\"></path><path class=\"fp-dim-tick\" d=\"M138.34012492679213 -14.912894879843787 L141.65987507320787 -18.2326450262595 M218.34012492679213 -14.912894879843787 L221.65987507320787 -18.2326450262595\" stroke-width=\"1\"></path><path class=\"fp-dim-ext\" d=\"M400 0 L419.38967136150234 0 M400 200 L419.38967136150234 200\" stroke-width=\"1\"></path><path class=\"fp-dim-run\" d=\"M416.57276995305165 0 L416.57276995305165 200\" stroke-width=\"1\"></path><path class=\"fp-dim-tick\" d=\"M414.9128948798438 -1.659875073207858 L418.2326450262595 1.659875073207858 M414.9128948798438 198.34012492679213 L418.2326450262595 201.65987507320787\" stroke-width=\"1\"></path></g><g class=\"fp-hits\"><rect class=\"fp-grab\" data-testid=\"landmark-mark1-hit\" data-landmark-id=\"mark1\" x=\"110\" y=\"10\" width=\"30\" height=\"30\"></rect><rect class=\"fp-grab\" data-testid=\"landmark-mark2-hit\" data-landmark-id=\"mark2\" x=\"250\" y=\"-40\" width=\"30\" height=\"30\"></rect></g><g class=\"fp-marks\"><polygon class=\"fp-wash\" points=\"99.5,-0.5 150.5,-0.5 150.5,50.5 99.5,50.5\"></polygon><polygon class=\"fp-mark on\" data-testid=\"landmark-mark1\" data-landmark-id=\"mark1\" data-kind=\"radiator\" data-face=\"in\" style=\"fill:var(--calorifer)\" stroke-width=\"1\" points=\"110,10 140,10 140,40 110,40\"></polygon><polygon class=\"fp-mark\" data-testid=\"landmark-mark2\" data-landmark-id=\"mark2\" data-kind=\"water\" data-face=\"out\" style=\"fill:var(--apa)\" stroke-width=\"1\" points=\"250,-40 280,-40 280,-10 250,-10\"></polygon></g>",
+  "testids": [
+    "chain",
+    "chain-gap-after",
+    "chain-gap-before",
+    "confirm-dialog",
+    "confirm-no",
+    "confirm-yes",
+    "dim-wall2",
+    "editor-svg",
+    "focus-plate",
+    "hint",
+    "landmark-mark1",
+    "landmark-mark1-hit",
+    "landmark-mark2",
+    "landmark-mark2-hit",
+    "landmark-name-mark1",
+    "landmark-name-mark2",
+    "plate-delete",
+    "redo",
+    "seg-seg1",
+    "seg-seg2",
+    "seg-seg3",
+    "seg-seg4",
+    "stage",
+    "toast",
+    "toast-dismiss",
+    "tool-landmark",
+    "tool-select",
+    "undo",
+    "view-fit",
+    "view-zoom-in",
+    "view-zoom-out"
+  ]
+}

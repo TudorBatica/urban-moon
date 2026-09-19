@@ -1,0 +1,52 @@
+{
+  "name": "empty",
+  "mode": "plan",
+  "landmarkKind": null,
+  "selection": null,
+  "toolGesture": "none",
+  "scale": 1.63,
+  "visibleBox": {
+    "minX": -276.07361963190186,
+    "maxX": 276.07361963190186,
+    "minY": -214.7239263803681,
+    "maxY": 214.7239263803681
+  },
+  "model": {
+    "walls": [],
+    "landmarks": []
+  },
+  "room": {
+    "unit": "cm",
+    "ceilingHeightCm": null,
+    "closed": false,
+    "outline": [],
+    "walls": [],
+    "openings": [],
+    "landmarks": [],
+    "unanswered": [
+      "Desenează primul perete ca să începi."
+    ],
+    "finished": false
+  },
+  "svg": "<g class=\"fp-plan\"></g><g class=\"fp-hits\"></g>",
+  "testids": [
+    "confirm-dialog",
+    "confirm-no",
+    "confirm-yes",
+    "editor-svg",
+    "hint",
+    "redo",
+    "stage",
+    "toast",
+    "toast-dismiss",
+    "tool-door",
+    "tool-open",
+    "tool-select",
+    "tool-wall",
+    "tool-window",
+    "undo",
+    "view-fit",
+    "view-zoom-in",
+    "view-zoom-out"
+  ]
+}

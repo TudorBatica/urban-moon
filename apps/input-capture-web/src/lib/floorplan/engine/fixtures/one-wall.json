@@ -1,0 +1,130 @@
+{
+  "name": "one-wall",
+  "mode": "plan",
+  "landmarkKind": null,
+  "selection": null,
+  "toolGesture": "none",
+  "scale": 2.84,
+  "visibleBox": {
+    "minX": -8.450704225352126,
+    "maxX": 308.4507042253521,
+    "minY": -123.23943661971832,
+    "maxY": 123.23943661971832
+  },
+  "model": {
+    "walls": [
+      {
+        "id": "wall1",
+        "from": {
+          "x": 0,
+          "y": 0
+        },
+        "to": {
+          "x": 300,
+          "y": 0
+        },
+        "lengthSource": "drawn",
+        "isOpen": false,
+        "segments": [
+          {
+            "id": "seg1",
+            "kind": "wall",
+            "length": {
+              "value": 300,
+              "source": "computed"
+            },
+            "offsetFromStart": 0,
+            "sill": null,
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          }
+        ]
+      }
+    ],
+    "landmarks": []
+  },
+  "room": {
+    "unit": "cm",
+    "ceilingHeightCm": null,
+    "closed": false,
+    "outline": [
+      [
+        0,
+        0
+      ],
+      [
+        300,
+        0
+      ]
+    ],
+    "walls": [
+      {
+        "id": "wall1",
+        "index": 0,
+        "from": [
+          0,
+          0
+        ],
+        "to": [
+          300,
+          0
+        ],
+        "heading": "E",
+        "lengthCm": {
+          "value": 300,
+          "source": "drawn"
+        },
+        "segments": [
+          {
+            "id": "seg1",
+            "kind": "wall",
+            "lengthCm": {
+              "value": 300,
+              "source": "computed"
+            },
+            "offsetFromStartCm": 0,
+            "sillCm": null,
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          }
+        ]
+      }
+    ],
+    "openings": [],
+    "landmarks": [],
+    "unanswered": [
+      "2 capete de perete nu sunt legate de nimic încă."
+    ],
+    "finished": false
+  },
+  "svg": "<g class=\"fp-plan\"><g data-testid=\"seg-seg1\"><polygon class=\"fp-band\" points=\"0,10 0,-10 300,-10 300,10\"></polygon></g></g><g class=\"fp-dims\"><path class=\"fp-dim-ext\" d=\"M0 0 L0 -17.04225352112676 M300 0 L300 -17.04225352112676\" stroke-width=\"1\"></path><path class=\"fp-dim-run\" d=\"M0 -14.929577464788732 L300 -14.929577464788732\" stroke-width=\"1\"></path><path class=\"fp-dim-tick\" d=\"M-1.2449063049058935 -13.68467115988284 L1.2449063049058935 -16.174483769694625 M298.7550936950941 -13.68467115988284 L301.2449063049059 -16.174483769694625\" stroke-width=\"1\"></path></g><g class=\"fp-hits\"><rect class=\"fp-hit\" data-testid=\"seg-seg1-hit\" data-wall-id=\"wall1\" data-seg-id=\"seg1\" data-kind=\"wall\" x=\"0\" y=\"-8.450704225352114\" width=\"300\" height=\"16.901408450704228\"></rect><circle class=\"fp-grab fp-free-hit\" data-testid=\"free-end-0,0\" data-wall-id=\"wall1\" data-end=\"from\" cx=\"0\" cy=\"0\" r=\"9\"></circle><circle class=\"fp-grab fp-free-hit\" data-testid=\"free-end-300,0\" data-wall-id=\"wall1\" data-end=\"to\" cx=\"300\" cy=\"0\" r=\"9\"></circle></g>",
+  "testids": [
+    "confirm-dialog",
+    "confirm-no",
+    "confirm-yes",
+    "dim-wall1",
+    "editor-svg",
+    "free-end-0,0",
+    "free-end-300,0",
+    "hint",
+    "redo",
+    "seg-seg1",
+    "seg-seg1-hit",
+    "stage",
+    "toast",
+    "toast-dismiss",
+    "tool-door",
+    "tool-open",
+    "tool-select",
+    "tool-wall",
+    "tool-window",
+    "undo",
+    "view-fit",
+    "view-zoom-in",
+    "view-zoom-out"
+  ]
+}

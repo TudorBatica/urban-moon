@@ -1,0 +1,200 @@
+{
+  "name": "legacy-model",
+  "mode": "plan",
+  "landmarkKind": null,
+  "selection": null,
+  "toolGesture": "none",
+  "scale": 3.4080000000000004,
+  "visibleBox": {
+    "minX": -7.042253521126753,
+    "maxX": 257.0422535211268,
+    "minY": -27.69953051643192,
+    "maxY": 177.69953051643193
+  },
+  "model": {
+    "walls": [
+      {
+        "id": "wall1",
+        "from": {
+          "x": 0,
+          "y": 0
+        },
+        "to": {
+          "x": 250,
+          "y": 0
+        },
+        "lengthSource": "drawn",
+        "isOpen": false,
+        "segments": [
+          {
+            "id": "seg1",
+            "kind": "wall",
+            "length": {
+              "value": 250,
+              "source": "computed"
+            },
+            "offsetFromStart": 0,
+            "sill": null,
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          }
+        ]
+      },
+      {
+        "id": "wall2",
+        "from": {
+          "x": 250,
+          "y": 0
+        },
+        "to": {
+          "x": 250,
+          "y": 150
+        },
+        "lengthSource": "drawn",
+        "isOpen": false,
+        "segments": [
+          {
+            "id": "seg2",
+            "kind": "wall",
+            "length": {
+              "value": 150,
+              "source": "computed"
+            },
+            "offsetFromStart": 0,
+            "sill": null,
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          }
+        ]
+      }
+    ],
+    "landmarks": []
+  },
+  "room": {
+    "unit": "cm",
+    "ceilingHeightCm": null,
+    "closed": false,
+    "outline": [
+      [
+        0,
+        0
+      ],
+      [
+        250,
+        0
+      ],
+      [
+        250,
+        150
+      ]
+    ],
+    "walls": [
+      {
+        "id": "wall1",
+        "index": 0,
+        "from": [
+          0,
+          0
+        ],
+        "to": [
+          250,
+          0
+        ],
+        "heading": "E",
+        "lengthCm": {
+          "value": 250,
+          "source": "drawn"
+        },
+        "segments": [
+          {
+            "id": "seg1",
+            "kind": "wall",
+            "lengthCm": {
+              "value": 250,
+              "source": "computed"
+            },
+            "offsetFromStartCm": 0,
+            "sillCm": null,
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          }
+        ]
+      },
+      {
+        "id": "wall2",
+        "index": 1,
+        "from": [
+          250,
+          0
+        ],
+        "to": [
+          250,
+          150
+        ],
+        "heading": "S",
+        "lengthCm": {
+          "value": 150,
+          "source": "drawn"
+        },
+        "segments": [
+          {
+            "id": "seg2",
+            "kind": "wall",
+            "lengthCm": {
+              "value": 150,
+              "source": "computed"
+            },
+            "offsetFromStartCm": 0,
+            "sillCm": null,
+            "hinge": null,
+            "hingeSource": null,
+            "swing": null,
+            "swingSource": null
+          }
+        ]
+      }
+    ],
+    "openings": [],
+    "landmarks": [],
+    "unanswered": [
+      "2 capete de perete nu sunt legate de nimic încă."
+    ],
+    "finished": false
+  },
+  "svg": "<g class=\"fp-plan\"><g data-testid=\"seg-seg1\"><polygon class=\"fp-band\" points=\"0,10 0,-10 260,-10 260,10\"></polygon></g><g data-testid=\"seg-seg2\"><polygon class=\"fp-band\" points=\"240,-10 260,-10 260,150 240,150\"></polygon></g></g><g class=\"fp-dims\"><path class=\"fp-dim-ext\" d=\"M0 0 L0 -15.868544600938966 M250 0 L250 -15.868544600938966\" stroke-width=\"1\"></path><path class=\"fp-dim-run\" d=\"M0 -14.107981220657276 L250 -14.107981220657276\" stroke-width=\"1\"></path><path class=\"fp-dim-tick\" d=\"M-1.0374219207549111 -13.070559299902365 L1.0374219207549111 -15.145403141412187 M248.96257807924508 -13.070559299902365 L251.03742192075492 -15.145403141412187\" stroke-width=\"1\"></path><path class=\"fp-dim-ext\" d=\"M250 0 L265.86854460093895 0 M250 150 L265.86854460093895 150\" stroke-width=\"1\"></path><path class=\"fp-dim-run\" d=\"M264.1079812206573 0 L264.1079812206573 150\" stroke-width=\"1\"></path><path class=\"fp-dim-tick\" d=\"M263.07055929990236 -1.0374219207549111 L265.1454031414122 1.0374219207549111 M263.07055929990236 148.96257807924508 L265.1454031414122 151.03742192075492\" stroke-width=\"1\"></path></g><g class=\"fp-hits\"><rect class=\"fp-hit\" data-testid=\"seg-seg1-hit\" data-wall-id=\"wall1\" data-seg-id=\"seg1\" data-kind=\"wall\" x=\"0\" y=\"-7.04225352112676\" width=\"250\" height=\"14.08450704225352\"></rect><rect class=\"fp-hit\" data-testid=\"seg-seg2-hit\" data-wall-id=\"wall2\" data-seg-id=\"seg2\" data-kind=\"wall\" x=\"242.95774647887325\" y=\"0\" width=\"14.08450704225352\" height=\"150\"></rect><circle class=\"fp-grab\" data-testid=\"corner-250,0\" data-vx=\"250\" data-vy=\"0\" cx=\"250\" cy=\"0\" r=\"9\"></circle><circle class=\"fp-grab fp-free-hit\" data-testid=\"free-end-0,0\" data-wall-id=\"wall1\" data-end=\"from\" cx=\"0\" cy=\"0\" r=\"9\"></circle><circle class=\"fp-grab fp-free-hit\" data-testid=\"free-end-250,150\" data-wall-id=\"wall2\" data-end=\"to\" cx=\"250\" cy=\"150\" r=\"9\"></circle></g>",
+  "testids": [
+    "confirm-dialog",
+    "confirm-no",
+    "confirm-yes",
+    "corner-250,0",
+    "dim-wall1",
+    "dim-wall2",
+    "editor-svg",
+    "free-end-0,0",
+    "free-end-250,150",
+    "hint",
+    "redo",
+    "seg-seg1",
+    "seg-seg1-hit",
+    "seg-seg2",
+    "seg-seg2-hit",
+    "stage",
+    "toast",
+    "toast-dismiss",
+    "tool-door",
+    "tool-open",
+    "tool-select",
+    "tool-wall",
+    "tool-window",
+    "undo",
+    "view-fit",
+    "view-zoom-in",
+    "view-zoom-out"
+  ]
+}
